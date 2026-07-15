@@ -1,0 +1,39 @@
+# NokoTracker
+
+NokoTracker ist eine private Heim-ERP-App mit React/Vite-Frontend und FastAPI-Backend. Sie verwaltet unter anderem Vorrat, Lebensmittel, Produktgruppen, Rezepte, Mahlzeiten, Kalenderdaten und Einkaufsliste.
+
+## Struktur
+
+- `frontend/`: React, TypeScript und Vite
+- `backend/`: FastAPI, SQLAlchemy, Pydantic und SQLite
+
+## Backend starten
+
+```powershell
+cd backend
+pip install -r requirements.txt
+uvicorn app.main:app --reload
+```
+
+Die API ist danach unter `http://127.0.0.1:8000` erreichbar, die OpenAPI-Dokumentation unter `http://127.0.0.1:8000/docs`.
+
+## Frontend starten
+
+```powershell
+cd frontend
+npm install
+npm run dev
+```
+
+Das Frontend laeuft standardmaessig unter `http://127.0.0.1:5173`.
+
+## Konfiguration
+
+Das Frontend nutzt standardmaessig `http://127.0.0.1:8000` als API-Basis. Fuer andere Umgebungen kann `VITE_API_BASE_URL` gesetzt werden.
+
+```powershell
+$env:VITE_API_BASE_URL = "http://127.0.0.1:8000"
+npm run dev
+```
+
+SQLite-Datenbanken und lokale Laufzeitdateien werden nicht versioniert.
