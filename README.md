@@ -6,6 +6,7 @@ NokoTracker ist eine private Heim-ERP-App mit React/Vite-Frontend und FastAPI-Ba
 
 - `frontend/`: React, TypeScript und Vite
 - `backend/`: FastAPI, SQLAlchemy, Pydantic und SQLite
+- `noko_tracker/`: Home-Assistant-Add-on mit kombiniertem Frontend und Backend
 
 ## Backend starten
 
@@ -37,3 +38,9 @@ npm run dev
 ```
 
 SQLite-Datenbanken und lokale Laufzeitdateien werden nicht versioniert.
+
+## Home Assistant Add-on
+
+Die Branch `home-assistant-addon` enthaelt ein installierbares Home-Assistant-Add-on in `noko_tracker/`.
+
+Das Add-on baut das Frontend im Docker-Image, startet das FastAPI-Backend auf Port `8000` und liefert die UI ueber Home-Assistant-Ingress aus. Die SQLite-Datenbank liegt persistent unter `/data/noko_tracker.db`.
