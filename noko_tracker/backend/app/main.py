@@ -913,6 +913,14 @@ app.add_middleware(
 )
 
 
+@app.middleware("http")
+async def normalize_ingress_double_slashes(request, call_next):
+    path = request.scope.get("path")
+    if isinstance(path, str) and path.startswith("//"):
+        request.scope["path"] = "/" + path.lstrip("/")
+    return await call_next(request)
+
+
 @app.get("/health", tags=["system"])
 def read_health():
     return {"status": "ok"}

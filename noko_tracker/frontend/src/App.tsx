@@ -1264,6 +1264,23 @@ function formatDueDateWithDistance(value?: string | null) {
 }
 
 const inventoryColumnStorageKey = "heim-erp-inventory-visible-columns";
+const userIdStorageKey = "heim-erp-user-id";
+
+function readStoredValue(key: string) {
+  try {
+    return window.localStorage.getItem(key);
+  } catch {
+    return null;
+  }
+}
+
+function writeStoredValue(key: string, value: string) {
+  try {
+    window.localStorage.setItem(key, value);
+  } catch {
+    // Home Assistant ingress may run in a constrained iframe without storage.
+  }
+}
 
 function formatServingConversion(
   productUnit: string,
@@ -1392,7 +1409,7 @@ const defaultInventoryColumnKeys = inventoryColumnDefinitions.map(
 
 function getInitialInventoryVisibleColumns(): InventoryColumnKey[] {
   try {
-    const storedValue = localStorage.getItem(inventoryColumnStorageKey);
+    const storedValue = readStoredValue(inventoryColumnStorageKey);
     if (!storedValue) {
       return defaultInventoryColumnKeys;
     }
@@ -1718,7 +1735,7 @@ function joinRecipeSteps(steps: string[]) {
 }
 
 function getStoredUserId() {
-  const stored = localStorage.getItem("heim-erp-user-id");
+  const stored = readStoredValue(userIdStorageKey);
   const parsed = stored ? Number(stored) : 1;
   return Number.isFinite(parsed) && parsed > 0 ? parsed : 1;
 }
@@ -1866,7 +1883,7 @@ export default function App() {
   }, [loadData]);
 
   useEffect(() => {
-    localStorage.setItem("heim-erp-user-id", String(userId));
+    writeStoredValue(userIdStorageKey, String(userId));
   }, [userId]);
 
   useEffect(() => {
@@ -5100,7 +5117,7 @@ function InventoryPage({
   const [receiptImportMessage, setReceiptImportMessage] = useState("");
 
   useEffect(() => {
-    localStorage.setItem(
+    writeStoredValue(
       inventoryColumnStorageKey,
       JSON.stringify(visibleColumnKeys),
     );
