@@ -1,5 +1,5 @@
 name: NokoTracker
-version: "0.1.0"
+version: "0.1.1"
 slug: noko_tracker
 description: Private Heim-ERP-App mit Vorrat, Rezepten, Mahlzeiten, Kalender und Einkaufsliste.
 url: https://github.com/Noko-png/NokoTracker/tree/home-assistant-addon
