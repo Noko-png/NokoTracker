@@ -28,6 +28,21 @@ npm run dev
 
 Das Frontend laeuft standardmaessig unter `http://127.0.0.1:5173`.
 
+## Lokal alles starten
+
+Unter Windows kannst du im Projektordner auch direkt starten:
+
+```cmd
+start-local.cmd
+```
+
+Das oeffnet zwei CMD-Fenster:
+
+- Frontend: `http://127.0.0.1:5173`
+- Backend/API-Doku: `http://127.0.0.1:8000/docs`
+
+Dass `http://127.0.0.1:8000` nur JSON ausgibt, ist normal. Die Bedienoberflaeche laeuft lokal ueber den Frontend-Devserver auf Port `5173`.
+
 ## Konfiguration
 
 Das Frontend nutzt standardmaessig `http://127.0.0.1:8000` als API-Basis. Fuer andere Umgebungen kann `VITE_API_BASE_URL` gesetzt werden.
