@@ -4723,6 +4723,55 @@ th {
   gap: 14px;
 }
 
+.settings-import-form.compact {
+  gap: 10px;
+}
+
+.file-field {
+  display: grid;
+  gap: 8px;
+  min-width: 0;
+  padding: 12px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--field-bg);
+}
+
+.file-field span {
+  color: var(--muted);
+  font-size: 0.78rem;
+  font-weight: 900;
+}
+
+.file-field input {
+  width: 100%;
+  min-width: 0;
+  color: var(--text);
+}
+
+.file-field strong,
+.database-transfer-result strong,
+.database-transfer-result span {
+  overflow: hidden;
+  color: var(--text-strong);
+  font-size: 0.86rem;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.database-transfer-result {
+  display: grid;
+  gap: 5px;
+  padding: 10px;
+  border: 1px solid color-mix(in srgb, var(--green) 38%, var(--line));
+  border-radius: 8px;
+  background: var(--green-soft);
+}
+
+.database-transfer-result span {
+  color: var(--muted);
+}
+
 .settings-row {
   display: grid;
   grid-template-columns: 140px minmax(0, 1fr);

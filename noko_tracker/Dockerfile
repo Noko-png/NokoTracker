@@ -11,7 +11,7 @@ RUN VITE_API_BASE_URL=./ npm run build
 FROM ghcr.io/home-assistant/base:latest
 
 ARG BUILD_ARCH=amd64
-ARG BUILD_VERSION=0.1.1
+ARG BUILD_VERSION=1.0.0
 
 LABEL \
     io.hass.version="${BUILD_VERSION}" \

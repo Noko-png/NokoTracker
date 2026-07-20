@@ -495,6 +495,12 @@ export type CsvImportResult = {
   warnings: string[];
 };
 
+export type DatabaseImportResult = {
+  filename: string;
+  backup_path?: string | null;
+  message: string;
+};
+
 export type ReceiptImportStatus = "ready" | "needs_review" | "ignored";
 
 export type ReceiptFoodSuggestion = {
@@ -562,9 +568,13 @@ type RequestOptions = Omit<RequestInit, "body"> & {
 
 async function request<T>(path: string, options: RequestOptions = {}): Promise<T> {
   const headers = new Headers(options.headers);
+  const isFormData =
+    typeof FormData !== "undefined" && options.body instanceof FormData;
   const body =
-    options.body === undefined ? undefined : JSON.stringify(options.body);
-  if (body !== undefined && !headers.has("Content-Type")) {
+    options.body === undefined || isFormData
+      ? (options.body as BodyInit | undefined)
+      : JSON.stringify(options.body);
+  if (body !== undefined && !isFormData && !headers.has("Content-Type")) {
     headers.set("Content-Type", "application/json");
   }
 
@@ -978,6 +988,45 @@ export function importGrocyCsv(directory: string, dryRun = false) {
       directory,
       dry_run: dryRun,
     },
+  });
+}
+
+export function importGrocyCsvUpload(files: File[], dryRun = false) {
+  const body = new FormData();
+  files.forEach((file) => body.append("files", file));
+  body.set("dry_run", String(dryRun));
+
+  return request<CsvImportResult>("/imports/grocy-csv/upload", {
+    method: "POST",
+    body,
+  });
+}
+
+export async function exportDatabaseBackup() {
+  const response = await fetch(apiUrl("/database/export"));
+  if (!response.ok) {
+    let message = `${response.status} ${response.statusText}`;
+    try {
+      const payload = await response.json();
+      if (typeof payload.detail === "string") {
+        message = payload.detail;
+      }
+    } catch {
+      // Keep the HTTP status when the backend sends an empty error body.
+    }
+    throw new Error(message);
+  }
+
+  return response.blob();
+}
+
+export function importDatabaseBackup(file: File) {
+  const body = new FormData();
+  body.set("file", file);
+
+  return request<DatabaseImportResult>("/database/import", {
+    method: "POST",
+    body,
   });
 }
 

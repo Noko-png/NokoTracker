@@ -6,6 +6,7 @@ from sqlalchemy.exc import OperationalError
 from . import crud, models
 from .database import DATABASE_URL, SessionLocal, engine
 from .routers import (
+    backups,
     calendar,
     dashboard,
     foods,
@@ -892,7 +893,7 @@ ensure_default_user()
 app = FastAPI(
     title="Heim-ERP Backend",
     description="Backend API fuer ein privates Heim-ERP mit Kalender, Vorrat, Rezepten, Mahlzeiten und Einkaufsliste.",
-    version="0.1.0",
+    version="1.0.0",
 )
 
 app.add_middleware(
@@ -931,4 +932,5 @@ app.include_router(meals.router)
 app.include_router(nutrition.router)
 app.include_router(shopping.router)
 app.include_router(imports.router)
+app.include_router(backups.router)
 app.include_router(dashboard.router)

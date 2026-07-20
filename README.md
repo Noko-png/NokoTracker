@@ -59,3 +59,9 @@ SQLite-Datenbanken und lokale Laufzeitdateien werden nicht versioniert.
 Die Branch `home-assistant-addon` enthaelt ein installierbares Home-Assistant-Add-on in `noko_tracker/`.
 
 Das Add-on baut das Frontend im Docker-Image, startet das FastAPI-Backend auf Port `8000` und liefert die UI ueber Home-Assistant-Ingress aus. Die SQLite-Datenbank liegt persistent unter `/data/noko_tracker.db`.
+
+## Import und Export
+
+In den Einstellungen kannst du die NokoTracker-Datenbank als SQLite-Datei herunterladen oder eine vorhandene `.db`/`.sqlite`-Datei hochladen. Beim Import wird die bestehende Datenbank vorher automatisch als Backup gesichert.
+
+Der Grocy-Import kann weiterhin einen Serverordner lesen und zusaetzlich direkt im Browser CSV-Dateien oder ein ZIP-Archiv aus deinem PC hochladen.

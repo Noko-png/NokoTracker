@@ -1060,6 +1060,12 @@ class CsvImportResult(BaseModel):
     warnings: list[str] = Field(default_factory=list)
 
 
+class DatabaseImportResult(BaseModel):
+    filename: str
+    backup_path: Optional[str] = None
+    message: str
+
+
 ReceiptImportStatus = Literal["ready", "needs_review", "ignored"]
 
 

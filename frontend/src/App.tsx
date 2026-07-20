@@ -11,6 +11,7 @@ import {
   ChevronRight,
   Circle,
   Database,
+  Download,
   Eye,
   EyeOff,
   Filter,
@@ -27,6 +28,7 @@ import {
   ShoppingCart,
   Soup,
   Trash2,
+  Upload,
   Utensils,
   X,
 } from "lucide-react";
@@ -45,6 +47,7 @@ import {
   type CalendarGroup,
   type CalendarGroupCreate,
   type CsvImportResult,
+  type DatabaseImportResult,
   type DashboardSummary,
   type Food,
   type FoodBarcodeLookup,
@@ -108,6 +111,7 @@ import {
   deleteStorageLocation,
   deleteShoppingListItem,
   deleteUser,
+  exportDatabaseBackup,
   generateShoppingListFromLowStock,
   getCalendarGroups,
   getCalendarEvents,
@@ -124,7 +128,9 @@ import {
   getShoppingList,
   getStorageLocations,
   getUsers,
+  importDatabaseBackup,
   importGrocyCsv,
+  importGrocyCsvUpload,
   importShoppingListToInventory,
   increaseInventoryItem,
   lookupFoodByBarcode,
@@ -1826,6 +1832,12 @@ export default function App() {
   const [csvImportResult, setCsvImportResult] =
     useState<CsvImportResult | null>(null);
   const [csvImportRunning, setCsvImportRunning] = useState(false);
+  const [grocyUploadFiles, setGrocyUploadFiles] = useState<File[]>([]);
+  const [databaseImportFile, setDatabaseImportFile] = useState<File | null>(null);
+  const [databaseTransferRunning, setDatabaseTransferRunning] = useState(false);
+  const [databaseTransferResult, setDatabaseTransferResult] =
+    useState<DatabaseImportResult | null>(null);
+  const [databaseTransferMessage, setDatabaseTransferMessage] = useState("");
   const [editingUserId, setEditingUserId] = useState<number | null>(null);
 
   const loadData = useCallback(async () => {
@@ -3076,6 +3088,81 @@ export default function App() {
     }
   }
 
+  async function submitGrocyCsvUpload(event: FormEvent) {
+    event.preventDefault();
+    if (grocyUploadFiles.length === 0) {
+      setApiError("Bitte Grocy-CSV-Dateien oder ein ZIP auswaehlen.");
+      return;
+    }
+
+    try {
+      setApiError(null);
+      setCsvImportRunning(true);
+      const result = await importGrocyCsvUpload(
+        grocyUploadFiles,
+        csvImportForm.dryRun,
+      );
+      setCsvImportResult(result);
+      if (!csvImportForm.dryRun) {
+        await loadData();
+      }
+    } catch (error) {
+      setApiError(error instanceof Error ? error.message : "API-Fehler");
+    } finally {
+      setCsvImportRunning(false);
+    }
+  }
+
+  async function downloadDatabaseBackup() {
+    try {
+      setApiError(null);
+      setDatabaseTransferRunning(true);
+      const blob = await exportDatabaseBackup();
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = `noko-tracker-${getLocalDate()}.db`;
+      document.body.append(link);
+      link.click();
+      link.remove();
+      URL.revokeObjectURL(url);
+      setDatabaseTransferMessage("Datenbank-Download gestartet.");
+    } catch (error) {
+      setApiError(error instanceof Error ? error.message : "API-Fehler");
+    } finally {
+      setDatabaseTransferRunning(false);
+    }
+  }
+
+  async function submitDatabaseImport(event: FormEvent) {
+    event.preventDefault();
+    if (!databaseImportFile) {
+      setApiError("Bitte eine Datenbankdatei auswaehlen.");
+      return;
+    }
+    if (
+      !window.confirm(
+        "Die aktuelle Datenbank wird ersetzt. Vorher wird automatisch ein Backup erstellt. Fortfahren?",
+      )
+    ) {
+      return;
+    }
+
+    try {
+      setApiError(null);
+      setDatabaseTransferRunning(true);
+      const result = await importDatabaseBackup(databaseImportFile);
+      setDatabaseTransferResult(result);
+      setDatabaseTransferMessage(result.message);
+      setDatabaseImportFile(null);
+      await loadData();
+    } catch (error) {
+      setApiError(error instanceof Error ? error.message : "API-Fehler");
+    } finally {
+      setDatabaseTransferRunning(false);
+    }
+  }
+
   function startEditingUser(user: User) {
     setUserForm(userFormFromUser(user));
     setEditingUserId(user.id);
@@ -3485,14 +3572,24 @@ export default function App() {
             csvImportForm={csvImportForm}
             csvImportResult={csvImportResult}
             csvImportRunning={csvImportRunning}
+            databaseImportFile={databaseImportFile}
+            databaseTransferMessage={databaseTransferMessage}
+            databaseTransferResult={databaseTransferResult}
+            databaseTransferRunning={databaseTransferRunning}
             form={userForm}
             editingUserId={editingUserId}
+            grocyUploadFiles={grocyUploadFiles}
             onCancelEditing={cancelEditingUser}
             onCsvImportFormChange={setCsvImportForm}
             onCsvImportSubmit={submitCsvImport}
+            onDatabaseExport={downloadDatabaseBackup}
+            onDatabaseImportFileChange={setDatabaseImportFile}
+            onDatabaseImportSubmit={submitDatabaseImport}
             onDelete={removeUser}
             onEdit={startEditingUser}
             onFormChange={setUserForm}
+            onGrocyUploadFilesChange={setGrocyUploadFiles}
+            onGrocyUploadSubmit={submitGrocyCsvUpload}
             onSettingsFormChange={setUserSettingsForm}
             onSettingsSubmit={submitUserSettings}
             onSubmit={submitUser}
@@ -10943,14 +11040,24 @@ function SettingsPage({
   csvImportForm,
   csvImportResult,
   csvImportRunning,
+  databaseImportFile,
+  databaseTransferMessage,
+  databaseTransferResult,
+  databaseTransferRunning,
   editingUserId,
   form,
+  grocyUploadFiles,
   onCancelEditing,
   onCsvImportFormChange,
   onCsvImportSubmit,
+  onDatabaseExport,
+  onDatabaseImportFileChange,
+  onDatabaseImportSubmit,
   onDelete,
   onEdit,
   onFormChange,
+  onGrocyUploadFilesChange,
+  onGrocyUploadSubmit,
   onSettingsFormChange,
   onSettingsSubmit,
   onSubmit,
@@ -10964,14 +11071,24 @@ function SettingsPage({
   csvImportForm: CsvImportForm;
   csvImportResult: CsvImportResult | null;
   csvImportRunning: boolean;
+  databaseImportFile: File | null;
+  databaseTransferMessage: string;
+  databaseTransferResult: DatabaseImportResult | null;
+  databaseTransferRunning: boolean;
   editingUserId: number | null;
   form: UserForm;
+  grocyUploadFiles: File[];
   onCancelEditing: () => void;
   onCsvImportFormChange: (value: CsvImportForm) => void;
   onCsvImportSubmit: (event: FormEvent) => void;
+  onDatabaseExport: () => void;
+  onDatabaseImportFileChange: (value: File | null) => void;
+  onDatabaseImportSubmit: (event: FormEvent) => void;
   onDelete: (user: User) => void;
   onEdit: (user: User) => void;
   onFormChange: (value: UserForm) => void;
+  onGrocyUploadFilesChange: (value: File[]) => void;
+  onGrocyUploadSubmit: (event: FormEvent) => void;
   onSettingsFormChange: (value: UserSettingsForm) => void;
   onSettingsSubmit: (event: FormEvent) => void;
   onSubmit: (event: FormEvent) => void;
@@ -11184,7 +11301,79 @@ function SettingsPage({
           </form>
         </Panel>
 
+        <Panel title="Datenbank sichern">
+          <div className="settings-import-form">
+            <button
+              className="button secondary full"
+              disabled={databaseTransferRunning}
+              onClick={onDatabaseExport}
+              type="button"
+            >
+              <Download size={16} />
+              Datenbank herunterladen
+            </button>
+
+            <form className="settings-import-form compact" onSubmit={onDatabaseImportSubmit}>
+              <label className="file-field">
+                <span>Datenbank hochladen</span>
+                <input
+                  accept=".db,.sqlite,.sqlite3"
+                  onChange={(event) =>
+                    onDatabaseImportFileChange(event.target.files?.[0] ?? null)
+                  }
+                  type="file"
+                />
+                <strong>{databaseImportFile?.name ?? "Keine Datei ausgewaehlt"}</strong>
+              </label>
+              <button
+                className="button danger full"
+                disabled={databaseTransferRunning || !databaseImportFile}
+                type="submit"
+              >
+                <Upload size={16} />
+                Datenbank importieren
+              </button>
+            </form>
+
+            {(databaseTransferMessage || databaseTransferResult) && (
+              <div className="database-transfer-result">
+                {databaseTransferMessage && <strong>{databaseTransferMessage}</strong>}
+                {databaseTransferResult?.backup_path && (
+                  <span>Backup: {databaseTransferResult.backup_path}</span>
+                )}
+              </div>
+            )}
+          </div>
+        </Panel>
+
         <Panel title="Grocy CSV-Import">
+          <form className="settings-import-form" onSubmit={onGrocyUploadSubmit}>
+            <label className="file-field">
+              <span>CSV oder ZIP vom PC</span>
+              <input
+                accept=".csv,.zip,text/csv,application/zip"
+                multiple
+                onChange={(event) =>
+                  onGrocyUploadFilesChange(Array.from(event.target.files ?? []))
+                }
+                type="file"
+              />
+              <strong>
+                {grocyUploadFiles.length > 0
+                  ? `${grocyUploadFiles.length} Datei(en) ausgewaehlt`
+                  : "Keine Datei ausgewaehlt"}
+              </strong>
+            </label>
+            <button
+              className="button primary full"
+              disabled={csvImportRunning || grocyUploadFiles.length === 0}
+              type="submit"
+            >
+              <Upload size={16} />
+              {csvImportRunning ? "Upload laeuft" : "CSV/ZIP hochladen"}
+            </button>
+          </form>
+
           <form className="settings-import-form" onSubmit={onCsvImportSubmit}>
             <TextInput
               label="CSV-Ordner"
