@@ -1,5 +1,10 @@
 # Changelog
 
+## 1.0.3
+
+- Mobile Navigation auf Hamburger-Menue mit seitlichem Drawer umgestellt.
+- Stammdaten und Einstellungen bleiben im mobilen Menue direkt erreichbar.
+
 ## 1.0.2
 
 - Version wird in den Einstellungen angezeigt.

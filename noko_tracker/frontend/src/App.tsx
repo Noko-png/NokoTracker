@@ -462,7 +462,7 @@ const macroMeta: Array<{
   { key: "carbs", label: "Kohlenhydrate", unit: "g", tone: "red" },
 ];
 
-const appVersion = "1.0.2";
+const appVersion = "1.0.3";
 const updateSourceLabel = "main / github.com/Noko-png/NokoTracker";
 
 const emptyNutrition: NutritionDay = {
@@ -1751,6 +1751,7 @@ function getStoredUserId() {
 
 export default function App() {
   const [activePage, setActivePage] = useState<Page>("dashboard");
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [masterDataOpen, setMasterDataOpen] = useState(true);
   const [activeMasterDataTab, setActiveMasterDataTab] =
     useState<MasterDataTab>("foods");
@@ -3226,13 +3227,57 @@ export default function App() {
     setActiveMasterDataTab(tab);
     setMasterDataOpen(true);
     setActivePage("masterData");
+    setMobileMenuOpen(false);
+  }
+
+  function navigateToPage(page: Page) {
+    setActivePage(page);
+    setMobileMenuOpen(false);
   }
 
   const SettingsIcon = settingsNavigationItem.icon;
 
   return (
     <div className="app-shell" data-theme={appliedTheme}>
-      <aside className="sidebar">
+      <header className="mobile-app-bar">
+        <button
+          aria-controls="primary-navigation"
+          aria-expanded={mobileMenuOpen}
+          aria-label={mobileMenuOpen ? "Menue schliessen" : "Menue oeffnen"}
+          className="mobile-menu-button"
+          onClick={() => setMobileMenuOpen((open) => !open)}
+          type="button"
+        >
+          {mobileMenuOpen ? <X size={22} /> : <Menu size={22} />}
+        </button>
+        <div className="mobile-app-title">
+          <strong>Heim-ERP</strong>
+          <span>{pageTitle}</span>
+        </div>
+      </header>
+
+      <button
+        aria-label="Menue schliessen"
+        className={`mobile-menu-backdrop ${mobileMenuOpen ? "open" : ""}`}
+        onClick={() => setMobileMenuOpen(false)}
+        type="button"
+      />
+
+      <aside
+        className={`sidebar ${mobileMenuOpen ? "open" : ""}`}
+        id="primary-navigation"
+      >
+        <div className="sidebar-mobile-head">
+          <span>Navigation</span>
+          <button
+            aria-label="Menue schliessen"
+            className="mobile-menu-button"
+            onClick={() => setMobileMenuOpen(false)}
+            type="button"
+          >
+            <X size={22} />
+          </button>
+        </div>
         <div className="brand">
           <div className="brand-mark">
             <Utensils size={22} />
@@ -3248,7 +3293,7 @@ export default function App() {
             <button
               className={`nav-item ${activePage === id ? "active" : ""}`}
               key={id}
-              onClick={() => setActivePage(id)}
+              onClick={() => navigateToPage(id)}
               type="button"
             >
               <Icon size={18} />
@@ -3262,7 +3307,7 @@ export default function App() {
             className={`nav-item ${
               activePage === settingsNavigationItem.id ? "active" : ""
             }`}
-            onClick={() => setActivePage(settingsNavigationItem.id)}
+            onClick={() => navigateToPage(settingsNavigationItem.id)}
             type="button"
           >
             <SettingsIcon size={18} />
@@ -3344,7 +3389,7 @@ export default function App() {
             dashboard={dashboard}
             inventoryWarnings={warnings}
             nutrition={nutrition}
-            onNavigate={setActivePage}
+            onNavigate={navigateToPage}
             openShoppingList={openShoppingList}
             todaysEvents={todaysEvents}
           />
