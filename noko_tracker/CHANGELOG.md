@@ -1,5 +1,10 @@
 # Changelog
 
+## 1.0.5
+
+- Lebensmittel-Auswahl in der Einkaufsliste von einem Dropdown auf eine Suchleiste mit Treffer-Dropdown umgestellt.
+- Auswahl per Klick oder Enter uebernimmt weiterhin automatisch die passende Einheit.
+
 ## 1.0.4
 
 - Mobiler Kalorientracker im Food-Log-Stil mit dunklem Tageskopf, Wochenleiste, kompakter Makrozeile und Timeline ueberarbeitet.

@@ -462,7 +462,7 @@ const macroMeta: Array<{
   { key: "carbs", label: "Kohlenhydrate", unit: "g", tone: "red" },
 ];
 
-const appVersion = "1.0.4";
+const appVersion = "1.0.5";
 const updateSourceLabel = "main / github.com/Noko-png/NokoTracker";
 
 const emptyNutrition: NutritionDay = {
@@ -11019,6 +11019,8 @@ function ShoppingPage({
   const [inventoryImportBusy, setInventoryImportBusy] = useState(false);
   const [inventoryImportResult, setInventoryImportResult] =
     useState<ShoppingListInventoryImportResult | null>(null);
+  const [foodSearchQuery, setFoodSearchQuery] = useState("");
+  const [foodSearchOpen, setFoodSearchOpen] = useState(false);
   const foodOptions = foods
     .slice()
     .sort((first, second) => first.name.localeCompare(second.name, "de"));
@@ -11027,7 +11029,25 @@ function ShoppingPage({
   const selectedFoodUnit = selectedFood
     ? productUnitNameForFood(selectedFood, productUnits)
     : "";
+  const normalizedFoodSearch = foodSearchQuery.trim().toLowerCase();
+  const filteredFoodOptions = foodOptions
+    .filter((food) =>
+      formatFoodSuggestionLabel(food).toLowerCase().includes(normalizedFoodSearch),
+    )
+    .slice(0, 10);
   const openItems = items.filter((item) => !item.is_checked);
+
+  useEffect(() => {
+    if (form.source !== "food") {
+      setFoodSearchQuery("");
+      setFoodSearchOpen(false);
+      return;
+    }
+
+    if (selectedFood) {
+      setFoodSearchQuery(formatFoodSuggestionLabel(selectedFood));
+    }
+  }, [form.source, selectedFood]);
 
   async function importToInventory(
     unknownItemAction: ShoppingListInventoryUnknownAction = "ask",
@@ -11044,11 +11064,35 @@ function ShoppingPage({
   function selectFood(foodId: string) {
     const food = foods.find((item) => String(item.id) === foodId);
     const unit = food ? productUnitNameForFood(food, productUnits) : form.unit;
+    setFoodSearchQuery(food ? formatFoodSuggestionLabel(food) : "");
+    setFoodSearchOpen(false);
     onFormChange({
       ...form,
       food_id: foodId,
       quantity: form.quantity || "1",
       unit: unit || "pcs",
+    });
+  }
+
+  function updateFoodSearch(query: string) {
+    setFoodSearchQuery(query);
+    setFoodSearchOpen(true);
+    if (form.food_id !== "") {
+      onFormChange({
+        ...form,
+        food_id: "",
+        unit: "",
+      });
+    }
+  }
+
+  function clearFoodSearch() {
+    setFoodSearchQuery("");
+    setFoodSearchOpen(true);
+    onFormChange({
+      ...form,
+      food_id: "",
+      unit: "",
     });
   }
 
@@ -11208,20 +11252,86 @@ function ShoppingPage({
 
           {form.source === "food" && (
             <>
-              <label>
+              <label className="shopping-food-combobox">
                 <span>Lebensmittel</span>
-                <select
-                  onChange={(event) => selectFood(event.target.value)}
-                  required
-                  value={form.food_id}
+                <div
+                  className="shopping-food-search"
+                  onBlur={(event) => {
+                    const nextTarget = event.relatedTarget as Node | null;
+                    if (!nextTarget || !event.currentTarget.contains(nextTarget)) {
+                      setFoodSearchOpen(false);
+                    }
+                  }}
                 >
-                  <option value="">Lebensmittel auswaehlen</option>
-                  {foodOptions.map((food) => (
-                    <option key={food.id} value={food.id}>
-                      {formatFoodSuggestionLabel(food)}
-                    </option>
-                  ))}
-                </select>
+                  <div className="shopping-food-search-input">
+                    <Search size={18} />
+                    <input
+                      aria-controls="shopping-food-search-results"
+                      aria-autocomplete="list"
+                      aria-expanded={foodSearchOpen}
+                      aria-haspopup="listbox"
+                      autoComplete="off"
+                      onChange={(event) => updateFoodSearch(event.target.value)}
+                      onFocus={() => setFoodSearchOpen(true)}
+                      onKeyDown={(event) => {
+                        if (event.key === "Escape") {
+                          setFoodSearchOpen(false);
+                          return;
+                        }
+                        if (event.key === "Enter" && filteredFoodOptions.length > 0) {
+                          event.preventDefault();
+                          selectFood(String(filteredFoodOptions[0].id));
+                        }
+                      }}
+                      placeholder="Lebensmittel suchen"
+                      role="combobox"
+                      type="search"
+                      value={foodSearchQuery}
+                    />
+                    {foodSearchQuery && (
+                      <button
+                        aria-label="Suche leeren"
+                        onClick={clearFoodSearch}
+                        type="button"
+                      >
+                        <X size={16} />
+                      </button>
+                    )}
+                  </div>
+                  {foodSearchOpen && (
+                    <div
+                      className="shopping-food-search-results"
+                      id="shopping-food-search-results"
+                      role="listbox"
+                    >
+                      {filteredFoodOptions.length === 0 ? (
+                        <div className="shopping-food-search-empty">
+                          Kein Lebensmittel gefunden
+                        </div>
+                      ) : (
+                        filteredFoodOptions.map((food) => (
+                          <button
+                            aria-selected={String(food.id) === form.food_id}
+                            key={food.id}
+                            onMouseDown={(event) => event.preventDefault()}
+                            onClick={() => selectFood(String(food.id))}
+                            role="option"
+                            type="button"
+                          >
+                            <strong>{food.name}</strong>
+                            <span>
+                              {[food.brand, food.storage_location]
+                                .filter((value): value is string =>
+                                  Boolean(value?.trim()),
+                                )
+                                .join(" | ") || "Ohne Zusatzinfos"}
+                            </span>
+                          </button>
+                        ))
+                      )}
+                    </div>
+                  )}
+                </div>
               </label>
               {selectedFood && (
                 <div className="shopping-inventory-summary">
