@@ -1,5 +1,10 @@
 # Changelog
 
+## 1.0.6
+
+- Bestandsuebersicht auf mobilen Geraeten als Kartenliste statt abgeschnittener Desktop-Tabelle dargestellt.
+- Mobile Warnkarten, Filter und Bestandsaktionen fuer kleine Displays neu ausgerichtet.
+
 ## 1.0.5
 
 - Lebensmittel-Auswahl in der Einkaufsliste von einem Dropdown auf eine Suchleiste mit Treffer-Dropdown umgestellt.
