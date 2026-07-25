@@ -462,7 +462,7 @@ const macroMeta: Array<{
   { key: "carbs", label: "Kohlenhydrate", unit: "g", tone: "red" },
 ];
 
-const appVersion = "1.0.3";
+const appVersion = "1.0.4";
 const updateSourceLabel = "main / github.com/Noko-png/NokoTracker";
 
 const emptyNutrition: NutritionDay = {
@@ -3238,7 +3238,7 @@ export default function App() {
   const SettingsIcon = settingsNavigationItem.icon;
 
   return (
-    <div className="app-shell" data-theme={appliedTheme}>
+    <div className="app-shell" data-page={activePage} data-theme={appliedTheme}>
       <header className="mobile-app-bar">
         <button
           aria-controls="primary-navigation"
@@ -3251,7 +3251,7 @@ export default function App() {
           {mobileMenuOpen ? <X size={22} /> : <Menu size={22} />}
         </button>
         <div className="mobile-app-title">
-          <strong>Heim-ERP</strong>
+          <strong>NokoTracker</strong>
           <span>{pageTitle}</span>
         </div>
       </header>
@@ -3348,7 +3348,7 @@ export default function App() {
         </div>
       </aside>
 
-      <main className="content">
+      <main className={`content ${activePage === "nutrition" ? "nutrition-content" : ""}`}>
         <header className="topbar">
           <div>
             <p className="eyebrow">http://127.0.0.1:8000</p>
@@ -3594,6 +3594,8 @@ export default function App() {
             onDelete={removeMealLog}
             onEdit={startEditingMealLog}
             onFormChange={setMealForm}
+            onMenuOpen={() => setMobileMenuOpen(true)}
+            onNavigate={navigateToPage}
             onDeductMealLogInventory={(mealLogId) =>
               runAction(() => deductMealLogInventory(mealLogId))
             }
@@ -9639,6 +9641,8 @@ function NutritionPage({
   onEdit,
   onFormChange,
   onInventoryDecrease,
+  onMenuOpen,
+  onNavigate,
   onMove,
   onSubmit,
   productUnits,
@@ -9658,6 +9662,8 @@ function NutritionPage({
   onEdit: (mealLog: MealLog) => void;
   onFormChange: (value: MealForm) => void;
   onInventoryDecrease: (id: number, amount: number) => Promise<boolean> | boolean;
+  onMenuOpen: () => void;
+  onNavigate: (page: Page) => void;
   onMove: (mealLog: MealLog, date: string, time: string) => void;
   onSubmit: (event?: FormEvent) => Promise<boolean> | boolean;
   productUnits: ProductUnit[];
@@ -10273,7 +10279,12 @@ function NutritionPage({
       <section className="nutrition-log-shell">
         <div className="nutrition-log-header">
           <div className="nutrition-log-nav">
-            <button className="nutrition-icon-button" type="button">
+            <button
+              className="nutrition-icon-button"
+              onClick={onMenuOpen}
+              title="Menue oeffnen"
+              type="button"
+            >
               <Menu size={24} />
             </button>
             <button
@@ -10479,6 +10490,34 @@ function NutritionPage({
             <span>EAN</span>
           </button>
         </div>
+
+        <nav className="nutrition-bottom-nav" aria-label="Kalorientracker Schnellnavigation">
+          <button onClick={() => onNavigate("dashboard")} type="button">
+            <LayoutDashboard size={24} />
+            <span>Dashboard</span>
+          </button>
+          <button className="active" type="button">
+            <Apple size={25} />
+            <span>Food Log</span>
+          </button>
+          <button
+            className="primary"
+            onClick={() => openFoodSearch()}
+            title="Eintrag hinzufuegen"
+            type="button"
+          >
+            <Plus size={32} />
+            <span>Hinzufuegen</span>
+          </button>
+          <button onClick={() => onNavigate("shopping")} type="button">
+            <ShoppingCart size={24} />
+            <span>Einkauf</span>
+          </button>
+          <button onClick={() => onNavigate("settings")} type="button">
+            <Settings size={24} />
+            <span>Mehr</span>
+          </button>
+        </nav>
       </section>
 
       {addSheetOpen && (

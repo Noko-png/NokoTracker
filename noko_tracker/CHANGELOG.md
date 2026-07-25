@@ -1,5 +1,10 @@
 # Changelog
 
+## 1.0.4
+
+- Mobiler Kalorientracker im Food-Log-Stil mit dunklem Tageskopf, Wochenleiste, kompakter Makrozeile und Timeline ueberarbeitet.
+- Feste mobile Suchleiste und Bottom-Navigation fuer Dashboard, Food Log, Einkauf und Einstellungen ergaenzt.
+
 ## 1.0.3
 
 - Mobile Navigation auf Hamburger-Menue mit seitlichem Drawer umgestellt.
