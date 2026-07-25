@@ -56,7 +56,11 @@ SQLite-Datenbanken und lokale Laufzeitdateien werden nicht versioniert.
 
 ## Home Assistant Add-on
 
-Die Branch `home-assistant-addon` enthaelt ein installierbares Home-Assistant-Add-on in `noko_tracker/`.
+Die `main`-Branch enthaelt das lokale Projekt und das installierbare Home-Assistant-Add-on in `noko_tracker/`. Fuege in Home Assistant immer nur die Repository-URL hinzu, nicht eine `/tree/...`-Branch-URL:
+
+```text
+https://github.com/Noko-png/NokoTracker
+```
 
 Das Add-on baut das Frontend im Docker-Image, startet das FastAPI-Backend auf Port `8000` und liefert die UI ueber Home-Assistant-Ingress aus. Die SQLite-Datenbank liegt persistent unter `/data/noko_tracker.db`.
 
