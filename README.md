@@ -64,6 +64,12 @@ https://github.com/Noko-png/NokoTracker
 
 Das Add-on baut das Frontend im Docker-Image, startet das FastAPI-Backend auf Port `8000` und liefert die UI ueber Home-Assistant-Ingress aus. Die SQLite-Datenbank liegt persistent unter `/data/noko_tracker.db`.
 
+### Updates
+
+Neue Versionen laufen ausschliesslich ueber `main`. Wenn in GitHub eine neue Version gepusht wurde, in Home Assistant den Add-on-Store oeffnen und oben rechts **Nach Updates suchen** ausfuehren. Danach sollte beim Add-on der normale **Update**-Button erscheinen; das Repository muss nicht entfernt und neu hinzugefuegt werden.
+
+Falls in Home Assistant noch eine alte URL mit `/tree/home-assistant-addon` oder `/tree/main` hinterlegt ist, diese einmal entfernen und nur die direkte Repository-URL `https://github.com/Noko-png/NokoTracker` hinzufuegen.
+
 ## Import und Export
 
 In den Einstellungen kannst du die NokoTracker-Datenbank als SQLite-Datei herunterladen oder eine vorhandene `.db`/`.sqlite`-Datei hochladen. Beim Import wird die bestehende Datenbank vorher automatisch als Backup gesichert.

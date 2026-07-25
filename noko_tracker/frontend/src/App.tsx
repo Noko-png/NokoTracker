@@ -462,6 +462,9 @@ const macroMeta: Array<{
   { key: "carbs", label: "Kohlenhydrate", unit: "g", tone: "red" },
 ];
 
+const appVersion = "1.0.2";
+const updateSourceLabel = "main / github.com/Noko-png/NokoTracker";
+
 const emptyNutrition: NutritionDay = {
   date: getLocalDate(),
   user_id: 1,
@@ -11266,6 +11269,14 @@ function SettingsPage({
   return (
     <div className="settings-layout">
       <section className="section settings-panel">
+        <div className="settings-row">
+          <span>Version</span>
+          <strong>{appVersion}</strong>
+        </div>
+        <div className="settings-row">
+          <span>Update-Quelle</span>
+          <strong>{updateSourceLabel}</strong>
+        </div>
         <div className="settings-row">
           <span>API</span>
           <strong>{apiBaseUrl}</strong>

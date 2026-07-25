@@ -1,5 +1,11 @@
 # Changelog
 
+## 1.0.2
+
+- Version wird in den Einstellungen angezeigt.
+- Add-on-Metadaten fuer den Betrieb ueber die einzige `main`-Branch aktualisiert.
+- Update-Hinweise ergaenzt, damit neue Versionen ohne Neuinstallation installiert werden koennen.
+
 ## 1.0.1
 
 - Dashboard mit kompakten Statuskarten fuer Bestand, Einkauf, Kalender, Rezepte und Aktivitaet.

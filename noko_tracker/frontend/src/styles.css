@@ -4945,6 +4945,11 @@ th {
   font-weight: 800;
 }
 
+.settings-row strong {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
 .active-user-chip,
 .macro-balance {
   display: flex;
