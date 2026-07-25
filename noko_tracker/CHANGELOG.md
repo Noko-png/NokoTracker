@@ -1,5 +1,10 @@
 # Changelog
 
+## 1.0.7
+
+- Mobile Bottom-Navigation aus dem Kalorientracker entfernt.
+- Tracking-Timeline auf mobilen Geraeten deutlich kompakter skaliert, damit mindestens 8 Stunden gleichzeitig sichtbar sind.
+
 ## 1.0.6
 
 - Bestandsuebersicht auf mobilen Geraeten als Kartenliste statt abgeschnittener Desktop-Tabelle dargestellt.

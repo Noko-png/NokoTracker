@@ -3391,10 +3391,6 @@ th {
   color: var(--text-strong);
 }
 
-.nutrition-bottom-nav {
-  display: none;
-}
-
 .nutrition-sheet-backdrop {
   position: fixed;
   inset: 0;
@@ -6207,43 +6203,43 @@ th {
 
   .nutrition-log-shell {
     min-height: 100dvh;
-    padding-bottom: 172px;
+    padding-bottom: 86px;
     background: var(--surface);
   }
 
   .nutrition-log-header {
     top: 0;
-    gap: 18px;
-    padding: 20px 26px 24px;
+    gap: 12px;
+    padding: 14px 18px 16px;
     border-bottom-color: var(--line);
     background: color-mix(in srgb, var(--surface) 94%, #111827);
   }
 
   .nutrition-log-nav {
-    grid-template-columns: 44px 40px minmax(0, 1fr) 40px;
-    gap: 12px;
+    grid-template-columns: 38px 34px minmax(0, 1fr) 34px;
+    gap: 9px;
   }
 
   .nutrition-log-nav h2 {
-    font-size: 2rem;
+    font-size: 1.7rem;
     font-weight: 950;
     line-height: 1.05;
   }
 
   .nutrition-icon-button {
-    min-width: 40px;
-    min-height: 40px;
+    min-width: 34px;
+    min-height: 34px;
     color: var(--text-strong);
   }
 
   .nutrition-week-strip {
-    gap: 10px;
+    gap: 7px;
   }
 
   .nutrition-week-strip button {
-    width: min(100%, 50px);
-    min-height: 64px;
-    padding: 7px 0;
+    width: min(100%, 44px);
+    min-height: 54px;
+    padding: 6px 0;
     background: transparent;
   }
 
@@ -6262,43 +6258,43 @@ th {
   }
 
   .nutrition-week-strip span {
-    font-size: 0.78rem;
+    font-size: 0.72rem;
     letter-spacing: 0;
   }
 
   .nutrition-week-strip strong {
-    font-size: 1.18rem;
+    font-size: 1.02rem;
   }
 
   .nutrition-macro-strip {
     grid-template-columns: repeat(4, minmax(0, 1fr));
-    gap: 8px;
+    gap: 7px;
   }
 
   .nutrition-macro-strip article {
-    gap: 9px;
+    gap: 6px;
   }
 
   .nutrition-macro-strip strong {
-    font-size: 0.88rem;
+    font-size: 0.78rem;
     font-weight: 950;
   }
 
   .nutrition-macro-strip span {
-    height: 8px;
+    height: 7px;
     background: #2d405b;
   }
 
   .nutrition-time-grid {
-    grid-template-columns: 82px 58px minmax(0, 1fr);
-    grid-template-rows: repeat(33, minmax(72px, auto));
-    margin-top: 72px;
-    padding: 0 26px 0 0;
+    grid-template-columns: 70px 44px minmax(0, 1fr);
+    grid-template-rows: repeat(33, minmax(30px, auto));
+    margin-top: 10px;
+    padding: 0 18px 0 0;
     background: var(--surface);
   }
 
   .nutrition-drop-slot {
-    min-height: 72px;
+    min-height: 30px;
     border-top-color: rgba(148, 163, 184, 0.22);
   }
 
@@ -6307,45 +6303,45 @@ th {
   }
 
   .nutrition-hour-row {
-    grid-template-columns: 82px 58px;
-    min-height: 72px;
+    grid-template-columns: 70px 44px;
+    min-height: 30px;
   }
 
   .nutrition-hour-row::before {
-    top: -72px;
-    left: 50px;
+    top: -30px;
+    left: 35px;
     width: 2px;
     background: var(--timeline-line);
   }
 
   .nutrition-hour-row span {
-    width: 68px;
-    min-height: 36px;
-    margin-left: 12px;
+    width: 62px;
+    min-height: 28px;
+    margin-left: 8px;
     background: #1e293b;
     color: var(--text-strong);
-    font-size: 0.92rem;
+    font-size: 0.82rem;
     font-weight: 950;
   }
 
   .nutrition-hour-row button {
-    width: 38px;
-    height: 38px;
-    margin-left: 8px;
+    width: 30px;
+    height: 30px;
+    margin-left: 7px;
     background: #2d3c53;
     color: var(--text-strong);
   }
 
   .nutrition-time-entry-stack {
-    gap: 8px;
-    margin: 10px 0 10px 8px;
+    gap: 6px;
+    margin: 4px 0 4px 8px;
   }
 
   .nutrition-time-entry,
   .nutrition-time-entry-stack.multiple .nutrition-time-entry {
     grid-template-columns: minmax(0, 1fr) 40px;
-    min-height: 72px;
-    padding: 12px 12px 12px 16px;
+    min-height: 52px;
+    padding: 8px 10px 8px 14px;
     border: 0;
     border-left: 0;
     border-radius: 8px;
@@ -6387,10 +6383,10 @@ th {
   .nutrition-search-actions {
     position: fixed;
     right: 14px;
-    bottom: calc(82px + env(safe-area-inset-bottom));
+    bottom: calc(12px + env(safe-area-inset-bottom));
     left: 14px;
     z-index: 31;
-    grid-template-columns: minmax(0, 1fr) 58px;
+    grid-template-columns: minmax(0, 1fr) 54px;
     gap: 8px;
     width: auto;
     margin: 0;
@@ -6398,12 +6394,12 @@ th {
 
   .nutrition-search-pill,
   .nutrition-barcode-pill {
-    min-height: 58px;
-    padding: 0 18px;
+    min-height: 54px;
+    padding: 0 16px;
     border: 0;
     background: #343a44;
     color: var(--text-strong);
-    font-size: 1rem;
+    font-size: 0.94rem;
   }
 
   .nutrition-search-pill {
@@ -6417,61 +6413,6 @@ th {
 
   .nutrition-barcode-pill span {
     display: none;
-  }
-
-  .nutrition-bottom-nav {
-    position: fixed;
-    right: 0;
-    bottom: 0;
-    left: 0;
-    z-index: 30;
-    display: grid;
-    grid-template-columns: repeat(5, minmax(0, 1fr));
-    align-items: center;
-    min-height: calc(78px + env(safe-area-inset-bottom));
-    padding: 8px 8px calc(10px + env(safe-area-inset-bottom));
-    border-top: 1px solid #273445;
-    background: #101318;
-  }
-
-  .nutrition-bottom-nav button {
-    display: grid;
-    justify-items: center;
-    gap: 3px;
-    min-width: 0;
-    padding: 4px 2px;
-    border: 0;
-    border-radius: 0;
-    background: transparent;
-    color: #9aa3ae;
-    font-size: 0.72rem;
-    font-weight: 800;
-    line-height: 1.1;
-    text-align: center;
-  }
-
-  .nutrition-bottom-nav button.active {
-    color: var(--text-strong);
-  }
-
-  .nutrition-bottom-nav button.primary {
-    position: relative;
-    align-self: start;
-    width: 58px;
-    height: 58px;
-    margin: -18px auto 0;
-    border-radius: 999px;
-    background: #ffffff;
-    color: #0f172a;
-  }
-
-  .nutrition-bottom-nav button.primary span {
-    position: absolute;
-    overflow: hidden;
-    width: 1px;
-    height: 1px;
-    clip: rect(0 0 0 0);
-    white-space: nowrap;
   }
 
   .nutrition-barcode-form {

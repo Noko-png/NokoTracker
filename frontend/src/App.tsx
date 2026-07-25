@@ -462,7 +462,7 @@ const macroMeta: Array<{
   { key: "carbs", label: "Kohlenhydrate", unit: "g", tone: "red" },
 ];
 
-const appVersion = "1.0.6";
+const appVersion = "1.0.7";
 const updateSourceLabel = "main / github.com/Noko-png/NokoTracker";
 
 const emptyNutrition: NutritionDay = {
@@ -3595,7 +3595,6 @@ export default function App() {
             onEdit={startEditingMealLog}
             onFormChange={setMealForm}
             onMenuOpen={() => setMobileMenuOpen(true)}
-            onNavigate={navigateToPage}
             onDeductMealLogInventory={(mealLogId) =>
               runAction(() => deductMealLogInventory(mealLogId))
             }
@@ -9739,7 +9738,6 @@ function NutritionPage({
   onFormChange,
   onInventoryDecrease,
   onMenuOpen,
-  onNavigate,
   onMove,
   onSubmit,
   productUnits,
@@ -9760,7 +9758,6 @@ function NutritionPage({
   onFormChange: (value: MealForm) => void;
   onInventoryDecrease: (id: number, amount: number) => Promise<boolean> | boolean;
   onMenuOpen: () => void;
-  onNavigate: (page: Page) => void;
   onMove: (mealLog: MealLog, date: string, time: string) => void;
   onSubmit: (event?: FormEvent) => Promise<boolean> | boolean;
   productUnits: ProductUnit[];
@@ -10587,34 +10584,6 @@ function NutritionPage({
             <span>EAN</span>
           </button>
         </div>
-
-        <nav className="nutrition-bottom-nav" aria-label="Kalorientracker Schnellnavigation">
-          <button onClick={() => onNavigate("dashboard")} type="button">
-            <LayoutDashboard size={24} />
-            <span>Dashboard</span>
-          </button>
-          <button className="active" type="button">
-            <Apple size={25} />
-            <span>Food Log</span>
-          </button>
-          <button
-            className="primary"
-            onClick={() => openFoodSearch()}
-            title="Eintrag hinzufuegen"
-            type="button"
-          >
-            <Plus size={32} />
-            <span>Hinzufuegen</span>
-          </button>
-          <button onClick={() => onNavigate("shopping")} type="button">
-            <ShoppingCart size={24} />
-            <span>Einkauf</span>
-          </button>
-          <button onClick={() => onNavigate("settings")} type="button">
-            <Settings size={24} />
-            <span>Mehr</span>
-          </button>
-        </nav>
       </section>
 
       {addSheetOpen && (
