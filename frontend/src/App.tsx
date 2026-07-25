@@ -1270,6 +1270,23 @@ function formatDueDateWithDistance(value?: string | null) {
 }
 
 const inventoryColumnStorageKey = "heim-erp-inventory-visible-columns";
+const userIdStorageKey = "heim-erp-user-id";
+
+function readStoredValue(key: string) {
+  try {
+    return window.localStorage.getItem(key);
+  } catch {
+    return null;
+  }
+}
+
+function writeStoredValue(key: string, value: string) {
+  try {
+    window.localStorage.setItem(key, value);
+  } catch {
+    // Home Assistant ingress may run in a constrained iframe without storage.
+  }
+}
 
 function formatServingConversion(
   productUnit: string,
@@ -1398,7 +1415,7 @@ const defaultInventoryColumnKeys = inventoryColumnDefinitions.map(
 
 function getInitialInventoryVisibleColumns(): InventoryColumnKey[] {
   try {
-    const storedValue = localStorage.getItem(inventoryColumnStorageKey);
+    const storedValue = readStoredValue(inventoryColumnStorageKey);
     if (!storedValue) {
       return defaultInventoryColumnKeys;
     }
@@ -1724,7 +1741,7 @@ function joinRecipeSteps(steps: string[]) {
 }
 
 function getStoredUserId() {
-  const stored = localStorage.getItem("heim-erp-user-id");
+  const stored = readStoredValue(userIdStorageKey);
   const parsed = stored ? Number(stored) : 1;
   return Number.isFinite(parsed) && parsed > 0 ? parsed : 1;
 }
@@ -1878,7 +1895,7 @@ export default function App() {
   }, [loadData]);
 
   useEffect(() => {
-    localStorage.setItem("heim-erp-user-id", String(userId));
+    writeStoredValue(userIdStorageKey, String(userId));
   }, [userId]);
 
   useEffect(() => {
@@ -3619,9 +3636,133 @@ function DashboardPage({
   openShoppingList: ShoppingListItem[];
   todaysEvents: CalendarOccurrence[];
 }) {
+  const warningTotal =
+    inventoryWarnings.low_stock.length +
+    inventoryWarnings.expiring_soon.length +
+    inventoryWarnings.expired.length;
+  const inventoryItemCount = dashboard?.inventory_items ?? 0;
+  const foodCount = dashboard?.foods ?? 0;
+  const recipeCount = dashboard?.recipes ?? 0;
+  const openShoppingCount =
+    dashboard?.shopping_open_items ?? openShoppingList.length;
+  const upcomingEventCount = dashboard?.upcoming_events ?? todaysEvents.length;
+  const recentMealCount = dashboard?.recent_meals ?? 0;
+  const caloriesPercent = Math.min(nutrition.percentages.calories, 100);
+  const nextEvent = todaysEvents[0];
+  const firstShoppingItem = openShoppingList[0];
+  const dashboardCards = [
+    {
+      label: "Bestand",
+      value: inventoryItemCount,
+      detail: `${foodCount} Lebensmittel`,
+      meta:
+        warningTotal === 0 ? "Keine Warnungen" : `${warningTotal} Warnungen`,
+      page: "foods" as Page,
+      icon: <Database size={20} />,
+      tone: warningTotal > 0 ? "amber" : "green",
+    },
+    {
+      label: "Einkauf",
+      value: openShoppingCount,
+      detail: "offene Artikel",
+      meta: firstShoppingItem ? firstShoppingItem.name : "Liste leer",
+      page: "shopping" as Page,
+      icon: <ShoppingCart size={20} />,
+      tone: openShoppingCount > 0 ? "blue" : "green",
+    },
+    {
+      label: "Kalender",
+      value: upcomingEventCount,
+      detail: "kommende Eintraege",
+      meta: nextEvent ? nextEvent.event.title : "Heute frei",
+      page: "calendar" as Page,
+      icon: <CalendarDays size={20} />,
+      tone: todaysEvents.length > 0 ? "blue" : "green",
+    },
+    {
+      label: "Gerichte",
+      value: recipeCount,
+      detail: "Rezepte",
+      meta: `${recentMealCount} Mahlzeiten zuletzt`,
+      page: "recipes" as Page,
+      icon: <Soup size={20} />,
+      tone: "green",
+    },
+  ];
+
   return (
     <div className="page-grid">
-      <section className="metric-grid">
+      <section className="dashboard-overview-grid" aria-label="Uebersicht">
+        <button
+          className="dashboard-priority-card dashboard-link-card"
+          onClick={() => onNavigate(warningTotal > 0 ? "foods" : "nutrition")}
+          type="button"
+        >
+          <div className="dashboard-card-head">
+            {warningTotal > 0 ? (
+              <AlertTriangle size={20} />
+            ) : (
+              <CheckCircle2 size={20} />
+            )}
+            <span>Heute im Blick</span>
+          </div>
+          <div className="dashboard-priority-main">
+            <strong>
+              {warningTotal > 0
+                ? `${warningTotal} Lagerhinweise`
+                : "Bestand stabil"}
+            </strong>
+            <span>
+              {warningTotal > 0
+                ? `${inventoryWarnings.expired.length} abgelaufen, ${inventoryWarnings.expiring_soon.length} bald faellig, ${inventoryWarnings.low_stock.length} niedrig`
+                : `${formatNumber(nutrition.totals.calories)} kcal gegessen`}
+            </span>
+          </div>
+          <div className="progress-track" aria-hidden="true">
+            <span
+              className="progress-fill blue"
+              style={{
+                width: `${caloriesPercent}%`,
+              }}
+            />
+          </div>
+          <div className="dashboard-priority-list">
+            <span>
+              <Gauge size={16} />
+              {formatNumber(nutrition.remaining.calories)} kcal offen
+            </span>
+            <span>
+              <CalendarDays size={16} />
+              {todaysEvents.length} Termine heute
+            </span>
+            <span>
+              <ShoppingCart size={16} />
+              {openShoppingList.length} Einkaufsartikel
+            </span>
+          </div>
+        </button>
+
+        <div className="dashboard-summary-grid">
+          {dashboardCards.map((card) => (
+            <button
+              className={`dashboard-summary-card dashboard-link-card ${card.tone}`}
+              key={card.label}
+              onClick={() => onNavigate(card.page)}
+              type="button"
+            >
+              <span className="dashboard-summary-icon">{card.icon}</span>
+              <span>
+                <small>{card.label}</small>
+                <strong>{card.value}</strong>
+                <em>{card.detail}</em>
+              </span>
+              <i>{card.meta}</i>
+            </button>
+          ))}
+        </div>
+      </section>
+
+      <section className="metric-grid" aria-label="Naehrwerte heute">
         {macroMeta.map((macro) => (
           <button
             className="metric-card dashboard-link-card"
@@ -3732,6 +3873,27 @@ function DashboardPage({
                 </button>
               ))
             )}
+          </div>
+        </Panel>
+
+        <Panel title="Aktivitaet">
+          <div className="system-grid">
+            <button
+              className="stat dashboard-list-link dashboard-stat-link"
+              onClick={() => onNavigate("nutrition")}
+              type="button"
+            >
+              <strong>{recentMealCount}</strong>
+              <span>Mahlzeiten zuletzt</span>
+            </button>
+            <button
+              className="stat dashboard-list-link dashboard-stat-link"
+              onClick={() => onNavigate("settings")}
+              type="button"
+            >
+              <strong>{dashboard?.users ?? 0}</strong>
+              <span>Profile</span>
+            </button>
           </div>
         </Panel>
       </section>
@@ -5197,7 +5359,7 @@ function InventoryPage({
   const [receiptImportMessage, setReceiptImportMessage] = useState("");
 
   useEffect(() => {
-    localStorage.setItem(
+    writeStoredValue(
       inventoryColumnStorageKey,
       JSON.stringify(visibleColumnKeys),
     );

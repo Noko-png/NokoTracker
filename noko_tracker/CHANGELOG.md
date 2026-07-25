@@ -1,5 +1,10 @@
 # Changelog
 
+## 1.0.1
+
+- Dashboard mit kompakten Statuskarten fuer Bestand, Einkauf, Kalender, Rezepte und Aktivitaet.
+- Mobile UI fuer Navigation, Karten, Tabellen, Formulare, Kalender, Rezepte und Dialoge verbessert.
+
 ## 1.0.0
 
 - Datenbank-Import und -Export ueber die Einstellungen.
