@@ -3722,7 +3722,9 @@ th {
   box-shadow: 0 -18px 50px rgba(24, 33, 47, 0.18);
 }
 
-.nutrition-mealprep-sheet {
+.nutrition-tools-sheet,
+.nutrition-mealprep-sheet,
+.nutrition-weight-sheet {
   display: grid;
   gap: 16px;
   overflow-y: auto;
@@ -3734,6 +3736,51 @@ th {
   background: var(--surface);
   color: var(--text-strong);
   box-shadow: 0 -18px 50px rgba(24, 33, 47, 0.18);
+}
+
+.nutrition-tools-sheet {
+  width: min(480px, calc(100% - 32px));
+}
+
+.nutrition-weight-sheet {
+  width: min(980px, calc(100% - 32px));
+}
+
+.nutrition-tools-list {
+  display: grid;
+  gap: 10px;
+}
+
+.nutrition-tools-list button {
+  display: grid;
+  grid-template-columns: 38px minmax(0, 1fr);
+  align-items: center;
+  gap: 12px;
+  min-height: 64px;
+  padding: 12px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--surface-soft);
+  color: var(--text-strong);
+  text-align: left;
+}
+
+.nutrition-tools-list button:hover {
+  background: var(--hover-soft);
+}
+
+.nutrition-tools-list strong,
+.nutrition-tools-list small {
+  display: block;
+}
+
+.nutrition-tools-list small {
+  color: var(--muted);
+  font-weight: 800;
+}
+
+.nutrition-weight-sheet .weight-page {
+  min-height: 0;
 }
 
 .nutrition-mealprep-head {
@@ -5962,7 +6009,9 @@ th {
     align-items: start;
   }
 
-  .nutrition-mealprep-sheet {
+  .nutrition-tools-sheet,
+  .nutrition-mealprep-sheet,
+  .nutrition-weight-sheet {
     width: 100%;
     max-height: 94dvh;
     padding: 14px 12px 22px;
@@ -6016,8 +6065,8 @@ th {
   }
 
   .dashboard-nutrition-grid {
-    grid-template-columns: 1fr;
-    gap: 10px;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 8px;
   }
 
   .dashboard-focus-grid {
@@ -6026,12 +6075,21 @@ th {
   }
 
   .dashboard-nutrition-card {
-    min-height: 128px;
-    padding: 14px;
+    gap: 9px;
+    min-height: 118px;
+    padding: 11px;
   }
 
   .dashboard-nutrition-card strong {
-    font-size: 1.65rem;
+    gap: 5px;
+    margin-top: 4px;
+    font-size: 1.38rem;
+  }
+
+  .dashboard-nutrition-card span,
+  .dashboard-nutrition-card small,
+  .dashboard-nutrition-card em {
+    font-size: 0.74rem;
   }
 
   .metric-grid {
@@ -6718,12 +6776,18 @@ th {
   }
 
   .mealprep-grid {
-    grid-template-columns: 1fr;
-    overflow-x: visible;
+    grid-auto-columns: min(82vw, 320px);
+    grid-auto-flow: column;
+    grid-template-columns: none;
+    overflow-x: auto;
+    overflow-y: hidden;
+    padding-bottom: 10px;
+    scroll-snap-type: x proximity;
   }
 
   .mealprep-day-card {
     min-width: 0;
+    scroll-snap-align: start;
   }
 
   .nutrition-content {

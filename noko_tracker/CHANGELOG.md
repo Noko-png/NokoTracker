@@ -1,5 +1,11 @@
 # Changelog
 
+## 1.0.13.2
+
+- Dashboard-Naehrwerte auf mobilen Geraeten als echtes 2x2-Raster komprimiert.
+- Gewicht aus der Hauptnavigation entfernt und in das Kalorientracker-Tools-Menue verschoben.
+- Mealprep-Planer mobil wieder horizontal scrollbar gemacht.
+
 ## 1.0.13.1
 
 - Mobile Makroanzeige im Kalorientracker als kompaktes 2x2-Quadrat dargestellt.

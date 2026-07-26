@@ -188,7 +188,6 @@ type Page =
   | "masterData"
   | "recipes"
   | "nutrition"
-  | "weight"
   | "shopping"
   | "settings";
 
@@ -427,7 +426,6 @@ const navigation = [
   { id: "foods", label: "Bestandsübersicht", icon: Apple },
   { id: "recipes", label: "Gerichte", icon: Soup },
   { id: "nutrition", label: "Kalorientracker", icon: Gauge },
-  { id: "weight", label: "Gewicht", icon: Scale },
   { id: "shopping", label: "Einkaufsliste", icon: ShoppingCart },
 ] as const;
 
@@ -478,7 +476,7 @@ const macroMeta: Array<{
   { key: "carbs", label: "Kohlenhydrate", unit: "g", tone: "red" },
 ];
 
-const appVersion = "1.0.13.1";
+const appVersion = "1.0.13.2";
 const updateSourceLabel = "main / github.com/Noko-png/NokoTracker";
 
 const emptyNutrition: NutritionDay = {
@@ -2830,7 +2828,6 @@ export default function App() {
       notes: entry.notes ?? "",
     });
     setEditingWeightEntryId(entry.id);
-    setActivePage("weight");
   }
 
   function cancelEditingWeightEntry() {
@@ -3772,10 +3769,14 @@ export default function App() {
             inventory={inventory}
             mealLogs={mealLogs}
             nutrition={nutrition}
+            editingWeightEntryId={editingWeightEntryId}
             onCancelEdit={cancelEditingMealLog}
+            onCancelWeightEdit={cancelEditingWeightEntry}
             onDateChange={setSelectedDate}
             onDelete={removeMealLog}
+            onDeleteWeightEntry={removeWeightEntry}
             onEdit={startEditingMealLog}
+            onEditWeightEntry={startEditingWeightEntry}
             onFormChange={setMealForm}
             onDeductMealLogInventory={(mealLogId) =>
               runAction(() => deductMealLogInventory(mealLogId))
@@ -3786,23 +3787,14 @@ export default function App() {
             onMealPrepChange={updateMealPrepSlot}
             onMove={moveMealLog}
             onSubmit={submitMeal}
+            onWeightFormChange={setWeightForm}
+            onWeightSubmit={submitWeightEntry}
             productUnits={productUnits}
             recipes={recipes}
             selectedDate={selectedDate}
             userId={userId}
-          />
-        )}
-
-        {activePage === "weight" && (
-          <WeightPage
-            editingEntryId={editingWeightEntryId}
-            entries={weightEntries}
-            form={weightForm}
-            onCancelEdit={cancelEditingWeightEntry}
-            onDelete={removeWeightEntry}
-            onEdit={startEditingWeightEntry}
-            onFormChange={setWeightForm}
-            onSubmit={submitWeightEntry}
+            weightEntries={weightEntries}
+            weightForm={weightForm}
           />
         )}
 
@@ -10033,20 +10025,28 @@ function NutritionPage({
   inventory,
   mealLogs,
   nutrition,
+  editingWeightEntryId,
   onCancelEdit,
+  onCancelWeightEdit,
   onDateChange,
   onDelete,
+  onDeleteWeightEntry,
   onDeductMealLogInventory,
   onEdit,
+  onEditWeightEntry,
   onFormChange,
   onInventoryDecrease,
   onMealPrepChange,
   onMove,
   onSubmit,
+  onWeightFormChange,
+  onWeightSubmit,
   productUnits,
   recipes,
   selectedDate,
   userId,
+  weightEntries,
+  weightForm,
 }: {
   editingMealLogId: number | null;
   foods: Food[];
@@ -10054,11 +10054,15 @@ function NutritionPage({
   inventory: InventoryItem[];
   mealLogs: MealLog[];
   nutrition: NutritionDay;
+  editingWeightEntryId: number | null;
   onCancelEdit: () => void;
+  onCancelWeightEdit: () => void;
   onDateChange: (value: string) => void;
   onDelete: (mealLogId: number) => void;
+  onDeleteWeightEntry: (id: number) => void;
   onDeductMealLogInventory: (mealLogId: number) => Promise<boolean> | boolean;
   onEdit: (mealLog: MealLog) => void;
+  onEditWeightEntry: (entry: WeightEntry) => void;
   onFormChange: (value: MealForm) => void;
   onInventoryDecrease: (id: number, amount: number) => Promise<boolean> | boolean;
   onMealPrepChange: (
@@ -10068,14 +10072,21 @@ function NutritionPage({
   ) => Promise<void> | void;
   onMove: (mealLog: MealLog, date: string, time: string) => void;
   onSubmit: (event?: FormEvent) => Promise<boolean> | boolean;
+  onWeightFormChange: (value: WeightForm) => void;
+  onWeightSubmit: (event: FormEvent) => void;
   productUnits: ProductUnit[];
   recipes: Recipe[];
   selectedDate: string;
   userId: number;
+  weightEntries: WeightEntry[];
+  weightForm: WeightForm;
 }) {
   const [draggedMealLogId, setDraggedMealLogId] = useState<number | null>(null);
   const [addSheetOpen, setAddSheetOpen] = useState(false);
-  const [mealPrepOpen, setMealPrepOpen] = useState(false);
+  const [toolMenuOpen, setToolMenuOpen] = useState(false);
+  const [activeTool, setActiveTool] = useState<"mealprep" | "weight" | null>(
+    null,
+  );
   const [sheetMode, setSheetMode] = useState<"search" | "details">("search");
   const [nutritionSearch, setNutritionSearch] = useState("");
   const [barcodePanelOpen, setBarcodePanelOpen] = useState(false);
@@ -10685,8 +10696,8 @@ function NutritionPage({
           <div className="nutrition-log-nav">
             <button
               className="nutrition-icon-button"
-              onClick={() => setMealPrepOpen(true)}
-              title="Mealprep"
+              onClick={() => setToolMenuOpen(true)}
+              title="Tools"
               type="button"
             >
               <Menu size={24} />
@@ -10896,10 +10907,63 @@ function NutritionPage({
         </div>
       </section>
 
-      {mealPrepOpen && (
+      {toolMenuOpen && (
         <ModalBackdrop
           className="nutrition-sheet-backdrop"
-          onClose={() => setMealPrepOpen(false)}
+          onClose={() => setToolMenuOpen(false)}
+        >
+          <section className="nutrition-tools-sheet">
+            <div className="nutrition-sheet-grip" />
+            <div className="nutrition-mealprep-head">
+              <div>
+                <p className="eyebrow">Kalorientracker</p>
+                <h3>Tools</h3>
+              </div>
+              <button
+                className="nutrition-sheet-round"
+                onClick={() => setToolMenuOpen(false)}
+                title="Schliessen"
+                type="button"
+              >
+                <X size={24} />
+              </button>
+            </div>
+            <div className="nutrition-tools-list">
+              <button
+                onClick={() => {
+                  setToolMenuOpen(false);
+                  setActiveTool("mealprep");
+                }}
+                type="button"
+              >
+                <Soup size={22} />
+                <span>
+                  <strong>Mealprep</strong>
+                  <small>Woche planen und Bestand buchen</small>
+                </span>
+              </button>
+              <button
+                onClick={() => {
+                  setToolMenuOpen(false);
+                  setActiveTool("weight");
+                }}
+                type="button"
+              >
+                <Scale size={22} />
+                <span>
+                  <strong>Gewicht</strong>
+                  <small>Waagenwerte tracken</small>
+                </span>
+              </button>
+            </div>
+          </section>
+        </ModalBackdrop>
+      )}
+
+      {activeTool === "mealprep" && (
+        <ModalBackdrop
+          className="nutrition-sheet-backdrop"
+          onClose={() => setActiveTool(null)}
         >
           <section className="nutrition-mealprep-sheet">
             <div className="nutrition-sheet-grip" />
@@ -10910,7 +10974,7 @@ function NutritionPage({
               </div>
               <button
                 className="nutrition-sheet-round"
-                onClick={() => setMealPrepOpen(false)}
+                onClick={() => setActiveTool(null)}
                 title="Schliessen"
                 type="button"
               >
@@ -10927,6 +10991,41 @@ function NutritionPage({
               recipes={recipes}
               selectedDate={selectedDate}
               userId={userId}
+            />
+          </section>
+        </ModalBackdrop>
+      )}
+
+      {activeTool === "weight" && (
+        <ModalBackdrop
+          className="nutrition-sheet-backdrop"
+          onClose={() => setActiveTool(null)}
+        >
+          <section className="nutrition-weight-sheet">
+            <div className="nutrition-sheet-grip" />
+            <div className="nutrition-mealprep-head">
+              <div>
+                <p className="eyebrow">Kalorientracker</p>
+                <h3>Gewicht</h3>
+              </div>
+              <button
+                className="nutrition-sheet-round"
+                onClick={() => setActiveTool(null)}
+                title="Schliessen"
+                type="button"
+              >
+                <X size={24} />
+              </button>
+            </div>
+            <WeightPage
+              editingEntryId={editingWeightEntryId}
+              entries={weightEntries}
+              form={weightForm}
+              onCancelEdit={onCancelWeightEdit}
+              onDelete={onDeleteWeightEntry}
+              onEdit={onEditWeightEntry}
+              onFormChange={onWeightFormChange}
+              onSubmit={onWeightSubmit}
             />
           </section>
         </ModalBackdrop>
