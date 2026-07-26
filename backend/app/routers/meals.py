@@ -12,6 +12,9 @@ from ..services import nutrition_service
 
 router = APIRouter(prefix="/meals/logs", tags=["meals"])
 
+MEALPREP_SOURCE = "mealprep"
+PREPARED_FOOD_BRAND = "Zubereitet"
+
 
 def get_meal_log_or_404(db: Session, meal_log_id: int) -> models.MealLog:
     meal_log = crud.get(db, models.MealLog, meal_log_id)
@@ -129,6 +132,36 @@ def matching_inventory_items(
     )
 
 
+def prepared_food_for_recipe(
+    db: Session,
+    recipe: models.Recipe,
+) -> models.Food:
+    food = recipe.prepared_food
+    if food is None and recipe.prepared_food_id is not None:
+        food = crud.get(db, models.Food, recipe.prepared_food_id)
+    if food is None:
+        food = crud.get_food_by_name_brand(
+            db,
+            recipe.name,
+            PREPARED_FOOD_BRAND,
+        )
+    if food is None:
+        raise HTTPException(
+            status_code=422,
+            detail=(
+                "Fertiges Gericht ist noch nicht im Bestand. "
+                "Bitte Rezept zuerst zubereiten."
+            ),
+        )
+    return food
+
+
+def prepared_food_unit(food: models.Food) -> str:
+    if food.product_unit is not None and food.product_unit.name:
+        return food.product_unit.name
+    return food.serving_unit or "Portion"
+
+
 def recipe_multiplier_for_meal_log(meal_log: models.MealLog) -> float:
     quantity = normalized_quantity(meal_log.quantity)
     if normalized_unit(meal_log.unit) in {"recipe", "recipes", "gericht", "gerichte"}:
@@ -154,6 +187,16 @@ def meal_log_inventory_requirements(meal_log: models.MealLog) -> list[dict]:
         ]
 
     if meal_log.recipe_id is not None and meal_log.recipe is not None:
+        if normalized_unit(meal_log.meal_source) == MEALPREP_SOURCE:
+            food = prepared_food_for_recipe(db, meal_log.recipe)
+            return [
+                {
+                    "food": food,
+                    "quantity": normalized_quantity(meal_log.quantity),
+                    "unit": prepared_food_unit(food),
+                }
+            ]
+
         multiplier = recipe_multiplier_for_meal_log(meal_log)
         requirements: dict[tuple[int, str], dict] = {}
         for ingredient in meal_log.recipe.ingredients:

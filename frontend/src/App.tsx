@@ -57,6 +57,7 @@ import {
   type InventoryWarnings,
   type MacroValues,
   type MealLog,
+  type MealLogCreate,
   type NutritionDay,
   type ProductGroup,
   type ProductGroupCreate,
@@ -462,7 +463,7 @@ const macroMeta: Array<{
   { key: "carbs", label: "Kohlenhydrate", unit: "g", tone: "red" },
 ];
 
-const appVersion = "1.0.7";
+const appVersion = "1.0.8";
 const updateSourceLabel = "main / github.com/Noko-png/NokoTracker";
 
 const emptyNutrition: NutritionDay = {
@@ -1693,6 +1694,17 @@ function parseMealPrepSelectionValue(value: string) {
   return { id, kind };
 }
 
+function preparedFoodIdFromPrepareResult(result: RecipePrepareResult) {
+  return result.inventory_item.food_id ?? result.inventory_item.food?.id ?? null;
+}
+
+function wholePreparedServingCount(result: RecipePrepareResult | null) {
+  const quantity = result
+    ? normalizeFractionalQuantityValue(result.prepared_quantity)
+    : 0;
+  return Number.isFinite(quantity) ? Math.max(0, Math.floor(quantity)) : 0;
+}
+
 function isMealPrepSlotLog(
   mealLog: MealLog,
   date: string,
@@ -2839,6 +2851,69 @@ export default function App() {
     }
   }
 
+  async function schedulePreparedRecipeDinners(
+    recipe: Recipe,
+    result: RecipePrepareResult,
+  ) {
+    try {
+      setApiError(null);
+      const foodId = preparedFoodIdFromPrepareResult(result);
+      const portionsToPlan = wholePreparedServingCount(result);
+      const dinnerSlot = mealPrepSlots.find((slot) => slot.id === "dinner");
+
+      if (foodId === null) {
+        throw new Error("Fertiges Gericht wurde nicht als Lebensmittel gefunden.");
+      }
+      if (portionsToPlan <= 0) {
+        throw new Error("Keine ganzen Portionen zum Planen vorhanden.");
+      }
+      if (!dinnerSlot) {
+        throw new Error("Abendessen-Slot wurde nicht gefunden.");
+      }
+
+      const startDate = dateFromLocalValue(getLocalDate());
+      const unit = result.prepared_unit || result.inventory_item.unit || "Portion";
+
+      for (let index = 0; index < portionsToPlan; index += 1) {
+        const date = getLocalDate(addDays(startDate, index));
+        const existingMealLog =
+          mealLogs.find((mealLog) =>
+            isMealPrepSlotLog(mealLog, date, dinnerSlot, userId),
+          ) ?? null;
+        const payload: MealLogCreate = {
+          eaten_at: `${date}T${dinnerSlot.time}:00`,
+          meal_type: dinnerSlot.label,
+          quantity: 1,
+          unit,
+          notes: `Mealprep: ${recipe.name} als fertiges Gericht`,
+          user_id: userId,
+          food_id: foodId,
+          recipe_id: null,
+          quick_add_name: null,
+          quick_calories: null,
+          quick_protein: null,
+          quick_fat: null,
+          quick_carbs: null,
+          meal_source: mealPrepSource,
+          planned_inventory_deduction: true,
+          inventory_deducted_at: null,
+        };
+
+        if (existingMealLog) {
+          await updateMealLog(existingMealLog.id, payload);
+        } else {
+          await createMealLog(payload);
+        }
+      }
+
+      await loadData();
+      return portionsToPlan;
+    } catch (error) {
+      setApiError(error instanceof Error ? error.message : "API-Fehler");
+      throw error;
+    }
+  }
+
   async function submitShoppingItem(event: FormEvent) {
     event.preventDefault();
     try {
@@ -3568,6 +3643,7 @@ export default function App() {
             onIngredientSubmit={submitRecipeIngredient}
             onPendingIngredientAmountChange={updatePendingRecipeIngredientAmount}
             onPrepareRecipe={prepareRecipeFromInventory}
+            onSchedulePreparedRecipeServings={schedulePreparedRecipeDinners}
             onRecipeStepAdd={addRecipeStep}
             onRecipeStepDraftChange={setRecipeStepDraft}
             onRecipeStepRemove={removeRecipeStep}
@@ -8527,6 +8603,7 @@ function RecipesPage({
   onIngredientSubmit,
   onPendingIngredientAmountChange,
   onPrepareRecipe,
+  onSchedulePreparedRecipeServings,
   onRecipeStepAdd,
   onRecipeStepDraftChange,
   onRecipeStepRemove,
@@ -8562,6 +8639,10 @@ function RecipesPage({
   onIngredientSubmit: (recipeId: number, event: FormEvent) => void;
   onPendingIngredientAmountChange: (tempId: string, quantity: string) => void;
   onPrepareRecipe: (recipeId: number) => Promise<RecipePrepareResult>;
+  onSchedulePreparedRecipeServings: (
+    recipe: Recipe,
+    result: RecipePrepareResult,
+  ) => Promise<number>;
   onRecipeStepAdd: () => void;
   onRecipeStepDraftChange: (value: string) => void;
   onRecipeStepRemove: (index: number) => void;
@@ -8620,9 +8701,15 @@ function RecipesPage({
   const [preparingInventoryRecipeId, setPreparingInventoryRecipeId] = useState<
     number | null
   >(null);
+  const [prepareScheduleRecipeId, setPrepareScheduleRecipeId] = useState<
+    number | null
+  >(null);
   const [prepareMessages, setPrepareMessages] = useState<Record<number, string>>(
     {},
   );
+  const [prepareScheduleMessages, setPrepareScheduleMessages] = useState<
+    Record<number, string>
+  >({});
   const [recipeTagFilter, setRecipeTagFilter] = useState("all");
   const [recipeSort, setRecipeSort] = useState<RecipeSort>("name");
   const recipeCaloriesById = useMemo(() => {
@@ -8690,10 +8777,17 @@ function RecipesPage({
     preparingRecipe !== null && shoppingSyncingRecipeId === preparingRecipe.id;
   const preparingInventoryBusy =
     preparingRecipe !== null && preparingInventoryRecipeId === preparingRecipe.id;
+  const preparingScheduleBusy =
+    preparingRecipe !== null && prepareScheduleRecipeId === preparingRecipe.id;
   const preparingResult =
     preparingRecipe === null ? null : prepareResults[preparingRecipe.id] ?? null;
   const preparingMessage =
     preparingRecipe === null ? "" : prepareMessages[preparingRecipe.id] ?? "";
+  const preparingScheduleMessage =
+    preparingRecipe === null
+      ? ""
+      : prepareScheduleMessages[preparingRecipe.id] ?? "";
+  const preparingSchedulePortions = wholePreparedServingCount(preparingResult);
 
   useEffect(() => {
     setIngredientEditorOpen(false);
@@ -8728,6 +8822,11 @@ function RecipesPage({
   async function prepareInventoryRecipe(recipeId: number) {
     setPreparingInventoryRecipeId(recipeId);
     setPrepareMessages((current) => {
+      const next = { ...current };
+      delete next[recipeId];
+      return next;
+    });
+    setPrepareScheduleMessages((current) => {
       const next = { ...current };
       delete next[recipeId];
       return next;
@@ -8793,6 +8892,40 @@ function RecipesPage({
     }
   }
 
+  async function schedulePreparedServings() {
+    if (!preparingRecipe || !preparingResult) {
+      return;
+    }
+
+    setPrepareScheduleRecipeId(preparingRecipe.id);
+    setPrepareScheduleMessages((current) => {
+      const next = { ...current };
+      delete next[preparingRecipe.id];
+      return next;
+    });
+
+    try {
+      const plannedCount = await onSchedulePreparedRecipeServings(
+        preparingRecipe,
+        preparingResult,
+      );
+      setPrepareScheduleMessages((current) => ({
+        ...current,
+        [preparingRecipe.id]: `${plannedCount} Abendessen im Mealprep-Kalender geplant.`,
+      }));
+    } catch (error) {
+      setPrepareScheduleMessages((current) => ({
+        ...current,
+        [preparingRecipe.id]:
+          error instanceof Error
+            ? error.message
+            : "Abendessen konnten nicht geplant werden.",
+      }));
+    } finally {
+      setPrepareScheduleRecipeId(null);
+    }
+  }
+
   function openPreparingRecipe(recipeId: number) {
     setPreparingRecipeId(recipeId);
     setShoppingSyncResults((current) => {
@@ -8812,6 +8945,14 @@ function RecipesPage({
       return next;
     });
     setPrepareMessages((current) => {
+      if (!(recipeId in current)) {
+        return current;
+      }
+      const next = { ...current };
+      delete next[recipeId];
+      return next;
+    });
+    setPrepareScheduleMessages((current) => {
       if (!(recipeId in current)) {
         return current;
       }
@@ -9658,6 +9799,27 @@ function RecipesPage({
                       </div>
                     ))}
                   </div>
+                </div>
+              )}
+              {preparingResult && preparingSchedulePortions > 0 && (
+                <div className="prepare-plan-actions">
+                  <button
+                    className="button secondary"
+                    disabled={preparingScheduleBusy}
+                    onClick={() => void schedulePreparedServings()}
+                    type="button"
+                  >
+                    <CalendarDays size={16} />
+                    {preparingScheduleBusy
+                      ? "Abendessen werden geplant"
+                      : `${preparingSchedulePortions} Abendessen planen`}
+                  </button>
+                  <span>Je 1 Portion um 18:30 Uhr ab heute.</span>
+                </div>
+              )}
+              {preparingScheduleMessage && (
+                <div className="prepare-schedule-message">
+                  {preparingScheduleMessage}
                 </div>
               )}
               {preparingShoppingSyncResult && (

@@ -1,5 +1,11 @@
 # Changelog
 
+## 1.0.8
+
+- Kalorientracker-Timeline global kompakter skaliert, damit Desktop und Mobile mindestens 8 Stunden gleichzeitig anzeigen.
+- Mealprep-Bestandsbuchung fuer Rezept-Eintraege bucht fertige Gerichte statt Rohzutaten.
+- Nach dem Zubereiten koennen fertige Portionen automatisch als Abendessen auf die kommenden Tage geplant werden.
+
 ## 1.0.7
 
 - Mobile Bottom-Navigation aus dem Kalorientracker entfernt.
