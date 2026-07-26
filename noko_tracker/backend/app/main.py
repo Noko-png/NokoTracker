@@ -25,6 +25,7 @@ from .routers import (
     shopping,
     storage_locations,
     users,
+    weight,
 )
 
 
@@ -898,7 +899,7 @@ ensure_default_user()
 app = FastAPI(
     title="Heim-ERP Backend",
     description="Backend API fuer ein privates Heim-ERP mit Kalender, Vorrat, Rezepten, Mahlzeiten und Einkaufsliste.",
-    version="1.0.12.01",
+    version="1.0.13",
 )
 
 app.add_middleware(
@@ -942,6 +943,7 @@ app.include_router(shopping.router)
 app.include_router(imports.router)
 app.include_router(backups.router)
 app.include_router(dashboard.router)
+app.include_router(weight.router)
 
 
 def configure_frontend() -> None:

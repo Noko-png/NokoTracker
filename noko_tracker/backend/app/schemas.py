@@ -906,6 +906,41 @@ class MealInventoryDeductionResult(BaseModel):
     consumed: list[MealInventoryDeductionItem]
 
 
+class WeightEntryBase(BaseModel):
+    measured_at: datetime = Field(default_factory=datetime.utcnow)
+    weight_kg: float = Field(..., gt=0)
+    notes: Optional[str] = None
+    user_id: Optional[int] = None
+
+    @field_validator("weight_kg", mode="before")
+    @classmethod
+    def parse_fractional_weight(cls, value):
+        return parse_fractional_number(value)
+
+
+class WeightEntryCreate(WeightEntryBase):
+    pass
+
+
+class WeightEntryUpdate(BaseModel):
+    measured_at: Optional[datetime] = None
+    weight_kg: Optional[float] = Field(None, gt=0)
+    notes: Optional[str] = None
+    user_id: Optional[int] = None
+
+    @field_validator("weight_kg", mode="before")
+    @classmethod
+    def parse_fractional_weight(cls, value):
+        return parse_fractional_number(value)
+
+
+class WeightEntryRead(WeightEntryBase, ORMBase):
+    id: int
+    created_at: datetime
+    updated_at: datetime
+    user: Optional[UserSummary] = None
+
+
 class ShoppingListItemBase(BaseModel):
     name: str = Field(..., min_length=1, max_length=200)
     food_id: Optional[int] = None

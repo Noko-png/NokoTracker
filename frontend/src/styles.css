@@ -897,6 +897,137 @@ button {
   font-size: 0.85rem;
 }
 
+.weight-page {
+  display: grid;
+  gap: 18px;
+}
+
+.weight-hero-section {
+  display: grid;
+  gap: 16px;
+}
+
+.weight-hero {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 24px;
+}
+
+.weight-hero h2 {
+  margin: 0;
+  color: var(--text-strong);
+  font-size: clamp(2.2rem, 6vw, 4rem);
+}
+
+.weight-hero span {
+  color: var(--muted);
+  font-weight: 800;
+}
+
+.weight-hero svg {
+  flex: 0 0 auto;
+  color: var(--primary);
+}
+
+.weight-summary-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 14px;
+}
+
+.weight-summary-grid article {
+  display: grid;
+  gap: 8px;
+  padding: 16px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--surface-soft);
+}
+
+.weight-summary-grid span {
+  color: var(--muted);
+  font-weight: 800;
+}
+
+.weight-summary-grid strong {
+  color: var(--text-strong);
+  font-size: 1.45rem;
+}
+
+.weight-workspace {
+  display: grid;
+  grid-template-columns: minmax(280px, 0.8fr) minmax(0, 1.2fr);
+  gap: 18px;
+}
+
+.weight-form {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.weight-chart {
+  display: grid;
+  grid-template-columns: repeat(14, minmax(18px, 1fr));
+  align-items: end;
+  gap: 8px;
+  min-height: 180px;
+  padding: 16px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--surface-soft);
+}
+
+.weight-chart-bar {
+  display: grid;
+  align-items: end;
+  gap: 8px;
+  min-height: 148px;
+  color: var(--muted);
+  font-size: 0.74rem;
+  font-weight: 800;
+  text-align: center;
+}
+
+.weight-chart-bar i {
+  display: block;
+  min-height: 16px;
+  border-radius: 999px 999px 4px 4px;
+  background: linear-gradient(180deg, var(--primary), var(--green));
+}
+
+.weight-entry-list {
+  display: grid;
+  gap: 10px;
+  margin-top: 16px;
+}
+
+.weight-entry-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 14px;
+  padding: 14px 16px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--surface-soft);
+}
+
+.weight-entry-row strong,
+.weight-entry-row span,
+.weight-entry-row p {
+  display: block;
+}
+
+.weight-entry-row span,
+.weight-entry-row p {
+  color: var(--muted);
+  font-weight: 800;
+}
+
+.weight-entry-row p {
+  margin: 6px 0 0;
+}
+
 .food-name-with-emoji,
 .recipe-title-with-emoji {
   display: inline-flex;
@@ -3591,6 +3722,37 @@ th {
   box-shadow: 0 -18px 50px rgba(24, 33, 47, 0.18);
 }
 
+.nutrition-mealprep-sheet {
+  display: grid;
+  gap: 16px;
+  overflow-y: auto;
+  width: min(1080px, calc(100% - 32px));
+  max-height: 92vh;
+  padding: 16px 20px 24px;
+  border: 1px solid var(--line);
+  border-radius: 18px 18px 0 0;
+  background: var(--surface);
+  color: var(--text-strong);
+  box-shadow: 0 -18px 50px rgba(24, 33, 47, 0.18);
+}
+
+.nutrition-mealprep-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.nutrition-mealprep-head h3 {
+  margin: 0;
+  color: var(--text-strong);
+  font-size: 1.4rem;
+}
+
+.nutrition-mealprep-sheet .mealprep-planner {
+  min-height: 0;
+}
+
 .nutrition-sheet-grip {
   width: 82px;
   height: 7px;
@@ -5780,8 +5942,31 @@ th {
   .settings-layout,
   .warning-grid,
   .system-grid,
-  .nutrition-mini {
+  .nutrition-mini,
+  .weight-summary-grid,
+  .weight-workspace,
+  .weight-form {
     grid-template-columns: 1fr;
+  }
+
+  .weight-hero {
+    align-items: flex-start;
+  }
+
+  .weight-chart {
+    grid-template-columns: repeat(7, minmax(18px, 1fr));
+    overflow-x: auto;
+  }
+
+  .weight-entry-row {
+    align-items: start;
+  }
+
+  .nutrition-mealprep-sheet {
+    width: 100%;
+    max-height: 94dvh;
+    padding: 14px 12px 22px;
+    border-radius: 18px 18px 0 0;
   }
 
   .dashboard-priority-card,

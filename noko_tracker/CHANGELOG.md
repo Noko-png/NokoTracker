@@ -1,5 +1,10 @@
 # Changelog
 
+## 1.0.13
+
+- Mealprep-Planer aus dem Kalender in den Kalorientracker verschoben.
+- Neuer Menuepunkt Gewicht mit Eintragen, Bearbeiten, Loeschen und Verlauf fuer Waagenwerte.
+
 ## 1.0.12.01
 
 - Mobile Kalender-Erstellen-Auswahl bleibt sichtbar im Layout und rendert nicht mehr ausserhalb des Bildschirms.

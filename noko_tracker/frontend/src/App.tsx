@@ -26,6 +26,7 @@ import {
   Settings,
   ScanBarcode,
   ShoppingCart,
+  Scale,
   Soup,
   Trash2,
   Upload,
@@ -84,6 +85,8 @@ import {
   type ThemeName,
   type User,
   type UserCreate,
+  type WeightEntry,
+  type WeightEntryCreate,
   bookReceiptImport,
   checkShoppingListItem,
   createCalendarEvent,
@@ -98,8 +101,10 @@ import {
   createMealLog,
   createRecipe,
   createUser,
+  createWeightEntry,
   decreaseInventoryItem,
   deductMealLogInventory,
+  deleteWeightEntry,
   deleteInventoryItem,
   deleteMealLog,
   deleteCalendarEvent,
@@ -129,6 +134,7 @@ import {
   getShoppingList,
   getStorageLocations,
   getUsers,
+  getWeightEntries,
   importDatabaseBackup,
   importGrocyCsv,
   importGrocyCsvUpload,
@@ -152,6 +158,7 @@ import {
   updateStorageLocation,
   updateUser,
   updateCalendarEvent,
+  updateWeightEntry,
   syncRecipeShoppingList,
 } from "./api/client";
 
@@ -181,6 +188,7 @@ type Page =
   | "masterData"
   | "recipes"
   | "nutrition"
+  | "weight"
   | "shopping"
   | "settings";
 
@@ -356,8 +364,14 @@ type CalendarGroupForm = {
 };
 
 type CalendarView = "day" | "week" | "month";
-type CalendarMode = "calendar" | "mealprep";
 type MealPrepSlotKey = "breakfast" | "lunch" | "dinner";
+
+type WeightForm = {
+  date: string;
+  time: string;
+  weight_kg: string;
+  notes: string;
+};
 
 const mealPrepSource = "mealprep";
 const mealPrepSlots: Array<{
@@ -413,6 +427,7 @@ const navigation = [
   { id: "foods", label: "Bestandsübersicht", icon: Apple },
   { id: "recipes", label: "Gerichte", icon: Soup },
   { id: "nutrition", label: "Kalorientracker", icon: Gauge },
+  { id: "weight", label: "Gewicht", icon: Scale },
   { id: "shopping", label: "Einkaufsliste", icon: ShoppingCart },
 ] as const;
 
@@ -463,7 +478,7 @@ const macroMeta: Array<{
   { key: "carbs", label: "Kohlenhydrate", unit: "g", tone: "red" },
 ];
 
-const appVersion = "1.0.12.01";
+const appVersion = "1.0.13";
 const updateSourceLabel = "main / github.com/Noko-png/NokoTracker";
 
 const emptyNutrition: NutritionDay = {
@@ -658,6 +673,15 @@ const initialCsvImportForm: CsvImportForm = {
 function getLocalDate(date = new Date()) {
   const offset = date.getTimezoneOffset() * 60_000;
   return new Date(date.getTime() - offset).toISOString().slice(0, 10);
+}
+
+function createInitialWeightForm(): WeightForm {
+  return {
+    date: getLocalDate(),
+    time: formatTimeInput(new Date()),
+    weight_kg: "",
+    notes: "",
+  };
 }
 
 function parseDecimalNumber(value: string) {
@@ -865,6 +889,13 @@ function formatNumber(value: number, maximumFractionDigits = 1) {
   return new Intl.NumberFormat("de-DE", {
     maximumFractionDigits,
   }).format(value);
+}
+
+function formatSignedWeight(value: number) {
+  if (!Number.isFinite(value) || Math.abs(value) < 0.05) {
+    return "0,0 kg";
+  }
+  return `${value > 0 ? "+" : ""}${formatNumber(value, 1)} kg`;
 }
 
 function greatestCommonDivisor(left: number, right: number): number {
@@ -1778,6 +1809,7 @@ export default function App() {
   );
   const [recipes, setRecipes] = useState<Recipe[]>([]);
   const [mealLogs, setMealLogs] = useState<MealLog[]>([]);
+  const [weightEntries, setWeightEntries] = useState<WeightEntry[]>([]);
   const [shoppingList, setShoppingList] = useState<ShoppingListItem[]>([]);
   const [users, setUsers] = useState<User[]>([]);
   const [calendarEvents, setCalendarEvents] = useState<CalendarEvent[]>([]);
@@ -1843,6 +1875,11 @@ export default function App() {
   >({});
   const [mealForm, setMealForm] = useState<MealForm>(initialMealForm);
   const [editingMealLogId, setEditingMealLogId] = useState<number | null>(null);
+  const [weightForm, setWeightForm] =
+    useState<WeightForm>(createInitialWeightForm);
+  const [editingWeightEntryId, setEditingWeightEntryId] = useState<number | null>(
+    null,
+  );
   const [shoppingForm, setShoppingForm] =
     useState<ShoppingForm>(initialShoppingForm);
   const [calendarForm, setCalendarForm] = useState<CalendarForm>(
@@ -1896,6 +1933,7 @@ export default function App() {
       load(getStorageLocations(), setStorageLocations),
       load(getRecipes(), setRecipes),
       load(getMealLogs(), setMealLogs),
+      load(getWeightEntries(500, userId), setWeightEntries),
       load(getShoppingList(), setShoppingList),
       load(getCalendarEvents(), setCalendarEvents),
       load(getCalendarGroups(), setCalendarGroups),
@@ -2754,6 +2792,61 @@ export default function App() {
     }
   }
 
+  async function submitWeightEntry(event: FormEvent) {
+    event.preventDefault();
+    const weight = toQuantityNumber(weightForm.weight_kg, 0);
+    if (!Number.isFinite(weight) || weight <= 0) {
+      setApiError("Bitte ein gueltiges Gewicht eintragen.");
+      return;
+    }
+
+    try {
+      setApiError(null);
+      const payload = {
+        measured_at: `${weightForm.date}T${weightForm.time}:00`,
+        weight_kg: weight,
+        notes: optionalText(weightForm.notes),
+        user_id: userId,
+      } satisfies WeightEntryCreate;
+      if (editingWeightEntryId === null) {
+        await createWeightEntry(payload);
+      } else {
+        await updateWeightEntry(editingWeightEntryId, payload);
+      }
+      setWeightForm(createInitialWeightForm());
+      setEditingWeightEntryId(null);
+      await loadData();
+    } catch (error) {
+      setApiError(error instanceof Error ? error.message : "API-Fehler");
+    }
+  }
+
+  function startEditingWeightEntry(entry: WeightEntry) {
+    const measuredAt = new Date(entry.measured_at);
+    setWeightForm({
+      date: getLocalDate(measuredAt),
+      time: formatTimeInput(measuredAt),
+      weight_kg: toFormValue(entry.weight_kg),
+      notes: entry.notes ?? "",
+    });
+    setEditingWeightEntryId(entry.id);
+    setActivePage("weight");
+  }
+
+  function cancelEditingWeightEntry() {
+    setWeightForm(createInitialWeightForm());
+    setEditingWeightEntryId(null);
+  }
+
+  async function removeWeightEntry(entryId: number) {
+    await runAction(async () => {
+      await deleteWeightEntry(entryId);
+      if (editingWeightEntryId === entryId) {
+        cancelEditingWeightEntry();
+      }
+    });
+  }
+
   async function updateMealPrepSlot(
     date: string,
     slotId: MealPrepSlotKey,
@@ -3496,29 +3589,23 @@ export default function App() {
         {activePage === "calendar" && (
           <CalendarPage
             events={calendarEvents}
-            foods={foods}
             groups={calendarGroups}
             groupForm={calendarGroupForm}
             hiddenGroupIds={hiddenCalendarGroupIds}
             editingGroupId={editingCalendarGroupId}
             editingEventId={editingCalendarEventId}
             form={calendarForm}
-            mealLogs={mealLogs}
             onCancelEdit={cancelEditingCalendarEntry}
             onCancelGroupEdit={cancelEditingCalendarGroup}
             onDateChange={selectCalendarDate}
             onDeleteGroup={removeCalendarGroup}
             onDeleteOccurrence={removeCalendarOccurrence}
             onDeleteSeries={removeCalendarSeries}
-            onDeductMealLogInventory={(mealLogId) =>
-              runAction(() => deductMealLogInventory(mealLogId))
-            }
             onEdit={startEditingCalendarEntry}
             onEditGroup={startEditingCalendarGroup}
             onFormChange={setCalendarForm}
             onGroupFormChange={setCalendarGroupForm}
             onGroupSubmit={submitCalendarGroup}
-            onMealPrepChange={updateMealPrepSlot}
             onSubmit={submitCalendarEntry}
             onToggleGroup={toggleCalendarGroup}
             onToggleTask={(event) =>
@@ -3529,10 +3616,7 @@ export default function App() {
               )
             }
             onViewChange={setCalendarView}
-            productUnits={productUnits}
-            recipes={recipes}
             selectedDate={calendarDate}
-            userId={userId}
             view={calendarView}
           />
         )}
@@ -3693,18 +3777,32 @@ export default function App() {
             onDelete={removeMealLog}
             onEdit={startEditingMealLog}
             onFormChange={setMealForm}
-            onMenuOpen={() => setMobileMenuOpen(true)}
             onDeductMealLogInventory={(mealLogId) =>
               runAction(() => deductMealLogInventory(mealLogId))
             }
             onInventoryDecrease={(id, amount) =>
               runAction(() => decreaseInventoryItem(id, amount))
             }
+            onMealPrepChange={updateMealPrepSlot}
             onMove={moveMealLog}
             onSubmit={submitMeal}
             productUnits={productUnits}
             recipes={recipes}
             selectedDate={selectedDate}
+            userId={userId}
+          />
+        )}
+
+        {activePage === "weight" && (
+          <WeightPage
+            editingEntryId={editingWeightEntryId}
+            entries={weightEntries}
+            form={weightForm}
+            onCancelEdit={cancelEditingWeightEntry}
+            onDelete={removeWeightEntry}
+            onEdit={startEditingWeightEntry}
+            onFormChange={setWeightForm}
+            onSubmit={submitWeightEntry}
           />
         )}
 
@@ -3892,78 +3990,243 @@ function DashboardPage({
   );
 }
 
+function WeightPage({
+  editingEntryId,
+  entries,
+  form,
+  onCancelEdit,
+  onDelete,
+  onEdit,
+  onFormChange,
+  onSubmit,
+}: {
+  editingEntryId: number | null;
+  entries: WeightEntry[];
+  form: WeightForm;
+  onCancelEdit: () => void;
+  onDelete: (id: number) => void;
+  onEdit: (entry: WeightEntry) => void;
+  onFormChange: (value: WeightForm) => void;
+  onSubmit: (event: FormEvent) => void;
+}) {
+  const sortedEntries = useMemo(
+    () =>
+      [...entries].sort(
+        (first, second) =>
+          new Date(second.measured_at).getTime() -
+            new Date(first.measured_at).getTime() ||
+          second.id - first.id,
+      ),
+    [entries],
+  );
+  const latestEntry = sortedEntries[0] ?? null;
+  const previousEntry = sortedEntries[1] ?? null;
+  const oldestEntry = sortedEntries[sortedEntries.length - 1] ?? null;
+  const recentEntries = [...sortedEntries].reverse().slice(-14);
+  const weights = recentEntries.map((entry) => entry.weight_kg);
+  const minWeight = weights.length > 0 ? Math.min(...weights) : 0;
+  const maxWeight = weights.length > 0 ? Math.max(...weights) : 0;
+  const latestChange =
+    latestEntry && previousEntry ? latestEntry.weight_kg - previousEntry.weight_kg : 0;
+  const totalChange =
+    latestEntry && oldestEntry ? latestEntry.weight_kg - oldestEntry.weight_kg : 0;
+
+  function chartHeight(entry: WeightEntry) {
+    if (maxWeight <= minWeight) {
+      return "50%";
+    }
+    return `${24 + ((entry.weight_kg - minWeight) / (maxWeight - minWeight)) * 76}%`;
+  }
+
+  return (
+    <div className="weight-page">
+      <section className="section weight-hero-section">
+        <div className="weight-hero">
+          <div>
+            <p className="eyebrow">Waage</p>
+            <h2>{latestEntry ? `${formatNumber(latestEntry.weight_kg, 1)} kg` : "Kein Wert"}</h2>
+            <span>
+              {latestEntry
+                ? `${formatDate(getLocalDate(new Date(latestEntry.measured_at)))} ${formatCalendarTime(
+                    new Date(latestEntry.measured_at),
+                  )}`
+                : "Noch kein Eintrag"}
+            </span>
+          </div>
+          <Scale size={42} />
+        </div>
+        <div className="weight-summary-grid">
+          <article>
+            <span>Letzte Aenderung</span>
+            <strong>{formatSignedWeight(latestChange)}</strong>
+          </article>
+          <article>
+            <span>Gesamttrend</span>
+            <strong>{formatSignedWeight(totalChange)}</strong>
+          </article>
+          <article>
+            <span>Messungen</span>
+            <strong>{entries.length}</strong>
+          </article>
+        </div>
+      </section>
+
+      <section className="section weight-workspace">
+        <Panel title={editingEntryId === null ? "Gewicht eintragen" : "Gewicht bearbeiten"}>
+          <form className="form-grid weight-form" onSubmit={onSubmit}>
+            <DateInput
+              label="Datum"
+              onChange={(date) => onFormChange({ ...form, date })}
+              required
+              value={form.date}
+            />
+            <TextInput
+              label="Uhrzeit"
+              onChange={(time) => onFormChange({ ...form, time })}
+              required
+              type="time"
+              value={form.time}
+            />
+            <FractionNumberInput
+              label="Gewicht (kg)"
+              onChange={(weight_kg) => onFormChange({ ...form, weight_kg })}
+              required
+              value={form.weight_kg}
+            />
+            <label className="full-width">
+              <span>Notiz</span>
+              <textarea
+                onChange={(event) =>
+                  onFormChange({ ...form, notes: event.target.value })
+                }
+                rows={3}
+                value={form.notes}
+              />
+            </label>
+            <div className="form-actions">
+              {editingEntryId !== null && (
+                <button
+                  className="button secondary"
+                  onClick={onCancelEdit}
+                  type="button"
+                >
+                  Abbrechen
+                </button>
+              )}
+              <button className="button primary" type="submit">
+                <Check size={16} />
+                Speichern
+              </button>
+            </div>
+          </form>
+        </Panel>
+
+        <Panel title="Verlauf">
+          {recentEntries.length > 0 && (
+            <div className="weight-chart" aria-label="Gewichtsverlauf">
+              {recentEntries.map((entry) => (
+                <div className="weight-chart-bar" key={entry.id}>
+                  <i style={{ height: chartHeight(entry) }} />
+                  <span>{formatNumber(entry.weight_kg, 1)}</span>
+                </div>
+              ))}
+            </div>
+          )}
+          <div className="weight-entry-list">
+            {sortedEntries.length === 0 ? (
+              <EmptyState label="Keine Gewichtseintraege" />
+            ) : (
+              sortedEntries.slice(0, 30).map((entry) => (
+                <article className="weight-entry-row" key={entry.id}>
+                  <div>
+                    <strong>{formatNumber(entry.weight_kg, 1)} kg</strong>
+                    <span>
+                      {formatDate(getLocalDate(new Date(entry.measured_at)))} |{" "}
+                      {formatCalendarTime(new Date(entry.measured_at))}
+                    </span>
+                    {entry.notes && <p>{entry.notes}</p>}
+                  </div>
+                  <div className="row-actions">
+                    <button
+                      className="icon-button"
+                      onClick={() => onEdit(entry)}
+                      title="Bearbeiten"
+                      type="button"
+                    >
+                      <Pencil size={16} />
+                    </button>
+                    <button
+                      className="icon-button danger"
+                      onClick={() => onDelete(entry.id)}
+                      title="Loeschen"
+                      type="button"
+                    >
+                      <Trash2 size={16} />
+                    </button>
+                  </div>
+                </article>
+              ))
+            )}
+          </div>
+        </Panel>
+      </section>
+    </div>
+  );
+}
+
 function CalendarPage({
   events,
-  foods,
   groups,
   groupForm,
   hiddenGroupIds,
   editingGroupId,
   editingEventId,
   form,
-  mealLogs,
   onCancelEdit,
   onCancelGroupEdit,
   onDateChange,
   onDeleteGroup,
   onDeleteOccurrence,
   onDeleteSeries,
-  onDeductMealLogInventory,
   onEdit,
   onEditGroup,
   onFormChange,
   onGroupFormChange,
   onGroupSubmit,
-  onMealPrepChange,
   onSubmit,
   onToggleGroup,
   onToggleTask,
   onViewChange,
-  productUnits,
-  recipes,
   selectedDate,
-  userId,
   view,
 }: {
   events: CalendarEvent[];
-  foods: Food[];
   groups: CalendarGroup[];
   groupForm: CalendarGroupForm;
   hiddenGroupIds: number[];
   editingGroupId: number | null;
   editingEventId: number | null;
   form: CalendarForm;
-  mealLogs: MealLog[];
   onCancelEdit: () => void;
   onCancelGroupEdit: () => void;
   onDateChange: (value: string) => void;
   onDeleteGroup: (id: number) => void;
   onDeleteOccurrence: (occurrence: CalendarOccurrence) => void;
   onDeleteSeries: (event: CalendarEvent) => void;
-  onDeductMealLogInventory: (mealLogId: number) => Promise<boolean> | boolean;
   onEdit: (event: CalendarEvent) => void;
   onEditGroup: (group: CalendarGroup) => void;
   onFormChange: (value: CalendarForm) => void;
   onGroupFormChange: (value: CalendarGroupForm) => void;
   onGroupSubmit: (event: FormEvent) => void;
-  onMealPrepChange: (
-    date: string,
-    slotId: MealPrepSlotKey,
-    value: string,
-  ) => Promise<void> | void;
   onSubmit: (event: FormEvent) => void;
   onToggleGroup: (id: number) => void;
   onToggleTask: (event: CalendarEvent) => void;
-  productUnits: ProductUnit[];
-  recipes: Recipe[];
   selectedDate: string;
-  userId: number;
   onViewChange: (value: CalendarView) => void;
   view: CalendarView;
 }) {
   const [timeSelection, setTimeSelection] =
     useState<CalendarTimeSelection | null>(null);
-  const [calendarMode, setCalendarMode] = useState<CalendarMode>("calendar");
   const [createMenuOpen, setCreateMenuOpen] = useState(false);
   const createMenuRef = useCloseOnOutsideClick<HTMLDivElement>(
     createMenuOpen,
@@ -4014,11 +4277,7 @@ function CalendarPage({
   const miniMonthDates = monthGridDates(selectedDate);
   const today = getLocalDate();
   const groupById = new Map(groups.map((group) => [group.id, group]));
-  const navigationView: CalendarView = calendarMode === "mealprep" ? "week" : view;
-  const toolbarTitle =
-    calendarMode === "mealprep"
-      ? "Mealprep"
-      : formatCalendarViewTitle(view, selectedDate);
+  const toolbarTitle = formatCalendarViewTitle(view, selectedDate);
 
   function toggleSuppressedGroup(groupId: number) {
     const selected = groupForm.suppresses_group_ids.includes(groupId);
@@ -4214,23 +4473,7 @@ function CalendarPage({
             <h2>{toolbarTitle}</h2>
           </div>
           <div className="calendar-controls">
-            <div className="calendar-mode-switch" aria-label="Kalendermenue">
-              {[
-                { id: "calendar", label: "Kalender" },
-                { id: "mealprep", label: "Mealprep" },
-              ].map((mode) => (
-                <button
-                  className={calendarMode === mode.id ? "active" : ""}
-                  key={mode.id}
-                  onClick={() => setCalendarMode(mode.id as CalendarMode)}
-                  type="button"
-                >
-                  {mode.label}
-                </button>
-              ))}
-            </div>
-            {calendarMode === "calendar" && (
-              <div className="calendar-view-switch" aria-label="Kalenderansicht">
+            <div className="calendar-view-switch" aria-label="Kalenderansicht">
               {[
                 { id: "day", label: "Tag" },
                 { id: "week", label: "Woche" },
@@ -4245,23 +4488,20 @@ function CalendarPage({
                   {calendarView.label}
                 </button>
               ))}
-              </div>
-            )}
-            {calendarMode === "calendar" && (
-              <button
-                className="button secondary calendar-groups-toggle"
-                onClick={() => setCalendarGroupsOpen(true)}
-                type="button"
-              >
-                <Menu size={16} />
-                Gruppen
-              </button>
-            )}
+            </div>
+            <button
+              className="button secondary calendar-groups-toggle"
+              onClick={() => setCalendarGroupsOpen(true)}
+              type="button"
+            >
+              <Menu size={16} />
+              Gruppen
+            </button>
             <div className="calendar-nav">
               <button
                 className="icon-button"
                 onClick={() =>
-                  onDateChange(moveCalendarView(selectedDate, navigationView, -1))
+                  onDateChange(moveCalendarView(selectedDate, view, -1))
                 }
                 title="Vorheriger Zeitraum"
                 type="button"
@@ -4278,7 +4518,7 @@ function CalendarPage({
               <button
                 className="icon-button"
                 onClick={() =>
-                  onDateChange(moveCalendarView(selectedDate, navigationView, 1))
+                  onDateChange(moveCalendarView(selectedDate, view, 1))
                 }
                 title="Naechster Zeitraum"
                 type="button"
@@ -4288,19 +4528,7 @@ function CalendarPage({
             </div>
           </div>
         </div>
-        {calendarMode === "mealprep" ? (
-          <MealPrepPlanner
-            foods={foods}
-            mealLogs={mealLogs}
-            onDateChange={onDateChange}
-            onDeductMealLogInventory={onDeductMealLogInventory}
-            onMealPrepChange={onMealPrepChange}
-            productUnits={productUnits}
-            recipes={recipes}
-            selectedDate={selectedDate}
-            userId={userId}
-          />
-        ) : view === "month" ? (
+        {view === "month" ? (
           <>
             <div className="calendar-weekdays" aria-hidden="true">
               {["Mo", "Di", "Mi", "Do", "Fr", "Sa", "So"].map((weekday) => (
@@ -4480,7 +4708,6 @@ function CalendarPage({
             )}
           </div>
         )}
-        {calendarMode === "calendar" && (
         <div className="selected-day">
           <div className="section-header">
             <div>
@@ -4569,7 +4796,6 @@ function CalendarPage({
             )}
           </div>
         </div>
-        )}
       </section>
 
       {calendarGroupsOpen && (
@@ -9814,12 +10040,13 @@ function NutritionPage({
   onEdit,
   onFormChange,
   onInventoryDecrease,
-  onMenuOpen,
+  onMealPrepChange,
   onMove,
   onSubmit,
   productUnits,
   recipes,
   selectedDate,
+  userId,
 }: {
   editingMealLogId: number | null;
   foods: Food[];
@@ -9834,15 +10061,21 @@ function NutritionPage({
   onEdit: (mealLog: MealLog) => void;
   onFormChange: (value: MealForm) => void;
   onInventoryDecrease: (id: number, amount: number) => Promise<boolean> | boolean;
-  onMenuOpen: () => void;
+  onMealPrepChange: (
+    date: string,
+    slotId: MealPrepSlotKey,
+    value: string,
+  ) => Promise<void> | void;
   onMove: (mealLog: MealLog, date: string, time: string) => void;
   onSubmit: (event?: FormEvent) => Promise<boolean> | boolean;
   productUnits: ProductUnit[];
   recipes: Recipe[];
   selectedDate: string;
+  userId: number;
 }) {
   const [draggedMealLogId, setDraggedMealLogId] = useState<number | null>(null);
   const [addSheetOpen, setAddSheetOpen] = useState(false);
+  const [mealPrepOpen, setMealPrepOpen] = useState(false);
   const [sheetMode, setSheetMode] = useState<"search" | "details">("search");
   const [nutritionSearch, setNutritionSearch] = useState("");
   const [barcodePanelOpen, setBarcodePanelOpen] = useState(false);
@@ -10452,8 +10685,8 @@ function NutritionPage({
           <div className="nutrition-log-nav">
             <button
               className="nutrition-icon-button"
-              onClick={onMenuOpen}
-              title="Menue oeffnen"
+              onClick={() => setMealPrepOpen(true)}
+              title="Mealprep"
               type="button"
             >
               <Menu size={24} />
@@ -10662,6 +10895,42 @@ function NutritionPage({
           </button>
         </div>
       </section>
+
+      {mealPrepOpen && (
+        <ModalBackdrop
+          className="nutrition-sheet-backdrop"
+          onClose={() => setMealPrepOpen(false)}
+        >
+          <section className="nutrition-mealprep-sheet">
+            <div className="nutrition-sheet-grip" />
+            <div className="nutrition-mealprep-head">
+              <div>
+                <p className="eyebrow">Kalorientracker</p>
+                <h3>Mealprep</h3>
+              </div>
+              <button
+                className="nutrition-sheet-round"
+                onClick={() => setMealPrepOpen(false)}
+                title="Schliessen"
+                type="button"
+              >
+                <X size={24} />
+              </button>
+            </div>
+            <MealPrepPlanner
+              foods={foods}
+              mealLogs={mealLogs}
+              onDateChange={onDateChange}
+              onDeductMealLogInventory={onDeductMealLogInventory}
+              onMealPrepChange={onMealPrepChange}
+              productUnits={productUnits}
+              recipes={recipes}
+              selectedDate={selectedDate}
+              userId={userId}
+            />
+          </section>
+        </ModalBackdrop>
+      )}
 
       {addSheetOpen && (
         <ModalBackdrop

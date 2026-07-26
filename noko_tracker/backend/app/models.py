@@ -57,6 +57,11 @@ class User(Base):
         back_populates="user",
         cascade="all, delete-orphan",
     )
+    weight_entries = relationship(
+        "WeightEntry",
+        back_populates="user",
+        cascade="all, delete-orphan",
+    )
 
     __table_args__ = (
         CheckConstraint("daily_calories > 0", name="ck_users_daily_calories_positive"),
@@ -434,6 +439,22 @@ class MealLog(TimestampMixin, Base):
             "quick_carbs IS NULL OR quick_carbs >= 0",
             name="ck_meal_logs_quick_carbs_non_negative",
         ),
+    )
+
+
+class WeightEntry(TimestampMixin, Base):
+    __tablename__ = "weight_entries"
+
+    id = Column(Integer, primary_key=True, index=True)
+    measured_at = Column(DateTime(timezone=True), default=datetime.utcnow, nullable=False, index=True)
+    weight_kg = Column(Float, nullable=False)
+    notes = Column(Text, nullable=True)
+    user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=True, index=True)
+
+    user = relationship("User", back_populates="weight_entries")
+
+    __table_args__ = (
+        CheckConstraint("weight_kg > 0", name="ck_weight_entries_weight_positive"),
     )
 
 

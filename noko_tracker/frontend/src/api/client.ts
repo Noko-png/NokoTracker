@@ -470,6 +470,26 @@ export type MealLog = MealLogCreate & {
 
 export type MealLogUpdate = Partial<MealLogCreate>;
 
+export type WeightEntry = {
+  id: number;
+  measured_at: string;
+  weight_kg: number;
+  notes?: string | null;
+  user_id?: number | null;
+  user?: User;
+  created_at: string;
+  updated_at: string;
+};
+
+export type WeightEntryCreate = {
+  measured_at: string;
+  weight_kg: number;
+  notes?: string | null;
+  user_id?: number | null;
+};
+
+export type WeightEntryUpdate = Partial<WeightEntryCreate>;
+
 export type MealInventoryDeductionItem = {
   food_id: number;
   name: string;
@@ -896,6 +916,34 @@ export function deductMealLogInventory(id: number) {
       body: {},
     },
   );
+}
+
+export function getWeightEntries(limit = 500, userId?: number) {
+  const params = new URLSearchParams({ limit: String(limit) });
+  if (userId !== undefined) {
+    params.set("user_id", String(userId));
+  }
+  return request<WeightEntry[]>(`/weight-entries?${params.toString()}`);
+}
+
+export function createWeightEntry(entry: WeightEntryCreate) {
+  return request<WeightEntry>("/weight-entries", {
+    method: "POST",
+    body: entry,
+  });
+}
+
+export function updateWeightEntry(id: number, entry: WeightEntryUpdate) {
+  return request<WeightEntry>(`/weight-entries/${id}`, {
+    method: "PATCH",
+    body: entry,
+  });
+}
+
+export function deleteWeightEntry(id: number) {
+  return request<void>(`/weight-entries/${id}`, {
+    method: "DELETE",
+  });
 }
 
 export function getShoppingList() {
