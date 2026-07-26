@@ -463,7 +463,7 @@ const macroMeta: Array<{
   { key: "carbs", label: "Kohlenhydrate", unit: "g", tone: "red" },
 ];
 
-const appVersion = "1.0.10";
+const appVersion = "1.0.10.1";
 const updateSourceLabel = "main / github.com/Noko-png/NokoTracker";
 
 const emptyNutrition: NutritionDay = {
@@ -3463,6 +3463,8 @@ export default function App() {
           <DashboardPage
             nutrition={nutrition}
             onNavigate={navigateToPage}
+            openShoppingList={openShoppingList}
+            todaysEvents={todaysEvents}
           />
         )}
 
@@ -3745,9 +3747,13 @@ export default function App() {
 function DashboardPage({
   nutrition,
   onNavigate,
+  openShoppingList,
+  todaysEvents,
 }: {
   nutrition: NutritionDay;
   onNavigate: (page: Page) => void;
+  openShoppingList: ShoppingListItem[];
+  todaysEvents: CalendarOccurrence[];
 }) {
   return (
     <div className="page-grid dashboard-clean-page">
@@ -3795,6 +3801,67 @@ function DashboardPage({
           </button>
         ))}
         </div>
+      </section>
+      <section className="dashboard-focus-grid">
+        <Panel title="Termine">
+          <div className="list-stack">
+            {todaysEvents.length === 0 ? (
+              <button
+                className="empty-state dashboard-empty-link"
+                onClick={() => onNavigate("calendar")}
+                type="button"
+              >
+                Keine Termine heute
+              </button>
+            ) : (
+              todaysEvents.slice(0, 6).map((occurrence) => (
+                <button
+                  className="list-row dashboard-list-link"
+                  key={occurrence.key}
+                  onClick={() => onNavigate("calendar")}
+                  type="button"
+                >
+                  <CalendarDays size={18} />
+                  <div>
+                    <strong>{occurrence.event.title}</strong>
+                    <span>{formatOccurrenceTime(occurrence)}</span>
+                  </div>
+                </button>
+              ))
+            )}
+          </div>
+        </Panel>
+
+        <Panel title="Einkaufsliste">
+          <div className="list-stack">
+            {openShoppingList.length === 0 ? (
+              <button
+                className="empty-state dashboard-empty-link"
+                onClick={() => onNavigate("shopping")}
+                type="button"
+              >
+                Keine offenen Artikel
+              </button>
+            ) : (
+              openShoppingList.slice(0, 6).map((item) => (
+                <button
+                  className="list-row dashboard-list-link"
+                  key={item.id}
+                  onClick={() => onNavigate("shopping")}
+                  type="button"
+                >
+                  <ShoppingCart size={18} />
+                  <div>
+                    <strong>{item.name}</strong>
+                    <span>
+                      {formatFractionalQuantity(item.quantity)} {item.unit}
+                    </span>
+                  </div>
+                </button>
+              ))
+            )}
+          </div>
+        </Panel>
       </section>
     </div>
   );

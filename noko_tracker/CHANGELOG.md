@@ -1,5 +1,10 @@
 # Changelog
 
+## 1.0.10.1
+
+- Dashboard zeigt wieder Naehrwerte, Termine und Einkaufsliste.
+- Bestand, Gerichte, Lagerwarnungen und Aktivitaet bleiben ausgeblendet.
+
 ## 1.0.10
 
 - Dashboard auf einen kompakten Naehrwerte-Kasten reduziert.

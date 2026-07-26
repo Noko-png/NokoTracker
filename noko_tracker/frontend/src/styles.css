@@ -653,6 +653,13 @@ button {
   border-color: color-mix(in srgb, var(--red) 36%, var(--line));
 }
 
+.dashboard-focus-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 18px;
+  align-items: start;
+}
+
 .dashboard-stat-link {
   width: 100%;
   color: var(--text);
@@ -5738,6 +5745,11 @@ th {
   .dashboard-nutrition-grid {
     grid-template-columns: 1fr;
     gap: 10px;
+  }
+
+  .dashboard-focus-grid {
+    grid-template-columns: 1fr;
+    gap: 12px;
   }
 
   .dashboard-nutrition-card {
