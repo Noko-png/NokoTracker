@@ -1,5 +1,10 @@
 # Changelog
 
+## 1.0.13.1
+
+- Mobile Makroanzeige im Kalorientracker als kompaktes 2x2-Quadrat dargestellt.
+- Kalender-Erstellen-Menue und Formular auf mobilen Geraeten als sichtbarer Bottom-Bereich fixiert.
+
 ## 1.0.13
 
 - Mealprep-Planer aus dem Kalender in den Kalorientracker verschoben.

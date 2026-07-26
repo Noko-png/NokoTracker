@@ -894,7 +894,7 @@ ensure_default_user()
 app = FastAPI(
     title="Heim-ERP Backend",
     description="Backend API fuer ein privates Heim-ERP mit Kalender, Vorrat, Rezepten, Mahlzeiten und Einkaufsliste.",
-    version="1.0.13",
+    version="1.0.13.1",
 )
 
 app.add_middleware(
