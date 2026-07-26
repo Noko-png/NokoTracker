@@ -463,7 +463,7 @@ const macroMeta: Array<{
   { key: "carbs", label: "Kohlenhydrate", unit: "g", tone: "red" },
 ];
 
-const appVersion = "1.0.10.1";
+const appVersion = "1.0.11";
 const updateSourceLabel = "main / github.com/Noko-png/NokoTracker";
 
 const emptyNutrition: NutritionDay = {
@@ -3947,6 +3947,7 @@ function CalendarPage({
   const [createPanel, setCreatePanel] = useState<"event" | "group" | null>(
     null,
   );
+  const [calendarGroupsOpen, setCalendarGroupsOpen] = useState(false);
 
   useEffect(() => {
     if (editingEventId !== null) {
@@ -4063,6 +4064,57 @@ function CalendarPage({
     );
   }
 
+  function renderCalendarGroupRows() {
+    if (groups.length === 0) {
+      return <EmptyState label="Keine Gruppen" />;
+    }
+
+    return groups.map((group) => {
+      const hidden = hiddenGroupIds.includes(group.id);
+      return (
+        <div className={`calendar-group-row ${hidden ? "hidden" : ""}`} key={group.id}>
+          <button
+            className="icon-button"
+            onClick={() => onToggleGroup(group.id)}
+            title={hidden ? "Gruppe einblenden" : "Gruppe ausblenden"}
+            type="button"
+          >
+            {hidden ? <EyeOff size={16} /> : <Eye size={16} />}
+          </button>
+          <span className="group-swatch" style={{ background: group.color }} />
+          <div className="calendar-group-info">
+            <strong>{group.name}</strong>
+            {suppressedGroupNames(group) && (
+              <small>Verdraengt: {suppressedGroupNames(group)}</small>
+            )}
+            {group.hide_from_dashboard_and_month && (
+              <small>Dashboard/Monat ausgeblendet</small>
+            )}
+          </div>
+          <button
+            className="icon-button"
+            onClick={() => {
+              setCalendarGroupsOpen(false);
+              onEditGroup(group);
+            }}
+            title="Gruppe bearbeiten"
+            type="button"
+          >
+            <Pencil size={16} />
+          </button>
+          <button
+            className="icon-button danger"
+            onClick={() => onDeleteGroup(group.id)}
+            title="Gruppe loeschen"
+            type="button"
+          >
+            <Trash2 size={16} />
+          </button>
+        </div>
+      );
+    });
+  }
+
   function startTimeSelection(dayIndex: number, slot: number) {
     setTimeSelection({ dayIndex, startSlot: slot, endSlot: slot });
   }
@@ -4169,6 +4221,16 @@ function CalendarPage({
                 </button>
               ))}
               </div>
+            )}
+            {calendarMode === "calendar" && (
+              <button
+                className="button secondary calendar-groups-toggle"
+                onClick={() => setCalendarGroupsOpen(true)}
+                type="button"
+              >
+                <Menu size={16} />
+                Gruppen
+              </button>
             )}
             <div className="calendar-nav">
               <button
@@ -4485,6 +4547,35 @@ function CalendarPage({
         )}
       </section>
 
+      {calendarGroupsOpen && (
+        <button
+          aria-label="Kalendergruppen schliessen"
+          className="calendar-groups-backdrop"
+          onClick={() => setCalendarGroupsOpen(false)}
+          type="button"
+        />
+      )}
+      <aside
+        aria-label="Kalendergruppen"
+        className={`calendar-groups-drawer ${calendarGroupsOpen ? "open" : ""}`}
+      >
+        <div className="calendar-groups-drawer-head">
+          <div>
+            <p className="eyebrow">Kalender</p>
+            <h3>Gruppen</h3>
+          </div>
+          <button
+            className="icon-button"
+            onClick={() => setCalendarGroupsOpen(false)}
+            title="Schliessen"
+            type="button"
+          >
+            <X size={18} />
+          </button>
+        </div>
+        <div className="calendar-group-list">{renderCalendarGroupRows()}</div>
+      </aside>
+
       <div className="calendar-sidebar">
         <div className="calendar-create-menu" ref={createMenuRef}>
           <button
@@ -4798,55 +4889,13 @@ function CalendarPage({
           </div>
         </div>
 
-        <Panel title="Kalendergruppen">
-          <div className="calendar-group-list">
-            {groups.length === 0 ? (
-              <EmptyState label="Keine Gruppen" />
-            ) : (
-              groups.map((group) => {
-                const hidden = hiddenGroupIds.includes(group.id);
-                return (
-                  <div className={`calendar-group-row ${hidden ? "hidden" : ""}`} key={group.id}>
-                    <button
-                      className="icon-button"
-                      onClick={() => onToggleGroup(group.id)}
-                      title={hidden ? "Gruppe einblenden" : "Gruppe ausblenden"}
-                      type="button"
-                    >
-                      {hidden ? <EyeOff size={16} /> : <Eye size={16} />}
-                    </button>
-                    <span className="group-swatch" style={{ background: group.color }} />
-                    <div className="calendar-group-info">
-                      <strong>{group.name}</strong>
-                      {suppressedGroupNames(group) && (
-                        <small>Verdraengt: {suppressedGroupNames(group)}</small>
-                      )}
-                      {group.hide_from_dashboard_and_month && (
-                        <small>Dashboard/Monat ausgeblendet</small>
-                      )}
-                    </div>
-                    <button
-                      className="icon-button"
-                      onClick={() => onEditGroup(group)}
-                      title="Gruppe bearbeiten"
-                      type="button"
-                    >
-                      <Pencil size={16} />
-                    </button>
-                    <button
-                      className="icon-button danger"
-                      onClick={() => onDeleteGroup(group.id)}
-                      title="Gruppe loeschen"
-                      type="button"
-                    >
-                      <Trash2 size={16} />
-                    </button>
-                  </div>
-                );
-              })
-            )}
-          </div>
-        </Panel>
+        <div className="calendar-groups-desktop">
+          <Panel title="Kalendergruppen">
+            <div className="calendar-group-list">
+              {renderCalendarGroupRows()}
+            </div>
+          </Panel>
+        </div>
 
         {false && (
         <Panel

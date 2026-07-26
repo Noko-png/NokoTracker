@@ -1,5 +1,11 @@
 # Changelog
 
+## 1.0.11
+
+- Mobile Kalenderansichten fuer 9:16-Displays kompakter skaliert.
+- Mini-Kalender auf mobilen Geraeten ausgeblendet.
+- Kalendergruppen mobil als seitliche Schublade abrufbar.
+
 ## 1.0.10.1
 
 - Dashboard zeigt wieder Naehrwerte, Termine und Einkaufsliste.
