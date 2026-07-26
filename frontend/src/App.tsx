@@ -463,7 +463,7 @@ const macroMeta: Array<{
   { key: "carbs", label: "Kohlenhydrate", unit: "g", tone: "red" },
 ];
 
-const appVersion = "1.0.11";
+const appVersion = "1.0.12";
 const updateSourceLabel = "main / github.com/Noko-png/NokoTracker";
 
 const emptyNutrition: NutritionDay = {
@@ -1764,7 +1764,8 @@ function getStoredUserId() {
 export default function App() {
   const [activePage, setActivePage] = useState<Page>("dashboard");
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
-  const [masterDataOpen, setMasterDataOpen] = useState(true);
+  const [masterDataOpen, setMasterDataOpen] = useState(false);
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [activeMasterDataTab, setActiveMasterDataTab] =
     useState<MasterDataTab>("foods");
   const [dashboard, setDashboard] = useState<DashboardSummary | null>(null);
@@ -3313,7 +3314,12 @@ export default function App() {
   const SettingsIcon = settingsNavigationItem.icon;
 
   return (
-    <div className="app-shell" data-page={activePage} data-theme={appliedTheme}>
+    <div
+      className="app-shell"
+      data-page={activePage}
+      data-sidebar={sidebarCollapsed ? "collapsed" : "expanded"}
+      data-theme={appliedTheme}
+    >
       <header className="mobile-app-bar">
         <button
           aria-controls="primary-navigation"
@@ -3369,6 +3375,7 @@ export default function App() {
               className={`nav-item ${activePage === id ? "active" : ""}`}
               key={id}
               onClick={() => navigateToPage(id)}
+              title={label}
               type="button"
             >
               <Icon size={18} />
@@ -3383,6 +3390,7 @@ export default function App() {
               activePage === settingsNavigationItem.id ? "active" : ""
             }`}
             onClick={() => navigateToPage(settingsNavigationItem.id)}
+            title={settingsNavigationItem.label}
             type="button"
           >
             <SettingsIcon size={18} />
@@ -3395,7 +3403,15 @@ export default function App() {
             className={`sidebar-master-toggle ${
               activePage === "masterData" ? "active" : ""
             }`}
-            onClick={() => setMasterDataOpen((current) => !current)}
+            onClick={() => {
+              if (sidebarCollapsed) {
+                setActivePage("masterData");
+                setMobileMenuOpen(false);
+                return;
+              }
+              setMasterDataOpen((current) => !current);
+            }}
+            title="Stammdaten verwalten"
             type="button"
           >
             <Database size={18} />
@@ -3421,6 +3437,15 @@ export default function App() {
             </div>
           )}
         </div>
+        <button
+          aria-label={sidebarCollapsed ? "Sidebar ausklappen" : "Sidebar einklappen"}
+          className="sidebar-collapse-button"
+          onClick={() => setSidebarCollapsed((collapsed) => !collapsed)}
+          title={sidebarCollapsed ? "Sidebar ausklappen" : "Sidebar einklappen"}
+          type="button"
+        >
+          {sidebarCollapsed ? <ChevronRight size={16} /> : <ChevronLeft size={16} />}
+        </button>
       </aside>
 
       <main className={`content ${activePage === "nutrition" ? "nutrition-content" : ""}`}>

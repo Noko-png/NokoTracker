@@ -1,5 +1,11 @@
 # Changelog
 
+## 1.0.12
+
+- Stammdaten-Verwalten-Reiter startet eingeklappt.
+- Haupt-Sidebar kann per Button unten links ein- und ausgeklappt werden.
+- Eingeklappte Sidebar zeigt weiterhin alle Haupt-Icons als klickbare Navigation.
+
 ## 1.0.11
 
 - Mobile Kalenderansichten fuer 9:16-Displays kompakter skaliert.

@@ -65,6 +65,10 @@ button {
   color: var(--text);
 }
 
+.app-shell[data-sidebar="collapsed"] {
+  grid-template-columns: 78px minmax(0, 1fr);
+}
+
 .mobile-app-bar,
 .mobile-menu-backdrop,
 .sidebar-mobile-head {
@@ -207,6 +211,10 @@ button {
 .sidebar {
   position: sticky;
   top: 0;
+  display: grid;
+  grid-template-rows: auto auto auto auto 1fr auto;
+  align-content: start;
+  gap: 0;
   height: 100vh;
   padding: 20px 14px;
   background: var(--sidebar);
@@ -337,6 +345,70 @@ button {
   border-left-color: var(--primary);
   background: rgba(255, 255, 255, 0.08);
   color: #ffffff;
+}
+
+.sidebar-collapse-button {
+  display: inline-grid;
+  place-items: center;
+  align-self: end;
+  justify-self: start;
+  width: 34px;
+  min-width: 34px;
+  height: 34px;
+  margin: 16px 0 0 2px;
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.08);
+  color: #ffffff;
+}
+
+.sidebar-collapse-button:hover {
+  background: rgba(255, 255, 255, 0.14);
+}
+
+.app-shell[data-sidebar="collapsed"] .sidebar {
+  padding: 18px 10px;
+}
+
+.app-shell[data-sidebar="collapsed"] .brand {
+  justify-content: center;
+  padding: 2px 0 18px;
+}
+
+.app-shell[data-sidebar="collapsed"] .brand div:last-child,
+.app-shell[data-sidebar="collapsed"] .nav-item span,
+.app-shell[data-sidebar="collapsed"] .sidebar-master-toggle span,
+.app-shell[data-sidebar="collapsed"] .sidebar-master-toggle > svg:last-child,
+.app-shell[data-sidebar="collapsed"] .sidebar-master-options {
+  display: none;
+}
+
+.app-shell[data-sidebar="collapsed"] .brand-mark {
+  width: 40px;
+  height: 40px;
+}
+
+.app-shell[data-sidebar="collapsed"] .nav-item,
+.app-shell[data-sidebar="collapsed"] .sidebar-master-toggle {
+  grid-template-columns: 1fr;
+  justify-items: center;
+  min-height: 42px;
+  padding: 9px;
+}
+
+.app-shell[data-sidebar="collapsed"] .sidebar-secondary-nav,
+.app-shell[data-sidebar="collapsed"] .sidebar-master-data {
+  margin-top: 10px;
+  padding-top: 10px;
+}
+
+.app-shell[data-sidebar="collapsed"] .sidebar-master-data {
+  border-top: 1px solid rgba(255, 255, 255, 0.12);
+}
+
+.app-shell[data-sidebar="collapsed"] .sidebar-collapse-button {
+  justify-self: center;
+  margin-left: 0;
 }
 
 .content {
@@ -5433,27 +5505,6 @@ th {
 }
 
 @media (max-width: 1100px) {
-  .app-shell {
-    grid-template-columns: 90px minmax(0, 1fr);
-  }
-
-  .brand {
-    justify-content: center;
-    padding-left: 0;
-    padding-right: 0;
-  }
-
-  .brand div:last-child,
-  .nav-item span,
-  .sidebar-master-data {
-    display: none;
-  }
-
-  .nav-item {
-    grid-template-columns: 1fr;
-    justify-items: center;
-  }
-
   .metric-grid,
   .dashboard-overview-grid,
   .dashboard-grid,
@@ -5553,6 +5604,10 @@ th {
     box-shadow: 18px 0 36px rgba(2, 6, 23, 0.36);
   }
 
+  .sidebar-collapse-button {
+    display: none;
+  }
+
   .sidebar.open {
     transform: translateX(0);
     visibility: visible;
@@ -5586,6 +5641,33 @@ th {
   .brand div:last-child,
   .nav-item span {
     display: block;
+  }
+
+  .app-shell[data-sidebar="collapsed"] .brand div:last-child,
+  .app-shell[data-sidebar="collapsed"] .nav-item span,
+  .app-shell[data-sidebar="collapsed"] .sidebar-master-toggle span,
+  .app-shell[data-sidebar="collapsed"] .sidebar-master-toggle > svg:last-child {
+    display: block;
+  }
+
+  .app-shell[data-sidebar="collapsed"] .sidebar {
+    padding: 14px;
+  }
+
+  .app-shell[data-sidebar="collapsed"] .brand {
+    justify-content: flex-start;
+    padding: 0 4px 16px;
+  }
+
+  .app-shell[data-sidebar="collapsed"] .nav-item,
+  .app-shell[data-sidebar="collapsed"] .sidebar-master-toggle {
+    grid-template-columns: 22px minmax(0, 1fr);
+    justify-items: start;
+    padding: 10px;
+  }
+
+  .app-shell[data-sidebar="collapsed"] .sidebar-master-options {
+    display: grid;
   }
 
   .brand-mark {
