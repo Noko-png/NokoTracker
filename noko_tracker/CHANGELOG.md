@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.0.12.01
+
+- Mobile Kalender-Erstellen-Auswahl bleibt sichtbar im Layout und rendert nicht mehr ausserhalb des Bildschirms.
+
 ## 1.0.12
 
 - Stammdaten-Verwalten-Reiter startet eingeklappt.

@@ -6314,6 +6314,18 @@ th {
     grid-area: auto;
   }
 
+  .calendar-create-menu {
+    display: grid;
+    gap: 8px;
+  }
+
+  .calendar-create-options {
+    position: static;
+    inset: auto;
+    z-index: 1;
+    width: 100%;
+  }
+
   .calendar-sidebar .mini-calendar,
   .calendar-groups-desktop {
     display: none;
