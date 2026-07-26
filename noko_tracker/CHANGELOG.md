@@ -1,5 +1,10 @@
 # Changelog
 
+## 1.0.13.03
+
+- Uhrzeit aus dem Gewichtstracking entfernt; Gewicht wird nur noch pro Datum erfasst.
+- Mealprep- und Gewicht-Popups im Kalorientracker mittig im Bildschirm zentriert.
+
 ## 1.0.13.2
 
 - Dashboard-Naehrwerte auf mobilen Geraeten als echtes 2x2-Raster komprimiert.

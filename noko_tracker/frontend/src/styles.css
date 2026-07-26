@@ -3707,6 +3707,12 @@ th {
   background: rgba(17, 24, 39, 0.28);
 }
 
+.nutrition-tool-backdrop {
+  align-items: center;
+  justify-items: center;
+  padding: 24px;
+}
+
 .nutrition-add-sheet {
   display: grid;
   gap: 20px;
@@ -3744,6 +3750,17 @@ th {
 
 .nutrition-weight-sheet {
   width: min(980px, calc(100% - 32px));
+}
+
+.nutrition-tool-backdrop .nutrition-mealprep-sheet,
+.nutrition-tool-backdrop .nutrition-weight-sheet {
+  width: min(1080px, calc(100vw - 48px));
+  max-height: calc(100dvh - 48px);
+  border-radius: 18px;
+}
+
+.nutrition-tool-backdrop .nutrition-weight-sheet {
+  width: min(980px, calc(100vw - 48px));
 }
 
 .nutrition-tools-list {
@@ -6016,6 +6033,18 @@ th {
     max-height: 94dvh;
     padding: 14px 12px 22px;
     border-radius: 18px 18px 0 0;
+  }
+
+  .nutrition-tool-backdrop {
+    align-items: center;
+    padding: 12px;
+  }
+
+  .nutrition-tool-backdrop .nutrition-mealprep-sheet,
+  .nutrition-tool-backdrop .nutrition-weight-sheet {
+    width: calc(100vw - 24px);
+    max-height: calc(100dvh - 24px);
+    border-radius: 16px;
   }
 
   .dashboard-priority-card,

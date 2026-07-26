@@ -367,7 +367,6 @@ type MealPrepSlotKey = "breakfast" | "lunch" | "dinner";
 
 type WeightForm = {
   date: string;
-  time: string;
   weight_kg: string;
   notes: string;
 };
@@ -476,7 +475,7 @@ const macroMeta: Array<{
   { key: "carbs", label: "Kohlenhydrate", unit: "g", tone: "red" },
 ];
 
-const appVersion = "1.0.13.2";
+const appVersion = "1.0.13.03";
 const updateSourceLabel = "main / github.com/Noko-png/NokoTracker";
 
 const emptyNutrition: NutritionDay = {
@@ -676,7 +675,6 @@ function getLocalDate(date = new Date()) {
 function createInitialWeightForm(): WeightForm {
   return {
     date: getLocalDate(),
-    time: formatTimeInput(new Date()),
     weight_kg: "",
     notes: "",
   };
@@ -2801,7 +2799,7 @@ export default function App() {
     try {
       setApiError(null);
       const payload = {
-        measured_at: `${weightForm.date}T${weightForm.time}:00`,
+        measured_at: `${weightForm.date}T00:00:00`,
         weight_kg: weight,
         notes: optionalText(weightForm.notes),
         user_id: userId,
@@ -2823,7 +2821,6 @@ export default function App() {
     const measuredAt = new Date(entry.measured_at);
     setWeightForm({
       date: getLocalDate(measuredAt),
-      time: formatTimeInput(measuredAt),
       weight_kg: toFormValue(entry.weight_kg),
       notes: entry.notes ?? "",
     });
@@ -4039,9 +4036,7 @@ function WeightPage({
             <h2>{latestEntry ? `${formatNumber(latestEntry.weight_kg, 1)} kg` : "Kein Wert"}</h2>
             <span>
               {latestEntry
-                ? `${formatDate(getLocalDate(new Date(latestEntry.measured_at)))} ${formatCalendarTime(
-                    new Date(latestEntry.measured_at),
-                  )}`
+                ? formatDate(getLocalDate(new Date(latestEntry.measured_at)))
                 : "Noch kein Eintrag"}
             </span>
           </div>
@@ -4071,13 +4066,6 @@ function WeightPage({
               onChange={(date) => onFormChange({ ...form, date })}
               required
               value={form.date}
-            />
-            <TextInput
-              label="Uhrzeit"
-              onChange={(time) => onFormChange({ ...form, time })}
-              required
-              type="time"
-              value={form.time}
             />
             <FractionNumberInput
               label="Gewicht (kg)"
@@ -4132,10 +4120,7 @@ function WeightPage({
                 <article className="weight-entry-row" key={entry.id}>
                   <div>
                     <strong>{formatNumber(entry.weight_kg, 1)} kg</strong>
-                    <span>
-                      {formatDate(getLocalDate(new Date(entry.measured_at)))} |{" "}
-                      {formatCalendarTime(new Date(entry.measured_at))}
-                    </span>
+                    <span>{formatDate(getLocalDate(new Date(entry.measured_at)))}</span>
                     {entry.notes && <p>{entry.notes}</p>}
                   </div>
                   <div className="row-actions">
@@ -10962,7 +10947,7 @@ function NutritionPage({
 
       {activeTool === "mealprep" && (
         <ModalBackdrop
-          className="nutrition-sheet-backdrop"
+          className="nutrition-sheet-backdrop nutrition-tool-backdrop"
           onClose={() => setActiveTool(null)}
         >
           <section className="nutrition-mealprep-sheet">
@@ -10998,7 +10983,7 @@ function NutritionPage({
 
       {activeTool === "weight" && (
         <ModalBackdrop
-          className="nutrition-sheet-backdrop"
+          className="nutrition-sheet-backdrop nutrition-tool-backdrop"
           onClose={() => setActiveTool(null)}
         >
           <section className="nutrition-weight-sheet">
