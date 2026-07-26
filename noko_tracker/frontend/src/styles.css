@@ -580,6 +580,79 @@ button {
   text-align: right;
 }
 
+.dashboard-clean-page {
+  align-content: start;
+}
+
+.dashboard-nutrition-panel {
+  display: grid;
+  gap: 16px;
+}
+
+.dashboard-nutrition-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 14px;
+}
+
+.dashboard-nutrition-card {
+  display: grid;
+  align-content: space-between;
+  gap: 14px;
+  min-height: 164px;
+  padding: 16px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--surface-soft);
+}
+
+.dashboard-nutrition-card span,
+.dashboard-nutrition-card em {
+  color: var(--muted);
+  font-style: normal;
+  font-weight: 800;
+}
+
+.dashboard-nutrition-card span {
+  font-size: 0.86rem;
+}
+
+.dashboard-nutrition-card strong {
+  display: flex;
+  align-items: baseline;
+  gap: 7px;
+  margin-top: 10px;
+  color: var(--text-strong);
+  font-size: clamp(1.65rem, 3vw, 2.15rem);
+  line-height: 1;
+}
+
+.dashboard-nutrition-card small {
+  color: var(--muted);
+  font-size: 0.88rem;
+  font-weight: 800;
+}
+
+.dashboard-nutrition-card em {
+  font-size: 0.9rem;
+}
+
+.dashboard-nutrition-card.blue {
+  border-color: color-mix(in srgb, var(--primary) 36%, var(--line));
+}
+
+.dashboard-nutrition-card.green {
+  border-color: color-mix(in srgb, var(--green) 36%, var(--line));
+}
+
+.dashboard-nutrition-card.amber {
+  border-color: color-mix(in srgb, var(--amber) 36%, var(--line));
+}
+
+.dashboard-nutrition-card.red {
+  border-color: color-mix(in srgb, var(--red) 36%, var(--line));
+}
+
 .dashboard-stat-link {
   width: 100%;
   color: var(--text);
@@ -5660,6 +5733,20 @@ th {
   .dashboard-summary-card {
     min-height: 94px;
     padding: 12px;
+  }
+
+  .dashboard-nutrition-grid {
+    grid-template-columns: 1fr;
+    gap: 10px;
+  }
+
+  .dashboard-nutrition-card {
+    min-height: 128px;
+    padding: 14px;
+  }
+
+  .dashboard-nutrition-card strong {
+    font-size: 1.65rem;
   }
 
   .metric-grid {

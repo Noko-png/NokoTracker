@@ -463,7 +463,7 @@ const macroMeta: Array<{
   { key: "carbs", label: "Kohlenhydrate", unit: "g", tone: "red" },
 ];
 
-const appVersion = "1.0.8";
+const appVersion = "1.0.10";
 const updateSourceLabel = "main / github.com/Noko-png/NokoTracker";
 
 const emptyNutrition: NutritionDay = {
@@ -3461,12 +3461,8 @@ export default function App() {
 
         {activePage === "dashboard" && (
           <DashboardPage
-            dashboard={dashboard}
-            inventoryWarnings={warnings}
             nutrition={nutrition}
             onNavigate={navigateToPage}
-            openShoppingList={openShoppingList}
-            todaysEvents={todaysEvents}
           />
         )}
 
@@ -3747,159 +3743,42 @@ export default function App() {
 }
 
 function DashboardPage({
-  dashboard,
-  inventoryWarnings,
   nutrition,
   onNavigate,
-  openShoppingList,
-  todaysEvents,
 }: {
-  dashboard: DashboardSummary | null;
-  inventoryWarnings: InventoryWarnings;
   nutrition: NutritionDay;
   onNavigate: (page: Page) => void;
-  openShoppingList: ShoppingListItem[];
-  todaysEvents: CalendarOccurrence[];
 }) {
-  const warningTotal =
-    inventoryWarnings.low_stock.length +
-    inventoryWarnings.expiring_soon.length +
-    inventoryWarnings.expired.length;
-  const inventoryItemCount = dashboard?.inventory_items ?? 0;
-  const foodCount = dashboard?.foods ?? 0;
-  const recipeCount = dashboard?.recipes ?? 0;
-  const openShoppingCount =
-    dashboard?.shopping_open_items ?? openShoppingList.length;
-  const upcomingEventCount = dashboard?.upcoming_events ?? todaysEvents.length;
-  const recentMealCount = dashboard?.recent_meals ?? 0;
-  const caloriesPercent = Math.min(nutrition.percentages.calories, 100);
-  const nextEvent = todaysEvents[0];
-  const firstShoppingItem = openShoppingList[0];
-  const dashboardCards = [
-    {
-      label: "Bestand",
-      value: inventoryItemCount,
-      detail: `${foodCount} Lebensmittel`,
-      meta:
-        warningTotal === 0 ? "Keine Warnungen" : `${warningTotal} Warnungen`,
-      page: "foods" as Page,
-      icon: <Database size={20} />,
-      tone: warningTotal > 0 ? "amber" : "green",
-    },
-    {
-      label: "Einkauf",
-      value: openShoppingCount,
-      detail: "offene Artikel",
-      meta: firstShoppingItem ? firstShoppingItem.name : "Liste leer",
-      page: "shopping" as Page,
-      icon: <ShoppingCart size={20} />,
-      tone: openShoppingCount > 0 ? "blue" : "green",
-    },
-    {
-      label: "Kalender",
-      value: upcomingEventCount,
-      detail: "kommende Eintraege",
-      meta: nextEvent ? nextEvent.event.title : "Heute frei",
-      page: "calendar" as Page,
-      icon: <CalendarDays size={20} />,
-      tone: todaysEvents.length > 0 ? "blue" : "green",
-    },
-    {
-      label: "Gerichte",
-      value: recipeCount,
-      detail: "Rezepte",
-      meta: `${recentMealCount} Mahlzeiten zuletzt`,
-      page: "recipes" as Page,
-      icon: <Soup size={20} />,
-      tone: "green",
-    },
-  ];
-
   return (
-    <div className="page-grid">
-      <section className="dashboard-overview-grid" aria-label="Uebersicht">
-        <button
-          className="dashboard-priority-card dashboard-link-card"
-          onClick={() => onNavigate(warningTotal > 0 ? "foods" : "nutrition")}
-          type="button"
-        >
-          <div className="dashboard-card-head">
-            {warningTotal > 0 ? (
-              <AlertTriangle size={20} />
-            ) : (
-              <CheckCircle2 size={20} />
-            )}
-            <span>Heute im Blick</span>
+    <div className="page-grid dashboard-clean-page">
+      <section className="section dashboard-nutrition-panel">
+        <div className="section-header">
+          <div>
+            <p className="eyebrow">Heute</p>
+            <h2>Aktuelle Naehrwerte</h2>
           </div>
-          <div className="dashboard-priority-main">
-            <strong>
-              {warningTotal > 0
-                ? `${warningTotal} Lagerhinweise`
-                : "Bestand stabil"}
-            </strong>
-            <span>
-              {warningTotal > 0
-                ? `${inventoryWarnings.expired.length} abgelaufen, ${inventoryWarnings.expiring_soon.length} bald faellig, ${inventoryWarnings.low_stock.length} niedrig`
-                : `${formatNumber(nutrition.totals.calories)} kcal gegessen`}
-            </span>
-          </div>
-          <div className="progress-track" aria-hidden="true">
-            <span
-              className="progress-fill blue"
-              style={{
-                width: `${caloriesPercent}%`,
-              }}
-            />
-          </div>
-          <div className="dashboard-priority-list">
-            <span>
-              <Gauge size={16} />
-              {formatNumber(nutrition.remaining.calories)} kcal offen
-            </span>
-            <span>
-              <CalendarDays size={16} />
-              {todaysEvents.length} Termine heute
-            </span>
-            <span>
-              <ShoppingCart size={16} />
-              {openShoppingList.length} Einkaufsartikel
-            </span>
-          </div>
-        </button>
-
-        <div className="dashboard-summary-grid">
-          {dashboardCards.map((card) => (
-            <button
-              className={`dashboard-summary-card dashboard-link-card ${card.tone}`}
-              key={card.label}
-              onClick={() => onNavigate(card.page)}
-              type="button"
-            >
-              <span className="dashboard-summary-icon">{card.icon}</span>
-              <span>
-                <small>{card.label}</small>
-                <strong>{card.value}</strong>
-                <em>{card.detail}</em>
-              </span>
-              <i>{card.meta}</i>
-            </button>
-          ))}
+          <button
+            className="button secondary"
+            onClick={() => onNavigate("nutrition")}
+            type="button"
+          >
+            <Gauge size={16} />
+            Kalorientracker
+          </button>
         </div>
-      </section>
-
-      <section className="metric-grid" aria-label="Naehrwerte heute">
+        <div className="dashboard-nutrition-grid" aria-label="Naehrwerte heute">
         {macroMeta.map((macro) => (
           <button
-            className="metric-card dashboard-link-card"
+            className={`dashboard-nutrition-card dashboard-link-card ${macro.tone}`}
             key={macro.key}
             onClick={() => onNavigate("nutrition")}
             type="button"
           >
             <div>
-              <p>{macro.label}</p>
+              <span>{macro.label}</span>
               <strong>
                 {formatNumber(nutrition.totals[macro.key])}
-                <span>{macro.unit}</span>
+                <small>{macro.unit}</small>
               </strong>
             </div>
             <div className="progress-track" aria-hidden="true">
@@ -3910,117 +3789,12 @@ function DashboardPage({
                 }}
               />
             </div>
-            <small>
+            <em>
               {formatNumber(nutrition.remaining[macro.key])} {macro.unit} offen
-            </small>
+            </em>
           </button>
         ))}
-      </section>
-
-      <section className="dashboard-grid">
-        <Panel title="Heute">
-          <div className="list-stack">
-            {todaysEvents.length === 0 ? (
-              <button
-                className="empty-state dashboard-empty-link"
-                onClick={() => onNavigate("calendar")}
-                type="button"
-              >
-                Keine Termine
-              </button>
-            ) : (
-              todaysEvents.map((occurrence) => (
-                <button
-                  className="list-row dashboard-list-link"
-                  key={occurrence.key}
-                  onClick={() => onNavigate("calendar")}
-                  type="button"
-                >
-                  <CalendarDays size={18} />
-                  <div>
-                    <strong>{occurrence.event.title}</strong>
-                    <span>{formatOccurrenceTime(occurrence)}</span>
-                  </div>
-                </button>
-              ))
-            )}
-          </div>
-        </Panel>
-
-        <Panel title="Lagerwarnungen">
-          <div className="warning-grid">
-            <WarningCount
-              label="Niedrig"
-              onClick={() => onNavigate("foods")}
-              tone="low"
-              value={inventoryWarnings.low_stock.length}
-            />
-            <WarningCount
-              label="Bald ablaufend"
-              onClick={() => onNavigate("foods")}
-              tone="expiring"
-              value={inventoryWarnings.expiring_soon.length}
-            />
-            <WarningCount
-              label="Abgelaufen"
-              onClick={() => onNavigate("foods")}
-              tone="expired"
-              value={inventoryWarnings.expired.length}
-            />
-          </div>
-        </Panel>
-
-        <Panel title="Offene Einkaufsliste">
-          <div className="list-stack">
-            {openShoppingList.length === 0 ? (
-              <button
-                className="empty-state dashboard-empty-link"
-                onClick={() => onNavigate("shopping")}
-                type="button"
-              >
-                Keine offenen Artikel
-              </button>
-            ) : (
-              openShoppingList.slice(0, 6).map((item) => (
-                <button
-                  className="list-row dashboard-list-link"
-                  key={item.id}
-                  onClick={() => onNavigate("shopping")}
-                  type="button"
-                >
-                  <ShoppingCart size={18} />
-                  <div>
-                    <strong>{item.name}</strong>
-                    <span>
-                      {formatFractionalQuantity(item.quantity)} {item.unit}
-                    </span>
-                  </div>
-                </button>
-              ))
-            )}
-          </div>
-        </Panel>
-
-        <Panel title="Aktivitaet">
-          <div className="system-grid">
-            <button
-              className="stat dashboard-list-link dashboard-stat-link"
-              onClick={() => onNavigate("nutrition")}
-              type="button"
-            >
-              <strong>{recentMealCount}</strong>
-              <span>Mahlzeiten zuletzt</span>
-            </button>
-            <button
-              className="stat dashboard-list-link dashboard-stat-link"
-              onClick={() => onNavigate("settings")}
-              type="button"
-            >
-              <strong>{dashboard?.users ?? 0}</strong>
-              <span>Profile</span>
-            </button>
-          </div>
-        </Panel>
+        </div>
       </section>
     </div>
   );

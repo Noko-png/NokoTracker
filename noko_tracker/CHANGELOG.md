@@ -1,5 +1,10 @@
 # Changelog
 
+## 1.0.10
+
+- Dashboard auf einen kompakten Naehrwerte-Kasten reduziert.
+- Alte Dashboard-Bloecke fuer Bestand, Einkauf, Kalender, Gerichte, Lagerwarnungen und Aktivitaet entfernt.
+
 ## 1.0.8
 
 - Kalorientracker-Timeline global kompakter skaliert, damit Desktop und Mobile mindestens 8 Stunden gleichzeitig anzeigen.
