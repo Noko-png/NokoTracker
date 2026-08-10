@@ -373,8 +373,6 @@ type WeightForm = {
 };
 
 type TodoForm = {
-  title: string;
-  date: string;
   notes: string;
 };
 
@@ -483,7 +481,7 @@ const macroMeta: Array<{
   { key: "carbs", label: "Kohlenhydrate", unit: "g", tone: "red" },
 ];
 
-const appVersion = "1.0.13.06";
+const appVersion = "1.0.13.07";
 const updateSourceLabel = "main / github.com/Noko-png/NokoTracker";
 
 const emptyNutrition: NutritionDay = {
@@ -629,8 +627,6 @@ const initialShoppingForm: ShoppingForm = {
 };
 
 const initialTodoForm: TodoForm = {
-  title: "",
-  date: getLocalDate(),
   notes: "",
 };
 
@@ -2023,9 +2019,15 @@ export default function App() {
     );
     return calendarEvents.filter(
       (event) =>
-        !event.group_id || !hiddenOverviewGroupIds.has(event.group_id),
+        event.entry_type !== "task" &&
+        (!event.group_id || !hiddenOverviewGroupIds.has(event.group_id)),
     );
   }, [calendarEvents, calendarGroups]);
+
+  const calendarVisibleEvents = useMemo(
+    () => calendarEvents.filter((event) => event.entry_type !== "task"),
+    [calendarEvents],
+  );
 
   const todaysEvents = useMemo(() => {
     const today = getLocalDate();
@@ -2054,7 +2056,8 @@ export default function App() {
         .sort(
           (first, second) =>
             Number(first.is_completed) - Number(second.is_completed) ||
-            new Date(first.start_at).getTime() - new Date(second.start_at).getTime() ||
+            new Date(first.created_at).getTime() -
+              new Date(second.created_at).getTime() ||
             first.title.localeCompare(second.title, "de-DE"),
         ),
     [calendarEvents, userId],
@@ -3203,9 +3206,9 @@ export default function App() {
 
   async function submitTodo(event: FormEvent) {
     event.preventDefault();
-    const title = todoForm.title.trim();
-    if (!title) {
-      setApiError("Bitte einen ToDo-Titel eintragen.");
+    const note = todoForm.notes.trim();
+    if (!note) {
+      setApiError("Bitte eine ToDo-Notiz eintragen.");
       return;
     }
 
@@ -3215,10 +3218,11 @@ export default function App() {
         editingTodoId === null
           ? null
           : calendarEvents.find((item) => item.id === editingTodoId) ?? null;
+      const title = note.length > 80 ? `${note.slice(0, 77)}...` : note;
       const payload = {
         title,
-        description: optionalText(todoForm.notes),
-        start_at: `${todoForm.date}T00:00:00`,
+        description: note,
+        start_at: existingTodo?.start_at ?? `${getLocalDate()}T00:00:00`,
         end_at: null,
         location: null,
         entry_type: "task",
@@ -3247,9 +3251,7 @@ export default function App() {
 
   function startEditingTodo(todo: CalendarEvent) {
     setTodoForm({
-      title: todo.title,
-      date: getLocalDate(new Date(todo.start_at)),
-      notes: todo.description ?? "",
+      notes: todo.description ?? todo.title,
     });
     setEditingTodoId(todo.id);
     setActivePage("todos");
@@ -3712,7 +3714,7 @@ export default function App() {
 
         {activePage === "calendar" && (
           <CalendarPage
-            events={calendarEvents}
+            events={calendarVisibleEvents}
             groups={calendarGroups}
             groupForm={calendarGroupForm}
             hiddenGroupIds={hiddenCalendarGroupIds}
@@ -4096,8 +4098,7 @@ function DashboardPage({
                 >
                   <CheckCircle2 size={18} />
                   <div>
-                    <strong>{todo.title}</strong>
-                    <span>{formatDate(getLocalDate(new Date(todo.start_at)))}</span>
+                    <strong>{todo.description ?? todo.title}</strong>
                   </div>
                 </button>
               ))
@@ -4165,7 +4166,7 @@ function TodoPage({
     .filter((todo) => !todo.is_completed)
     .sort(
       (first, second) =>
-        new Date(first.start_at).getTime() - new Date(second.start_at).getTime() ||
+        new Date(first.created_at).getTime() - new Date(second.created_at).getTime() ||
         first.title.localeCompare(second.title, "de-DE"),
     );
   const completedTodos = todos
@@ -4177,11 +4178,8 @@ function TodoPage({
         second.id - first.id,
     );
 
-  function dueDate(todo: CalendarEvent) {
-    return formatDate(getLocalDate(new Date(todo.start_at)));
-  }
-
   function renderTodo(todo: CalendarEvent, completed = false) {
+    const note = todo.description ?? todo.title;
     return (
       <article className={`todo-item ${completed ? "completed" : ""}`} key={todo.id}>
         <button
@@ -4193,9 +4191,7 @@ function TodoPage({
           {completed ? <CheckCircle2 size={18} /> : <Circle size={18} />}
         </button>
         <div className="todo-item-main">
-          <strong>{todo.title}</strong>
-          <span>{dueDate(todo)}</span>
-          {todo.description && <p>{todo.description}</p>}
+          <p>{note}</p>
         </div>
         <div className="row-actions">
           <button
@@ -4241,18 +4237,6 @@ function TodoPage({
       <section className="section todo-workspace">
         <Panel title={editingTodoId === null ? "ToDo anlegen" : "ToDo bearbeiten"}>
           <form className="form-grid todo-form" onSubmit={onSubmit}>
-            <TextInput
-              label="Titel"
-              onChange={(title) => onFormChange({ ...form, title })}
-              required
-              value={form.title}
-            />
-            <DateInput
-              label="Datum"
-              onChange={(date) => onFormChange({ ...form, date })}
-              required
-              value={form.date}
-            />
             <label className="full-width">
               <span>Notiz</span>
               <textarea
@@ -4605,13 +4589,13 @@ function CalendarPage({
       .join(", ");
   }
 
-  function openEventCreatePanel(entryType: "event" | "task") {
+  function openEventCreatePanel() {
     if (editingEventId !== null) {
       onCancelEdit();
     }
     onFormChange({
       ...createCalendarForm(selectedDate),
-      entry_type: entryType,
+      entry_type: "event",
     });
     setCreatePanel("event");
     setCreateMenuOpen(false);
@@ -5150,13 +5134,9 @@ function CalendarPage({
           </button>
           {createMenuOpen && (
             <div className="calendar-create-options">
-              <button onClick={() => openEventCreatePanel("event")} type="button">
+              <button onClick={openEventCreatePanel} type="button">
                 <CalendarDays size={16} />
                 Termin
-              </button>
-              <button onClick={() => openEventCreatePanel("task")} type="button">
-                <CheckCircle2 size={16} />
-                Aufgabe
               </button>
               <button onClick={openGroupCreatePanel} type="button">
                 <Plus size={16} />
@@ -5171,27 +5151,10 @@ function CalendarPage({
             title={
               editingEventId !== null
                 ? "Eintrag bearbeiten"
-                : form.entry_type === "task"
-                  ? "Aufgabe anlegen"
-                  : "Termin anlegen"
+                : "Termin anlegen"
             }
           >
             <form className="form-grid calendar-form" onSubmit={onSubmit}>
-              <label>
-                <span>Typ</span>
-                <select
-                  onChange={(event) =>
-                    onFormChange({
-                      ...form,
-                      entry_type: event.target.value as "event" | "task",
-                    })
-                  }
-                  value={form.entry_type}
-                >
-                  <option value="event">Termin</option>
-                  <option value="task">Aufgabe</option>
-                </select>
-              </label>
               <TextInput
                 label="Titel"
                 onChange={(title) => onFormChange({ ...form, title })}
@@ -5462,27 +5425,10 @@ function CalendarPage({
           title={
             editingEventId !== null
               ? "Eintrag bearbeiten"
-              : form.entry_type === "task"
-                ? "Aufgabe anlegen"
-                : "Termin anlegen"
+              : "Termin anlegen"
           }
         >
           <form className="form-grid calendar-form" onSubmit={onSubmit}>
-          <label>
-            <span>Typ</span>
-            <select
-              onChange={(event) =>
-                onFormChange({
-                  ...form,
-                  entry_type: event.target.value as "event" | "task",
-                })
-              }
-              value={form.entry_type}
-            >
-              <option value="event">Termin</option>
-              <option value="task">Aufgabe</option>
-            </select>
-          </label>
           <TextInput
             label="Titel"
             onChange={(title) => onFormChange({ ...form, title })}

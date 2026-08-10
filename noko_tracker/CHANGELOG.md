@@ -1,5 +1,10 @@
 # Changelog
 
+## 1.0.13.07
+
+- ToDo Tasks werden nicht mehr im Kalender oder als Termine angezeigt.
+- ToDos verwenden in der Oberflaeche nur noch eine Notiz ohne Titel- und Datumsfeld.
+
 ## 1.0.13.06
 
 - Mobiler Kalorientracker zeigt die globale Sidebar-Leiste wieder an.

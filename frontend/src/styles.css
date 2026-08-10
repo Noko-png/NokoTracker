@@ -1106,7 +1106,7 @@ button {
   opacity: 0.72;
 }
 
-.todo-item.completed .todo-item-main strong {
+.todo-item.completed .todo-item-main p {
   text-decoration: line-through;
 }
 
@@ -1125,6 +1125,8 @@ button {
 
 .todo-item-main p {
   margin: 0;
+  color: var(--text-strong);
+  line-height: 1.35;
 }
 
 .food-name-with-emoji,
