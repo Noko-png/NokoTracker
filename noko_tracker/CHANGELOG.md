@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.0.13.04
+
+- Sidebar-Hauptnavigation neu sortiert: Dashboard, Kalorientracker, Kalender, Bestandsuebersicht, Einkaufsliste, Gerichte.
+
 ## 1.0.13.03
 
 - Uhrzeit aus dem Gewichtstracking entfernt; Gewicht wird nur noch pro Datum erfasst.

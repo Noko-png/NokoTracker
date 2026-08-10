@@ -421,11 +421,11 @@ type CsvImportForm = {
 
 const navigation = [
   { id: "dashboard", label: "Dashboard", icon: LayoutDashboard },
+  { id: "nutrition", label: "Kalorientracker", icon: Gauge },
   { id: "calendar", label: "Kalender", icon: CalendarDays },
   { id: "foods", label: "Bestandsübersicht", icon: Apple },
-  { id: "recipes", label: "Gerichte", icon: Soup },
-  { id: "nutrition", label: "Kalorientracker", icon: Gauge },
   { id: "shopping", label: "Einkaufsliste", icon: ShoppingCart },
+  { id: "recipes", label: "Gerichte", icon: Soup },
 ] as const;
 
 const settingsNavigationItem = {
@@ -475,7 +475,7 @@ const macroMeta: Array<{
   { key: "carbs", label: "Kohlenhydrate", unit: "g", tone: "red" },
 ];
 
-const appVersion = "1.0.13.03";
+const appVersion = "1.0.13.04";
 const updateSourceLabel = "main / github.com/Noko-png/NokoTracker";
 
 const emptyNutrition: NutritionDay = {
