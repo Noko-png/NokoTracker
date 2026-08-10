@@ -524,7 +524,7 @@ const macroMeta: Array<{
   { key: "carbs", label: "Kohlenhydrate", unit: "g", tone: "red" },
 ];
 
-const appVersion = "2.0.0";
+const appVersion = "2.0.1";
 const updateSourceLabel = "main / github.com/Noko-png/NokoTracker";
 
 const emptyNutrition: NutritionDay = {
@@ -3950,7 +3950,7 @@ export default function App() {
       <main className={`content ${activePage === "nutrition" ? "nutrition-content" : ""}`}>
         <header className="topbar">
           <div>
-            <p className="eyebrow">http://127.0.0.1:8000</p>
+            <p className="eyebrow">NokoTracker</p>
             <h1>{pageTitle}</h1>
           </div>
           <div className="topbar-actions">
@@ -4722,6 +4722,7 @@ function TrainingPage({
     const bestWeight = Math.max(0, ...sessions.flatMap((session) => session.sets.map((set) => set.weight_kg)));
     return { totalSessions, totalSets, bestWeight };
   }, [sessions]);
+  const latestSession = sessions[0] ?? null;
 
   function changeSessionPlan(planId: string) {
     const plan = plans.find((item) => String(item.id) === planId) ?? null;
@@ -4770,9 +4771,19 @@ function TrainingPage({
   return (
     <div className="training-page">
       <section className="section training-hero">
-        <div>
-          <p className="eyebrow">Training</p>
-          <h2>Trainingsplaene und Einheiten</h2>
+        <div className="training-hero-copy">
+          <span className="training-hero-icon">
+            <Dumbbell size={24} />
+          </span>
+          <div>
+            <p className="eyebrow">Training</p>
+            <h2>Trainingslog</h2>
+            <span>
+              {latestSession
+                ? `${latestSession.plan.name} - ${formatDate(getLocalDate(new Date(latestSession.trained_at)))}`
+                : "Noch keine Einheit gespeichert"}
+            </span>
+          </div>
         </div>
         <div className="training-summary">
           <article>
@@ -4796,10 +4807,10 @@ function TrainingPage({
 
       <section className="training-layout">
         <div className="training-column">
-          <Panel title={editingPlanId === null ? "Plan anlegen" : "Plan bearbeiten"}>
-            <form className="form-grid single-column" onSubmit={onPlanSubmit}>
+          <Panel title="Planung">
+            <form className="form-grid training-plan-form" onSubmit={onPlanSubmit}>
               <TextInput
-                label="Name"
+                label={editingPlanId === null ? "Neuer Plan" : "Planname"}
                 onChange={(name) => onPlanFormChange({ ...planForm, name })}
                 required
                 value={planForm.name}
@@ -4810,11 +4821,11 @@ function TrainingPage({
                   onChange={(event) =>
                     onPlanFormChange({ ...planForm, notes: event.target.value })
                   }
-                  rows={3}
+                  rows={2}
                   value={planForm.notes}
                 />
               </label>
-              <div className="form-actions">
+              <div className="form-actions full-width">
                 {editingPlanId !== null && (
                   <button
                     className="button secondary"
@@ -4826,13 +4837,94 @@ function TrainingPage({
                 )}
                 <button className="button primary" type="submit">
                   <Check size={16} />
-                  Speichern
+                  {editingPlanId === null ? "Plan speichern" : "Aendern"}
                 </button>
               </div>
             </form>
+
+            {plans.length > 0 && (
+              <div className="training-subform">
+                <div className="training-subhead">
+                  <strong>Uebung hinterlegen</strong>
+                  <span>{exercisePlan?.name ?? "Plan"}</span>
+                </div>
+                <form className="form-grid single-column" onSubmit={onExerciseSubmit}>
+                  <label>
+                    <span>Trainingsplan</span>
+                    <select
+                      onChange={(event) =>
+                        onExerciseFormChange({
+                          ...exerciseForm,
+                          plan_id: event.target.value,
+                        })
+                      }
+                      value={
+                        exerciseForm.plan_id ||
+                        (exercisePlan ? String(exercisePlan.id) : "")
+                      }
+                    >
+                      <option value="">Plan waehlen</option>
+                      {plans.map((plan) => (
+                        <option key={plan.id} value={plan.id}>
+                          {plan.name}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                  <TextInput
+                    label="Uebung"
+                    onChange={(name) => onExerciseFormChange({ ...exerciseForm, name })}
+                    required
+                    value={exerciseForm.name}
+                  />
+                  <label>
+                    <span>Notiz</span>
+                    <textarea
+                      onChange={(event) =>
+                        onExerciseFormChange({
+                          ...exerciseForm,
+                          notes: event.target.value,
+                        })
+                      }
+                      rows={2}
+                      value={exerciseForm.notes}
+                    />
+                  </label>
+                  <div className="form-actions">
+                    <button className="button primary" type="submit">
+                      <Plus size={16} />
+                      Uebung hinzufuegen
+                    </button>
+                  </div>
+                </form>
+
+                <div className="training-exercise-list compact">
+                  {exercisePlan?.exercises.length ? (
+                    exercisePlan.exercises.map((exercise) => (
+                      <div className="training-exercise-row" key={exercise.id}>
+                        <div>
+                          <strong>{exercise.name}</strong>
+                          {exercise.notes && <span>{exercise.notes}</span>}
+                        </div>
+                        <button
+                          className="icon-button danger"
+                          onClick={() => onDeleteExercise(exercise.id)}
+                          title="Uebung loeschen"
+                          type="button"
+                        >
+                          <Trash2 size={16} />
+                        </button>
+                      </div>
+                    ))
+                  ) : (
+                    <EmptyState label="Noch keine Uebungen" />
+                  )}
+                </div>
+              </div>
+            )}
           </Panel>
 
-          <Panel title="Plaene">
+          <Panel title="Trainingsplaene">
             <div className="training-plan-list">
               {plans.length === 0 ? (
                 <EmptyState label="Noch keine Trainingsplaene" />
@@ -4843,7 +4935,7 @@ function TrainingPage({
                       <strong>{plan.name}</strong>
                       <span>
                         {plan.exercises.length} Uebungen
-                        {plan.notes ? ` · ${plan.notes}` : ""}
+                        {plan.notes ? ` - ${plan.notes}` : ""}
                       </span>
                     </div>
                     <div className="row-actions">
@@ -4866,78 +4958,6 @@ function TrainingPage({
                     </div>
                   </article>
                 ))
-              )}
-            </div>
-          </Panel>
-
-          <Panel title="Uebung hinterlegen">
-            <form className="form-grid single-column" onSubmit={onExerciseSubmit}>
-              <label>
-                <span>Trainingsplan</span>
-                <select
-                  onChange={(event) =>
-                    onExerciseFormChange({
-                      ...exerciseForm,
-                      plan_id: event.target.value,
-                    })
-                  }
-                  value={exerciseForm.plan_id || (exercisePlan ? String(exercisePlan.id) : "")}
-                >
-                  <option value="">Plan waehlen</option>
-                  {plans.map((plan) => (
-                    <option key={plan.id} value={plan.id}>
-                      {plan.name}
-                    </option>
-                  ))}
-                </select>
-              </label>
-              <TextInput
-                label="Uebung"
-                onChange={(name) => onExerciseFormChange({ ...exerciseForm, name })}
-                required
-                value={exerciseForm.name}
-              />
-              <label>
-                <span>Notiz</span>
-                <textarea
-                  onChange={(event) =>
-                    onExerciseFormChange({
-                      ...exerciseForm,
-                      notes: event.target.value,
-                    })
-                  }
-                  rows={2}
-                  value={exerciseForm.notes}
-                />
-              </label>
-              <div className="form-actions">
-                <button className="button primary" disabled={plans.length === 0} type="submit">
-                  <Plus size={16} />
-                  Uebung hinzufuegen
-                </button>
-              </div>
-            </form>
-
-            <div className="training-exercise-list">
-              {exercisePlan?.exercises.length ? (
-                exercisePlan.exercises.map((exercise) => (
-                  <div className="training-exercise-row" key={exercise.id}>
-                    <div>
-                      <strong>{exercise.name}</strong>
-                      {exercise.notes && <span>{exercise.notes}</span>}
-                    </div>
-                    <button
-                      className="icon-button danger"
-                      onClick={() => onDeleteExercise(exercise.id)}
-                      title="Uebung loeschen"
-                      type="button"
-                    >
-                      <Trash2 size={16} />
-                    </button>
-                  </div>
-                ))
-              ) : (
-                <EmptyState label="Noch keine Uebungen in diesem Plan" />
               )}
             </div>
           </Panel>
@@ -5070,7 +5090,7 @@ function TrainingPage({
                     <div>
                       <strong>{formatDate(getLocalDate(new Date(session.trained_at)))}</strong>
                       <span>
-                        {session.plan.name} · {session.sets.length} Saetze
+                        {session.plan.name} - {session.sets.length} Saetze
                       </span>
                     </div>
                     <div className="training-session-sets">
@@ -5107,7 +5127,7 @@ function TrainingPage({
                   <option value="">Uebung waehlen</option>
                   {allExercises.map((exercise) => (
                     <option key={exercise.id} value={exercise.id}>
-                      {exercise.name} · {exercise.planName}
+                      {exercise.name} - {exercise.planName}
                     </option>
                   ))}
                 </select>

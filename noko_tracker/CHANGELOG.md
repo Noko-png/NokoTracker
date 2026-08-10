@@ -1,5 +1,10 @@
 # Changelog
 
+## 2.0.1
+
+- Training-UI kompakter und klarer strukturiert.
+- Planung, Uebungen, Einheitenerfassung und Ergebnisansicht visuell getrennt und leerzustandsfreundlicher gestaltet.
+
 ## 2.0.0
 
 - Neues Training-Modul mit Sidebar-Kategorie zwischen Kalorientracker und Kalender.

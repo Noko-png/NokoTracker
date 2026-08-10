@@ -1131,25 +1131,89 @@ button {
 
 .training-page {
   display: grid;
-  gap: 18px;
+  gap: 14px;
+  --training-accent: #22c55e;
+  --training-warm: #f59e0b;
+  --training-danger: #ef4444;
+}
+
+.training-page .panel {
+  padding: 16px;
+  background: color-mix(in srgb, var(--surface) 88%, #0f172a);
+}
+
+.training-page .panel-header {
+  min-height: 32px;
+  margin-bottom: 12px;
+  padding-bottom: 10px;
+  border-bottom: 1px solid color-mix(in srgb, var(--line) 72%, transparent);
+}
+
+.training-page .panel h2 {
+  font-size: 1.08rem;
+  line-height: 1.2;
+}
+
+.training-page .empty-state {
+  min-height: 72px;
+  padding: 14px;
+  border-style: solid;
+  background: color-mix(in srgb, var(--surface-soft) 66%, transparent);
+  color: var(--muted);
 }
 
 .training-hero {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 18px;
+  gap: 16px;
+  min-height: 106px;
+  padding: 16px;
+  border-color: color-mix(in srgb, var(--line) 78%, var(--primary));
+  background:
+    linear-gradient(90deg, color-mix(in srgb, var(--surface-soft) 78%, #020617), var(--surface));
 }
 
 .training-hero h2 {
-  margin: 4px 0 0;
+  margin: 2px 0 2px;
+  font-size: clamp(1.55rem, 2.2vw, 2.2rem);
+}
+
+.training-hero-copy {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  min-width: 0;
+}
+
+.training-hero-copy > div {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+
+.training-hero-copy span:last-child {
+  color: var(--muted);
+  font-weight: 800;
+}
+
+.training-hero-icon {
+  display: inline-grid;
+  place-items: center;
+  width: 54px;
+  height: 54px;
+  border: 1px solid color-mix(in srgb, var(--training-accent) 45%, var(--line));
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--training-accent) 16%, var(--surface));
+  color: var(--training-accent);
+  flex: 0 0 auto;
 }
 
 .training-summary {
   display: grid;
   grid-template-columns: repeat(4, minmax(96px, 1fr));
-  gap: 10px;
-  min-width: min(100%, 520px);
+  gap: 8px;
+  min-width: min(100%, 560px);
 }
 
 .training-summary article,
@@ -1166,7 +1230,9 @@ button {
 .training-summary article {
   display: grid;
   gap: 4px;
-  padding: 12px;
+  min-height: 68px;
+  padding: 10px 12px;
+  border-left: 3px solid var(--primary);
 }
 
 .training-summary span,
@@ -1181,23 +1247,62 @@ button {
 
 .training-summary strong {
   color: var(--text-strong);
-  font-size: 1.35rem;
+  font-size: 1.42rem;
+  line-height: 1;
 }
 
 .training-layout {
   display: grid;
-  grid-template-columns: minmax(260px, 0.9fr) minmax(420px, 1.35fr) minmax(280px, 0.95fr);
-  gap: 18px;
+  grid-template-columns: minmax(300px, 0.86fr) minmax(0, 1.46fr) minmax(300px, 0.88fr);
+  gap: 14px;
   align-items: start;
 }
 
 .training-column {
   display: grid;
-  gap: 18px;
+  gap: 14px;
+  min-width: 0;
+}
+
+.training-column.wide .panel:first-child {
+  border-color: color-mix(in srgb, var(--primary) 52%, var(--line));
 }
 
 .single-column {
   grid-template-columns: 1fr;
+}
+
+.training-plan-form {
+  grid-template-columns: 1fr;
+}
+
+.training-subform {
+  display: grid;
+  gap: 12px;
+  margin-top: 16px;
+  padding-top: 14px;
+  border-top: 1px solid color-mix(in srgb, var(--line) 74%, transparent);
+}
+
+.training-subhead {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.training-subhead strong {
+  color: var(--text-strong);
+}
+
+.training-subhead span {
+  min-width: 0;
+  overflow: hidden;
+  color: var(--muted);
+  font-size: 0.78rem;
+  font-weight: 900;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .training-plan-list,
@@ -1206,11 +1311,16 @@ button {
 .training-results-list,
 .training-set-editor {
   display: grid;
-  gap: 10px;
+  gap: 8px;
 }
 
 .training-exercise-list {
-  margin-top: 14px;
+  margin-top: 0;
+}
+
+.training-exercise-list.compact {
+  max-height: 260px;
+  overflow: auto;
 }
 
 .training-plan-item,
@@ -1221,7 +1331,15 @@ button {
   grid-template-columns: minmax(0, 1fr) auto;
   align-items: center;
   gap: 12px;
-  padding: 12px;
+  padding: 10px;
+}
+
+.training-plan-item {
+  border-left: 3px solid var(--training-accent);
+}
+
+.training-exercise-row {
+  border-left: 3px solid var(--primary);
 }
 
 .training-plan-item > div:first-child,
@@ -1241,6 +1359,7 @@ button {
 
 .training-session-item {
   grid-template-columns: minmax(150px, 0.8fr) minmax(0, 1fr) auto;
+  border-left: 3px solid var(--training-accent);
 }
 
 .training-session-sets {
@@ -1253,16 +1372,19 @@ button {
   padding: 5px 8px;
   border-radius: 999px;
   background: var(--surface);
+  color: var(--text);
+  font-size: 0.78rem;
 }
 
 .training-session-form {
-  grid-template-columns: repeat(2, minmax(0, 1fr));
+  grid-template-columns: minmax(0, 1fr) minmax(150px, 0.42fr);
 }
 
 .training-set-group {
   display: grid;
   gap: 10px;
-  padding: 12px;
+  padding: 10px;
+  background: color-mix(in srgb, var(--surface-soft) 78%, #020617);
 }
 
 .training-set-head {
@@ -1276,7 +1398,10 @@ button {
   display: grid;
   grid-template-columns: 72px minmax(92px, 1fr) minmax(92px, 1fr) 38px;
   align-items: end;
-  gap: 10px;
+  gap: 8px;
+  padding: 8px;
+  border-radius: 8px;
+  background: var(--field-bg);
 }
 
 .training-set-row > span {
@@ -1287,6 +1412,7 @@ button {
 
 .training-result-row {
   grid-template-columns: repeat(3, minmax(0, 1fr));
+  border-left: 3px solid var(--training-warm);
 }
 
 .training-result-row div {
