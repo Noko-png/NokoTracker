@@ -1,5 +1,10 @@
 # Changelog
 
+## 2.0.4
+
+- Trainingseinheiten zeigen standardmaessig drei Saetze pro Uebung.
+- Satznummern werden beim Speichern pro Uebung gezaehlt.
+
 ## 2.0.3
 
 - Uebungsnotiz in der Trainingseinheit direkt rechts neben dem Uebungsnamen angezeigt.

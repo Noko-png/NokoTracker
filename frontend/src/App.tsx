@@ -522,7 +522,7 @@ const macroMeta: Array<{
   { key: "carbs", label: "Kohlenhydrate", unit: "g", tone: "red" },
 ];
 
-const appVersion = "2.0.3";
+const appVersion = "2.0.4";
 const updateSourceLabel = "main / github.com/Noko-png/NokoTracker";
 
 const emptyNutrition: NutritionDay = {
@@ -687,6 +687,8 @@ const initialTrainingSessionForm: TrainingSessionForm = {
   sets: [],
 };
 
+const defaultTrainingSetCount = 3;
+
 function createTrainingSetForm(
   exercise: TrainingExercise,
   index: number,
@@ -706,7 +708,12 @@ function createTrainingSessionFormForPlan(
   return {
     ...initialTrainingSessionForm,
     plan_id: plan ? String(plan.id) : "",
-    sets: plan?.exercises.map(createTrainingSetForm) ?? [],
+    sets:
+      plan?.exercises.flatMap((exercise) =>
+        Array.from({ length: defaultTrainingSetCount }, (_, index) =>
+          createTrainingSetForm(exercise, index),
+        ),
+      ) ?? [],
   };
 }
 
@@ -3495,7 +3502,12 @@ export default function App() {
         form.plan_id === String(planId)
           ? {
               ...form,
-              sets: [...form.sets, createTrainingSetForm(exercise, form.sets.length)],
+              sets: [
+                ...form.sets,
+                ...Array.from({ length: defaultTrainingSetCount }, (_, index) =>
+                  createTrainingSetForm(exercise, index),
+                ),
+              ],
             }
           : form,
       );
@@ -3530,15 +3542,21 @@ export default function App() {
       return;
     }
 
+    const exerciseSetCounts = new Map<number, number>();
     const sets = trainingSessionForm.sets
       .filter((set) => Number(set.exercise_id) > 0 && toNumber(set.reps, 0) > 0)
-      .map((set, index) => ({
-        exercise_id: Number(set.exercise_id),
-        set_index: index + 1,
-        weight_kg: toNumber(set.weight_kg, 0),
-        reps: Math.trunc(toNumber(set.reps, 0)),
-        notes: optionalText(set.notes),
-      }));
+      .map((set) => {
+        const exerciseId = Number(set.exercise_id);
+        const setIndex = (exerciseSetCounts.get(exerciseId) ?? 0) + 1;
+        exerciseSetCounts.set(exerciseId, setIndex);
+        return {
+          exercise_id: exerciseId,
+          set_index: setIndex,
+          weight_kg: toNumber(set.weight_kg, 0),
+          reps: Math.trunc(toNumber(set.reps, 0)),
+          notes: optionalText(set.notes),
+        };
+      });
 
     if (sets.length === 0) {
       setApiError("Bitte mindestens eine Uebung mit Wiederholungen erfassen.");
