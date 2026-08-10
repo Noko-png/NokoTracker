@@ -183,6 +183,7 @@ type InventoryDeduction = {
 
 type Page =
   | "dashboard"
+  | "todos"
   | "calendar"
   | "foods"
   | "masterData"
@@ -371,6 +372,12 @@ type WeightForm = {
   notes: string;
 };
 
+type TodoForm = {
+  title: string;
+  date: string;
+  notes: string;
+};
+
 const mealPrepSource = "mealprep";
 const mealPrepSlots: Array<{
   id: MealPrepSlotKey;
@@ -421,6 +428,7 @@ type CsvImportForm = {
 
 const navigation = [
   { id: "dashboard", label: "Dashboard", icon: LayoutDashboard },
+  { id: "todos", label: "ToDo Tracker", icon: CheckCircle2 },
   { id: "nutrition", label: "Kalorientracker", icon: Gauge },
   { id: "calendar", label: "Kalender", icon: CalendarDays },
   { id: "foods", label: "Bestandsübersicht", icon: Apple },
@@ -475,7 +483,7 @@ const macroMeta: Array<{
   { key: "carbs", label: "Kohlenhydrate", unit: "g", tone: "red" },
 ];
 
-const appVersion = "1.0.13.04";
+const appVersion = "1.0.13.05";
 const updateSourceLabel = "main / github.com/Noko-png/NokoTracker";
 
 const emptyNutrition: NutritionDay = {
@@ -617,6 +625,12 @@ const initialShoppingForm: ShoppingForm = {
   quantity: "",
   source: "food",
   unit: "pcs",
+  notes: "",
+};
+
+const initialTodoForm: TodoForm = {
+  title: "",
+  date: getLocalDate(),
   notes: "",
 };
 
@@ -1876,6 +1890,8 @@ export default function App() {
   const [editingWeightEntryId, setEditingWeightEntryId] = useState<number | null>(
     null,
   );
+  const [todoForm, setTodoForm] = useState<TodoForm>(initialTodoForm);
+  const [editingTodoId, setEditingTodoId] = useState<number | null>(null);
   const [shoppingForm, setShoppingForm] =
     useState<ShoppingForm>(initialShoppingForm);
   const [calendarForm, setCalendarForm] = useState<CalendarForm>(
@@ -2023,6 +2039,29 @@ export default function App() {
   const openShoppingList = useMemo(
     () => shoppingList.filter((item) => !item.is_checked),
     [shoppingList],
+  );
+
+  const todoEvents = useMemo(
+    () =>
+      calendarEvents
+        .filter(
+          (event) =>
+            event.entry_type === "task" &&
+            (event.user_id === null ||
+              event.user_id === undefined ||
+              event.user_id === userId),
+        )
+        .sort(
+          (first, second) =>
+            Number(first.is_completed) - Number(second.is_completed) ||
+            new Date(first.start_at).getTime() - new Date(second.start_at).getTime() ||
+            first.title.localeCompare(second.title, "de-DE"),
+        ),
+    [calendarEvents, userId],
+  );
+  const openTodos = useMemo(
+    () => todoEvents.filter((event) => !event.is_completed),
+    [todoEvents],
   );
 
   const pageTitle =
@@ -3162,6 +3201,82 @@ export default function App() {
     await runAction(() => deleteCalendarEvent(event.id));
   }
 
+  async function submitTodo(event: FormEvent) {
+    event.preventDefault();
+    const title = todoForm.title.trim();
+    if (!title) {
+      setApiError("Bitte einen ToDo-Titel eintragen.");
+      return;
+    }
+
+    try {
+      setApiError(null);
+      const existingTodo =
+        editingTodoId === null
+          ? null
+          : calendarEvents.find((item) => item.id === editingTodoId) ?? null;
+      const payload = {
+        title,
+        description: optionalText(todoForm.notes),
+        start_at: `${todoForm.date}T00:00:00`,
+        end_at: null,
+        location: null,
+        entry_type: "task",
+        all_day: true,
+        is_completed: existingTodo?.is_completed ?? false,
+        recurrence_frequency: "none",
+        recurrence_interval: 1,
+        recurrence_until: null,
+        user_id: userId,
+        group_id: null,
+      } satisfies CalendarEventCreate;
+
+      if (editingTodoId === null) {
+        await createCalendarEvent(payload);
+      } else {
+        await updateCalendarEvent(editingTodoId, payload);
+      }
+
+      setTodoForm(initialTodoForm);
+      setEditingTodoId(null);
+      await loadData();
+    } catch (error) {
+      setApiError(error instanceof Error ? error.message : "API-Fehler");
+    }
+  }
+
+  function startEditingTodo(todo: CalendarEvent) {
+    setTodoForm({
+      title: todo.title,
+      date: getLocalDate(new Date(todo.start_at)),
+      notes: todo.description ?? "",
+    });
+    setEditingTodoId(todo.id);
+    setActivePage("todos");
+  }
+
+  function cancelEditingTodo() {
+    setTodoForm(initialTodoForm);
+    setEditingTodoId(null);
+  }
+
+  async function toggleTodo(todo: CalendarEvent) {
+    await runAction(() =>
+      updateCalendarEvent(todo.id, {
+        is_completed: !todo.is_completed,
+      }),
+    );
+  }
+
+  async function removeTodo(todoId: number) {
+    await runAction(async () => {
+      await deleteCalendarEvent(todoId);
+      if (editingTodoId === todoId) {
+        cancelEditingTodo();
+      }
+    });
+  }
+
   async function submitCalendarGroup(event: FormEvent) {
     event.preventDefault();
     try {
@@ -3576,7 +3691,22 @@ export default function App() {
             nutrition={nutrition}
             onNavigate={navigateToPage}
             openShoppingList={openShoppingList}
+            openTodos={openTodos}
             todaysEvents={todaysEvents}
+          />
+        )}
+
+        {activePage === "todos" && (
+          <TodoPage
+            editingTodoId={editingTodoId}
+            form={todoForm}
+            onCancelEdit={cancelEditingTodo}
+            onDelete={removeTodo}
+            onEdit={startEditingTodo}
+            onFormChange={setTodoForm}
+            onSubmit={submitTodo}
+            onToggle={toggleTodo}
+            todos={todoEvents}
           />
         )}
 
@@ -3860,11 +3990,13 @@ function DashboardPage({
   nutrition,
   onNavigate,
   openShoppingList,
+  openTodos,
   todaysEvents,
 }: {
   nutrition: NutritionDay;
   onNavigate: (page: Page) => void;
   openShoppingList: ShoppingListItem[];
+  openTodos: CalendarEvent[];
   todaysEvents: CalendarOccurrence[];
 }) {
   return (
@@ -3944,6 +4076,35 @@ function DashboardPage({
           </div>
         </Panel>
 
+        <Panel title="ToDo Tracker">
+          <div className="list-stack">
+            {openTodos.length === 0 ? (
+              <button
+                className="empty-state dashboard-empty-link"
+                onClick={() => onNavigate("todos")}
+                type="button"
+              >
+                Keine offenen ToDos
+              </button>
+            ) : (
+              openTodos.slice(0, 6).map((todo) => (
+                <button
+                  className="list-row dashboard-list-link"
+                  key={todo.id}
+                  onClick={() => onNavigate("todos")}
+                  type="button"
+                >
+                  <CheckCircle2 size={18} />
+                  <div>
+                    <strong>{todo.title}</strong>
+                    <span>{formatDate(getLocalDate(new Date(todo.start_at)))}</span>
+                  </div>
+                </button>
+              ))
+            )}
+          </div>
+        </Panel>
+
         <Panel title="Einkaufsliste">
           <div className="list-stack">
             {openShoppingList.length === 0 ? (
@@ -3974,6 +4135,177 @@ function DashboardPage({
             )}
           </div>
         </Panel>
+      </section>
+    </div>
+  );
+}
+
+function TodoPage({
+  editingTodoId,
+  form,
+  onCancelEdit,
+  onDelete,
+  onEdit,
+  onFormChange,
+  onSubmit,
+  onToggle,
+  todos,
+}: {
+  editingTodoId: number | null;
+  form: TodoForm;
+  onCancelEdit: () => void;
+  onDelete: (id: number) => void;
+  onEdit: (todo: CalendarEvent) => void;
+  onFormChange: (value: TodoForm) => void;
+  onSubmit: (event: FormEvent) => void;
+  onToggle: (todo: CalendarEvent) => void;
+  todos: CalendarEvent[];
+}) {
+  const openTodos = todos
+    .filter((todo) => !todo.is_completed)
+    .sort(
+      (first, second) =>
+        new Date(first.start_at).getTime() - new Date(second.start_at).getTime() ||
+        first.title.localeCompare(second.title, "de-DE"),
+    );
+  const completedTodos = todos
+    .filter((todo) => todo.is_completed)
+    .sort(
+      (first, second) =>
+        new Date(second.updated_at).getTime() -
+          new Date(first.updated_at).getTime() ||
+        second.id - first.id,
+    );
+
+  function dueDate(todo: CalendarEvent) {
+    return formatDate(getLocalDate(new Date(todo.start_at)));
+  }
+
+  function renderTodo(todo: CalendarEvent, completed = false) {
+    return (
+      <article className={`todo-item ${completed ? "completed" : ""}`} key={todo.id}>
+        <button
+          className="check-button"
+          onClick={() => onToggle(todo)}
+          title={completed ? "Wieder oeffnen" : "Erledigen"}
+          type="button"
+        >
+          {completed ? <CheckCircle2 size={18} /> : <Circle size={18} />}
+        </button>
+        <div className="todo-item-main">
+          <strong>{todo.title}</strong>
+          <span>{dueDate(todo)}</span>
+          {todo.description && <p>{todo.description}</p>}
+        </div>
+        <div className="row-actions">
+          <button
+            className="icon-button"
+            onClick={() => onEdit(todo)}
+            title="Bearbeiten"
+            type="button"
+          >
+            <Pencil size={16} />
+          </button>
+          <button
+            className="icon-button danger"
+            onClick={() => onDelete(todo.id)}
+            title="Loeschen"
+            type="button"
+          >
+            <Trash2 size={16} />
+          </button>
+        </div>
+      </article>
+    );
+  }
+
+  return (
+    <div className="todo-page">
+      <section className="section todo-hero">
+        <div>
+          <p className="eyebrow">Aufgaben</p>
+          <h2>ToDo Tracker</h2>
+        </div>
+        <div className="todo-summary">
+          <article>
+            <span>Offen</span>
+            <strong>{openTodos.length}</strong>
+          </article>
+          <article>
+            <span>Erledigt</span>
+            <strong>{completedTodos.length}</strong>
+          </article>
+        </div>
+      </section>
+
+      <section className="section todo-workspace">
+        <Panel title={editingTodoId === null ? "ToDo anlegen" : "ToDo bearbeiten"}>
+          <form className="form-grid todo-form" onSubmit={onSubmit}>
+            <TextInput
+              label="Titel"
+              onChange={(title) => onFormChange({ ...form, title })}
+              required
+              value={form.title}
+            />
+            <DateInput
+              label="Datum"
+              onChange={(date) => onFormChange({ ...form, date })}
+              required
+              value={form.date}
+            />
+            <label className="full-width">
+              <span>Notiz</span>
+              <textarea
+                onChange={(event) =>
+                  onFormChange({ ...form, notes: event.target.value })
+                }
+                rows={3}
+                value={form.notes}
+              />
+            </label>
+            <div className="form-actions">
+              {editingTodoId !== null && (
+                <button
+                  className="button secondary"
+                  onClick={onCancelEdit}
+                  type="button"
+                >
+                  Abbrechen
+                </button>
+              )}
+              <button className="button primary" type="submit">
+                <Check size={16} />
+                Speichern
+              </button>
+            </div>
+          </form>
+        </Panel>
+
+        <Panel title="Offene ToDos">
+          <div className="todo-list">
+            {openTodos.length === 0 ? (
+              <EmptyState label="Keine offenen ToDos" />
+            ) : (
+              openTodos.map((todo) => renderTodo(todo))
+            )}
+          </div>
+        </Panel>
+      </section>
+
+      <section className="section">
+        <div className="section-header">
+          <div>
+            <p className="eyebrow">Verlauf</p>
+            <h2>Erledigte Tasks</h2>
+          </div>
+        </div>
+        <div className="todo-list">
+          {completedTodos.length === 0 ? (
+            <EmptyState label="Noch keine erledigten Tasks" />
+          ) : (
+            completedTodos.map((todo) => renderTodo(todo, true))
+          )}
+        </div>
       </section>
     </div>
   );

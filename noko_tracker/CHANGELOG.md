@@ -1,5 +1,10 @@
 # Changelog
 
+## 1.0.13.05
+
+- ToDo Tracker als eigener Sidebar-Menuepunkt mit offenen Aufgaben und Verlauf erledigter Tasks ergaenzt.
+- Dashboard zeigt offene ToDos mit direkter Verlinkung zum ToDo Tracker.
+
 ## 1.0.13.04
 
 - Sidebar-Hauptnavigation neu sortiert: Dashboard, Kalorientracker, Kalender, Bestandsuebersicht, Einkaufsliste, Gerichte.

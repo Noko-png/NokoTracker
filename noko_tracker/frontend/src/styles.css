@@ -1028,6 +1028,105 @@ button {
   margin: 6px 0 0;
 }
 
+.todo-page {
+  display: grid;
+  gap: 18px;
+}
+
+.todo-hero {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 18px;
+}
+
+.todo-hero h2 {
+  margin: 0;
+  color: var(--text-strong);
+  font-size: clamp(1.8rem, 4vw, 3rem);
+}
+
+.todo-summary {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(120px, 1fr));
+  gap: 12px;
+}
+
+.todo-summary article {
+  display: grid;
+  gap: 6px;
+  min-width: 120px;
+  padding: 14px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--surface-soft);
+}
+
+.todo-summary span,
+.todo-item span,
+.todo-item p {
+  color: var(--muted);
+  font-weight: 800;
+}
+
+.todo-summary strong {
+  color: var(--text-strong);
+  font-size: 1.7rem;
+}
+
+.todo-workspace {
+  display: grid;
+  grid-template-columns: minmax(280px, 0.75fr) minmax(0, 1.25fr);
+  gap: 18px;
+  align-items: start;
+}
+
+.todo-form {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.todo-list {
+  display: grid;
+  gap: 10px;
+}
+
+.todo-item {
+  display: grid;
+  grid-template-columns: 42px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 12px;
+  min-height: 64px;
+  padding: 12px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--surface-soft);
+}
+
+.todo-item.completed {
+  opacity: 0.72;
+}
+
+.todo-item.completed .todo-item-main strong {
+  text-decoration: line-through;
+}
+
+.todo-item-main {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+}
+
+.todo-item-main strong,
+.todo-item-main span,
+.todo-item-main p {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.todo-item-main p {
+  margin: 0;
+}
+
 .food-name-with-emoji,
 .recipe-title-with-emoji {
   display: inline-flex;
@@ -6009,8 +6108,28 @@ th {
   .nutrition-mini,
   .weight-summary-grid,
   .weight-workspace,
-  .weight-form {
+  .weight-form,
+  .todo-workspace,
+  .todo-form {
     grid-template-columns: 1fr;
+  }
+
+  .todo-hero {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .todo-summary {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .todo-item {
+    grid-template-columns: 38px minmax(0, 1fr);
+    align-items: start;
+  }
+
+  .todo-item .row-actions {
+    grid-column: 2;
   }
 
   .weight-hero {
