@@ -522,7 +522,7 @@ const macroMeta: Array<{
   { key: "carbs", label: "Kohlenhydrate", unit: "g", tone: "red" },
 ];
 
-const appVersion = "2.0.2";
+const appVersion = "2.0.3";
 const updateSourceLabel = "main / github.com/Noko-png/NokoTracker";
 
 const emptyNutrition: NutritionDay = {
@@ -4982,7 +4982,10 @@ function TrainingPage({
                     return (
                       <article className="training-set-group" key={exercise.id}>
                         <div className="training-set-head">
-                          <strong>{exercise.name}</strong>
+                          <div className="training-set-title">
+                            <strong>{exercise.name}</strong>
+                            {exercise.notes && <span>{exercise.notes}</span>}
+                          </div>
                           <button
                             className="icon-button"
                             onClick={() => addSetForExercise(exercise)}

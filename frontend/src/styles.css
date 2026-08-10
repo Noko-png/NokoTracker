@@ -1394,6 +1394,27 @@ button {
   gap: 10px;
 }
 
+.training-set-title {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  min-width: 0;
+}
+
+.training-set-title strong,
+.training-set-title span {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.training-set-title span {
+  color: var(--muted);
+  font-size: 0.82rem;
+  font-weight: 800;
+}
+
 .training-set-row {
   display: grid;
   grid-template-columns: 64px minmax(86px, 0.7fr) minmax(78px, 0.62fr) minmax(120px, 1fr) 38px;

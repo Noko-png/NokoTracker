@@ -1,5 +1,9 @@
 # Changelog
 
+## 2.0.3
+
+- Uebungsnotiz in der Trainingseinheit direkt rechts neben dem Uebungsnamen angezeigt.
+
 ## 2.0.2
 
 - Notizfelder aus Trainingsplan und Trainingseinheit entfernt.
