@@ -1239,7 +1239,6 @@ button {
 .training-plan-item span,
 .training-exercise-row span,
 .training-session-item span,
-.training-session-sets,
 .training-result-row span {
   color: var(--muted);
   font-weight: 800;
@@ -1371,22 +1370,88 @@ button {
 }
 
 .training-session-item {
-  grid-template-columns: minmax(150px, 0.8fr) minmax(0, 1fr) auto;
+  grid-template-columns: minmax(132px, 0.28fr) minmax(0, 1fr) 38px;
+  align-items: start;
+  gap: 14px;
+  padding: 12px;
   border-left: 3px solid var(--training-accent);
 }
 
-.training-session-sets {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 6px;
+.training-session-meta {
+  padding-top: 4px;
 }
 
-.training-session-sets span {
-  padding: 5px 8px;
-  border-radius: 999px;
-  background: var(--surface);
-  color: var(--text);
-  font-size: 0.78rem;
+.training-session-groups {
+  display: grid;
+  gap: 8px;
+  min-width: 0;
+}
+
+.training-session-exercise-group {
+  display: grid;
+  grid-template-columns: minmax(104px, 0.24fr) minmax(0, 1fr);
+  gap: 8px;
+  padding: 8px;
+  border: 1px solid color-mix(in srgb, var(--line) 78%, transparent);
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--surface) 74%, #020617);
+}
+
+.training-session-exercise-head {
+  display: grid;
+  align-content: center;
+  gap: 3px;
+  min-width: 0;
+}
+
+.training-session-exercise-head strong {
+  min-width: 0;
+  overflow: hidden;
+  color: var(--text-strong);
+  font-size: 0.88rem;
+  line-height: 1.15;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.training-session-set-grid {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 6px;
+  min-width: 0;
+}
+
+.training-session-set-card {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+  min-height: 52px;
+  padding: 7px 8px;
+  border: 1px solid color-mix(in srgb, var(--line) 70%, transparent);
+  border-radius: 8px;
+  background: var(--field-bg);
+}
+
+.training-session-set-card strong,
+.training-session-set-card span,
+.training-session-set-card small {
+  min-width: 0;
+  overflow: hidden;
+  line-height: 1.12;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.training-session-set-card strong {
+  color: var(--text-strong);
+  font-size: 0.74rem;
+}
+
+.training-session-set-card span,
+.training-session-set-card small {
+  color: var(--muted);
+  font-size: 0.7rem;
+  font-weight: 800;
 }
 
 .training-history-matrix {
@@ -6543,8 +6608,13 @@ th {
     align-items: start;
   }
 
-  .training-session-sets {
+  .training-session-groups {
     grid-column: 1 / -1;
+  }
+
+  .training-session-exercise-group {
+    grid-template-columns: minmax(96px, 0.28fr) minmax(500px, 1fr);
+    overflow-x: auto;
   }
 
   .training-set-row,

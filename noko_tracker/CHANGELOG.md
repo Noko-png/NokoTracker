@@ -1,5 +1,9 @@
 # Changelog
 
+## 2.0.9
+
+- Letzte Trainingseinheiten werden nach Uebung gruppiert und als kompakte Set-Karten angezeigt.
+
 ## 2.0.8
 
 - Trainingsplan zeigt letzte Ergebnisse als Matrix mit einer Zeile pro Uebung.

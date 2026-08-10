@@ -522,7 +522,7 @@ const macroMeta: Array<{
   { key: "carbs", label: "Kohlenhydrate", unit: "g", tone: "red" },
 ];
 
-const appVersion = "2.0.8";
+const appVersion = "2.0.9";
 const updateSourceLabel = "main / github.com/Noko-png/NokoTracker";
 
 const emptyNutrition: NutritionDay = {
@@ -4646,6 +4646,36 @@ function sortTrainingSessionsNewestFirst(sessions: TrainingSession[]) {
   });
 }
 
+type TrainingSessionSetGroup = {
+  exerciseId: number;
+  exerciseName: string;
+  sets: TrainingSession["sets"];
+};
+
+function groupTrainingSessionSets(session: TrainingSession): TrainingSessionSetGroup[] {
+  const groups = new Map<number, TrainingSessionSetGroup>();
+  for (const set of [...session.sets].sort((first, second) => first.id - second.id)) {
+    const exerciseId = set.exercise_id;
+    const group = groups.get(exerciseId);
+    if (group) {
+      group.sets.push(set);
+    } else {
+      groups.set(exerciseId, {
+        exerciseId,
+        exerciseName: set.exercise.name,
+        sets: [set],
+      });
+    }
+  }
+
+  return Array.from(groups.values()).map((group) => ({
+    ...group,
+    sets: [...group.sets].sort(
+      (first, second) => first.set_index - second.set_index || first.id - second.id,
+    ),
+  }));
+}
+
 function TrainingSessionList({
   emptyLabel,
   onDeleteSession,
@@ -4660,35 +4690,50 @@ function TrainingSessionList({
       {sessions.length === 0 ? (
         <EmptyState label={emptyLabel} />
       ) : (
-        sessions.map((session) => (
-          <article className="training-session-item" key={session.id}>
-            <div>
-              <strong>{formatDate(getLocalDate(new Date(session.trained_at)))}</strong>
-              <span>
-                {session.plan.name} - {session.sets.length} Saetze
-              </span>
-            </div>
-            <div className="training-session-sets">
-              {[...session.sets]
-                .sort((first, second) => first.id - second.id)
-                .map((set) => (
-                  <span key={set.id}>
-                    {set.exercise.name} Satz {set.set_index}:{" "}
-                    {formatNumber(set.weight_kg)} kg x {set.reps}
-                    {set.notes ? ` - ${set.notes}` : ""}
-                  </span>
+        sessions.map((session) => {
+          const groups = groupTrainingSessionSets(session);
+          return (
+            <article className="training-session-item" key={session.id}>
+              <div className="training-session-meta">
+                <strong>{formatDate(getLocalDate(new Date(session.trained_at)))}</strong>
+                <span>
+                  {session.plan.name} - {session.sets.length} Saetze
+                </span>
+              </div>
+              <div className="training-session-groups">
+                {groups.map((group) => (
+                  <div
+                    className="training-session-exercise-group"
+                    key={`${session.id}-${group.exerciseId}`}
+                  >
+                    <div className="training-session-exercise-head">
+                      <strong>{group.exerciseName}</strong>
+                      <span>{group.sets.length} Saetze</span>
+                    </div>
+                    <div className="training-session-set-grid">
+                      {group.sets.map((set) => (
+                        <div className="training-session-set-card" key={set.id}>
+                          <strong>Satz {set.set_index}</strong>
+                          <span>{formatNumber(set.weight_kg)} kg</span>
+                          <span>{set.reps} Wdh.</span>
+                          {set.notes && <small>{set.notes}</small>}
+                        </div>
+                      ))}
+                    </div>
+                  </div>
                 ))}
-            </div>
-            <button
-              className="icon-button danger"
-              onClick={() => onDeleteSession(session.id)}
-              title="Einheit loeschen"
-              type="button"
-            >
-              <Trash2 size={16} />
-            </button>
-          </article>
-        ))
+              </div>
+              <button
+                className="icon-button danger"
+                onClick={() => onDeleteSession(session.id)}
+                title="Einheit loeschen"
+                type="button"
+              >
+                <Trash2 size={16} />
+              </button>
+            </article>
+          );
+        })
       )}
     </div>
   );
