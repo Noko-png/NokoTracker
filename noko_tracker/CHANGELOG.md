@@ -1,5 +1,9 @@
 # Changelog
 
+## 2.0.10
+
+- Trainingssession-Entwuerfe bleiben beim Tab-Wechsel auf dem Handy erhalten.
+
 ## 2.0.9
 
 - Letzte Trainingseinheiten werden nach Uebung gruppiert und als kompakte Set-Karten angezeigt.

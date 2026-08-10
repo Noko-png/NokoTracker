@@ -522,7 +522,7 @@ const macroMeta: Array<{
   { key: "carbs", label: "Kohlenhydrate", unit: "g", tone: "red" },
 ];
 
-const appVersion = "2.0.9";
+const appVersion = "2.0.10";
 const updateSourceLabel = "main / github.com/Noko-png/NokoTracker";
 
 const emptyNutrition: NutritionDay = {
@@ -1398,6 +1398,7 @@ function formatDueDateWithDistance(value?: string | null) {
 }
 
 const inventoryColumnStorageKey = "heim-erp-inventory-visible-columns";
+const trainingSessionDraftStorageKey = "heim-erp-training-session-draft-v1";
 const userIdStorageKey = "heim-erp-user-id";
 
 function readStoredValue(key: string) {
@@ -1413,6 +1414,42 @@ function writeStoredValue(key: string, value: string) {
     window.localStorage.setItem(key, value);
   } catch {
     // Home Assistant ingress may run in a constrained iframe without storage.
+  }
+}
+
+function isStoredTrainingSessionForm(value: unknown): value is TrainingSessionForm {
+  if (typeof value !== "object" || value === null) {
+    return false;
+  }
+  const form = value as Partial<TrainingSessionForm>;
+  return (
+    typeof form.plan_id === "string" &&
+    typeof form.date === "string" &&
+    Array.isArray(form.sets) &&
+    form.sets.every(
+      (set) =>
+        typeof set === "object" &&
+        set !== null &&
+        typeof (set as Partial<TrainingSetForm>).exercise_id === "string" &&
+        typeof (set as Partial<TrainingSetForm>).set_index === "string" &&
+        typeof (set as Partial<TrainingSetForm>).weight_kg === "string" &&
+        typeof (set as Partial<TrainingSetForm>).reps === "string" &&
+        typeof (set as Partial<TrainingSetForm>).notes === "string",
+    )
+  );
+}
+
+function readStoredTrainingSessionDraft() {
+  const stored = readStoredValue(trainingSessionDraftStorageKey);
+  if (!stored) {
+    return null;
+  }
+
+  try {
+    const parsed = JSON.parse(stored);
+    return isStoredTrainingSessionForm(parsed) ? parsed : null;
+  } catch {
+    return null;
   }
 }
 
@@ -1985,7 +2022,10 @@ export default function App() {
   const [trainingExerciseForm, setTrainingExerciseForm] =
     useState<TrainingExerciseForm>(initialTrainingExerciseForm);
   const [trainingSessionForm, setTrainingSessionForm] =
-    useState<TrainingSessionForm>(initialTrainingSessionForm);
+    useState<TrainingSessionForm>(
+      () => readStoredTrainingSessionDraft() ?? initialTrainingSessionForm,
+    );
+  const trainingSessionFormRef = useRef(trainingSessionForm);
   const [selectedTrainingExerciseId, setSelectedTrainingExerciseId] =
     useState("");
   const [trainingResultSort, setTrainingResultSort] =
@@ -2073,10 +2113,6 @@ export default function App() {
 
   useEffect(() => {
     if (trainingPlans.length === 0) {
-      if (trainingSessionForm.plan_id || selectedTrainingExerciseId) {
-        setTrainingSessionForm(initialTrainingSessionForm);
-        setSelectedTrainingExerciseId("");
-      }
       return;
     }
 
@@ -2109,6 +2145,36 @@ export default function App() {
     trainingPlans,
     trainingSessionForm.plan_id,
   ]);
+
+  useEffect(() => {
+    trainingSessionFormRef.current = trainingSessionForm;
+    writeStoredValue(
+      trainingSessionDraftStorageKey,
+      JSON.stringify(trainingSessionForm),
+    );
+  }, [trainingSessionForm]);
+
+  useEffect(() => {
+    function persistTrainingDraft() {
+      writeStoredValue(
+        trainingSessionDraftStorageKey,
+        JSON.stringify(trainingSessionFormRef.current),
+      );
+    }
+
+    function persistTrainingDraftOnHide() {
+      if (document.visibilityState === "hidden") {
+        persistTrainingDraft();
+      }
+    }
+
+    document.addEventListener("visibilitychange", persistTrainingDraftOnHide);
+    window.addEventListener("pagehide", persistTrainingDraft);
+    return () => {
+      document.removeEventListener("visibilitychange", persistTrainingDraftOnHide);
+      window.removeEventListener("pagehide", persistTrainingDraft);
+    };
+  }, []);
 
   const activeUser = useMemo(
     () => users.find((user) => user.id === userId) ?? null,
