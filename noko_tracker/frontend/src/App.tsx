@@ -522,7 +522,7 @@ const macroMeta: Array<{
   { key: "carbs", label: "Kohlenhydrate", unit: "g", tone: "red" },
 ];
 
-const appVersion = "2.0.10";
+const appVersion = "2.0.11";
 const updateSourceLabel = "main / github.com/Noko-png/NokoTracker";
 
 const emptyNutrition: NutritionDay = {
@@ -13385,6 +13385,13 @@ function SettingsPage({
   const goals = macroGoalsFromPercentages(settingsForm);
   const percentTotal = macroPercentTotal(settingsForm);
   const isMacroBalanceValid = Math.abs(percentTotal - 100) <= 0.01;
+  const importedTables = databaseTransferResult?.imported_tables ?? {};
+  const importedTableCount = Object.keys(importedTables).length;
+  const importedRowCount = Object.values(importedTables).reduce(
+    (sum, value) => sum + value,
+    0,
+  );
+  const importedTrainingRows = databaseTransferResult?.training_rows ?? 0;
 
   return (
     <div className="settings-layout">
@@ -13633,6 +13640,19 @@ function SettingsPage({
                 {databaseTransferMessage && <strong>{databaseTransferMessage}</strong>}
                 {databaseTransferResult?.backup_path && (
                   <span>Backup: {databaseTransferResult.backup_path}</span>
+                )}
+                {databaseTransferResult && (
+                  <>
+                    <span>
+                      Importiert: {importedTableCount} Tabellen, {importedRowCount} Datensaetze
+                    </span>
+                    <span>Training: {importedTrainingRows} Datensaetze</span>
+                    {(databaseTransferResult.warnings ?? []).map((warning) => (
+                      <span className="database-transfer-warning" key={warning}>
+                        {warning}
+                      </span>
+                    ))}
+                  </>
                 )}
               </div>
             )}

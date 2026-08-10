@@ -1,5 +1,10 @@
 # Changelog
 
+## 2.0.11
+
+- Datenbankimport prueft und zaehlt alle aktuellen NokoTracker-Tabellen.
+- Trainingsdaten werden beim Import explizit ausgewiesen und fehlende Trainingstabellen gemeldet.
+
 ## 2.0.10
 
 - Trainingssession-Entwuerfe bleiben beim Tab-Wechsel auf dem Handy erhalten.

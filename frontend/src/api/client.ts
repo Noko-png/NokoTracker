@@ -616,7 +616,10 @@ export type CsvImportResult = {
 export type DatabaseImportResult = {
   filename: string;
   backup_path?: string | null;
+  imported_tables: Record<string, number>;
   message: string;
+  training_rows: number;
+  warnings: string[];
 };
 
 export type ReceiptImportStatus = "ready" | "needs_review" | "ignored";

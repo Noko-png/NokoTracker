@@ -1230,7 +1230,10 @@ class CsvImportResult(BaseModel):
 class DatabaseImportResult(BaseModel):
     filename: str
     backup_path: Optional[str] = None
+    imported_tables: dict[str, int] = Field(default_factory=dict)
     message: str
+    training_rows: int = 0
+    warnings: list[str] = Field(default_factory=list)
 
 
 ReceiptImportStatus = Literal["ready", "needs_review", "ignored"]

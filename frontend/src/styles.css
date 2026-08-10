@@ -6042,6 +6042,11 @@ th {
 
 .database-transfer-result span {
   color: var(--muted);
+  white-space: normal;
+}
+
+.database-transfer-result .database-transfer-warning {
+  color: var(--yellow);
 }
 
 .settings-row {

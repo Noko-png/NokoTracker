@@ -18,11 +18,32 @@ from ..database import DATABASE_URL, engine
 router = APIRouter(prefix="/database", tags=["database"])
 
 EXPECTED_TABLES = {
-    "users",
+    "calendar_event_exclusions",
+    "calendar_events",
+    "calendar_groups",
     "foods",
+    "food_conversions",
     "inventory_items",
+    "meal_logs",
+    "product_groups",
+    "product_units",
     "recipes",
+    "recipe_ingredients",
     "shopping_list_items",
+    "storage_locations",
+    "training_exercises",
+    "training_plans",
+    "training_session_sets",
+    "training_sessions",
+    "users",
+    "weight_entries",
+}
+
+TRAINING_TABLES = {
+    "training_exercises",
+    "training_plans",
+    "training_session_sets",
+    "training_sessions",
 }
 
 
@@ -58,7 +79,18 @@ def backup_sqlite_database(source_path: Path, target_path: Path) -> None:
         source.close()
 
 
-def validate_sqlite_database(path: Path) -> None:
+def count_database_tables(
+    connection: sqlite3.Connection,
+    table_names: set[str],
+) -> dict[str, int]:
+    table_counts: dict[str, int] = {}
+    for table_name in sorted(EXPECTED_TABLES.intersection(table_names)):
+        count = connection.execute(f'SELECT COUNT(*) FROM "{table_name}"').fetchone()
+        table_counts[table_name] = int(count[0] if count else 0)
+    return table_counts
+
+
+def validate_sqlite_database(path: Path) -> tuple[dict[str, int], list[str]]:
     try:
         connection = sqlite3.connect(str(path))
         try:
@@ -72,6 +104,7 @@ def validate_sqlite_database(path: Path) -> None:
                     "SELECT name FROM sqlite_master WHERE type = 'table'"
                 )
             }
+            table_counts = count_database_tables(connection, table_names)
         finally:
             connection.close()
     except sqlite3.DatabaseError as exc:
@@ -79,6 +112,16 @@ def validate_sqlite_database(path: Path) -> None:
 
     if not EXPECTED_TABLES.intersection(table_names):
         raise ValueError("Die Datenbank sieht nicht wie eine NokoTracker-Datenbank aus.")
+
+    warnings: list[str] = []
+    missing_training_tables = sorted(TRAINING_TABLES.difference(table_names))
+    if missing_training_tables:
+        warnings.append(
+            "Trainingstabellen fehlen in der Importdatei: "
+            + ", ".join(missing_training_tables)
+        )
+
+    return table_counts, warnings
 
 
 def remove_sqlite_sidecars(path: Path) -> None:
@@ -133,7 +176,7 @@ async def import_database(file: UploadFile = File(...)):
             handle.write(chunk)
 
     try:
-        validate_sqlite_database(upload_path)
+        table_counts, warnings = validate_sqlite_database(upload_path)
     except ValueError as exc:
         upload_path.unlink(missing_ok=True)
         raise HTTPException(status_code=422, detail=str(exc)) from exc
@@ -157,5 +200,10 @@ async def import_database(file: UploadFile = File(...)):
     return schemas.DatabaseImportResult(
         filename=filename,
         backup_path=str(backup_path) if backup_path.exists() else None,
+        imported_tables=table_counts,
         message="Datenbank importiert. Bitte die Seite neu laden.",
+        training_rows=sum(
+            table_counts.get(table_name, 0) for table_name in TRAINING_TABLES
+        ),
+        warnings=warnings,
     )
