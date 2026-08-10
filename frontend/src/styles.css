@@ -1266,6 +1266,10 @@ button {
   grid-template-columns: minmax(300px, 0.9fr) minmax(0, 1.1fr);
 }
 
+.training-planning-history {
+  grid-column: 1 / -1;
+}
+
 .training-column {
   display: grid;
   gap: 14px;

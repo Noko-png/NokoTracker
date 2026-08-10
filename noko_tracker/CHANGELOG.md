@@ -1,5 +1,10 @@
 # Changelog
 
+## 2.0.6
+
+- Letzte Trainingseinheiten zeigen maximal fuenf neueste Einheiten mit allen Saetzen.
+- Aeltere Trainingseinheiten sind im Training-Tab der Stammdaten sichtbar.
+
 ## 2.0.5
 
 - Training-Planung in die Stammdaten verschoben.

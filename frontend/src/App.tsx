@@ -522,7 +522,7 @@ const macroMeta: Array<{
   { key: "carbs", label: "Kohlenhydrate", unit: "g", tone: "red" },
 ];
 
-const appVersion = "2.0.5";
+const appVersion = "2.0.6";
 const updateSourceLabel = "main / github.com/Noko-png/NokoTracker";
 
 const emptyNutrition: NutritionDay = {
@@ -4131,6 +4131,7 @@ export default function App() {
                 onCancelPlanEdit={cancelEditingTrainingPlan}
                 onDeleteExercise={removeTrainingExercise}
                 onDeletePlan={removeTrainingPlan}
+                onDeleteSession={removeTrainingSession}
                 onEditPlan={startEditingTrainingPlan}
                 onExerciseFormChange={setTrainingExerciseForm}
                 onExerciseSubmit={submitTrainingExercise}
@@ -4139,6 +4140,7 @@ export default function App() {
                 planForm={trainingPlanForm}
                 plans={trainingPlans}
                 selectedPlanId={trainingSessionForm.plan_id}
+                sessions={trainingSessions}
               />
             ) : (
               <MasterDataPanel
@@ -4636,12 +4638,69 @@ function TodoPage({
   );
 }
 
+function sortTrainingSessionsNewestFirst(sessions: TrainingSession[]) {
+  return [...sessions].sort((first, second) => {
+    const dateDistance =
+      new Date(second.trained_at).getTime() - new Date(first.trained_at).getTime();
+    return dateDistance || second.id - first.id;
+  });
+}
+
+function TrainingSessionList({
+  emptyLabel,
+  onDeleteSession,
+  sessions,
+}: {
+  emptyLabel: string;
+  onDeleteSession: (id: number) => void;
+  sessions: TrainingSession[];
+}) {
+  return (
+    <div className="training-session-list">
+      {sessions.length === 0 ? (
+        <EmptyState label={emptyLabel} />
+      ) : (
+        sessions.map((session) => (
+          <article className="training-session-item" key={session.id}>
+            <div>
+              <strong>{formatDate(getLocalDate(new Date(session.trained_at)))}</strong>
+              <span>
+                {session.plan.name} - {session.sets.length} Saetze
+              </span>
+            </div>
+            <div className="training-session-sets">
+              {[...session.sets]
+                .sort((first, second) => first.id - second.id)
+                .map((set) => (
+                  <span key={set.id}>
+                    {set.exercise.name} Satz {set.set_index}:{" "}
+                    {formatNumber(set.weight_kg)} kg x {set.reps}
+                    {set.notes ? ` - ${set.notes}` : ""}
+                  </span>
+                ))}
+            </div>
+            <button
+              className="icon-button danger"
+              onClick={() => onDeleteSession(session.id)}
+              title="Einheit loeschen"
+              type="button"
+            >
+              <Trash2 size={16} />
+            </button>
+          </article>
+        ))
+      )}
+    </div>
+  );
+}
+
 function TrainingPlanningPanel({
   editingPlanId,
   exerciseForm,
   onCancelPlanEdit,
   onDeleteExercise,
   onDeletePlan,
+  onDeleteSession,
   onEditPlan,
   onExerciseFormChange,
   onExerciseSubmit,
@@ -4650,12 +4709,14 @@ function TrainingPlanningPanel({
   planForm,
   plans,
   selectedPlanId,
+  sessions,
 }: {
   editingPlanId: number | null;
   exerciseForm: TrainingExerciseForm;
   onCancelPlanEdit: () => void;
   onDeleteExercise: (id: number) => void;
   onDeletePlan: (id: number) => void;
+  onDeleteSession: (id: number) => void;
   onEditPlan: (plan: TrainingPlan) => void;
   onExerciseFormChange: (value: TrainingExerciseForm) => void;
   onExerciseSubmit: (event: FormEvent) => void;
@@ -4664,6 +4725,7 @@ function TrainingPlanningPanel({
   planForm: TrainingPlanForm;
   plans: TrainingPlan[];
   selectedPlanId: string;
+  sessions: TrainingSession[];
 }) {
   const selectedPlan =
     plans.find((plan) => String(plan.id) === selectedPlanId) ?? null;
@@ -4672,6 +4734,10 @@ function TrainingPlanningPanel({
     selectedPlan ??
     plans[0] ??
     null;
+  const olderSessions = useMemo(
+    () => sortTrainingSessionsNewestFirst(sessions).slice(5),
+    [sessions],
+  );
 
   return (
     <div className="training-page training-master-page">
@@ -4821,6 +4887,16 @@ function TrainingPlanningPanel({
             </div>
           </Panel>
         </div>
+
+        <div className="training-column training-planning-history">
+          <Panel title="Weitere Einheiten">
+            <TrainingSessionList
+              emptyLabel="Keine weiteren Trainingseinheiten"
+              onDeleteSession={onDeleteSession}
+              sessions={olderSessions}
+            />
+          </Panel>
+        </div>
       </section>
     </div>
   );
@@ -4899,7 +4975,11 @@ function TrainingPage({
     return rows.sort((first, second) => sorters[resultSort](second) - sorters[resultSort](first));
   }, [resultSort, selectedExercise, sessions]);
 
-  const latestSession = sessions[0] ?? null;
+  const recentSessions = useMemo(
+    () => sortTrainingSessionsNewestFirst(sessions).slice(0, 5),
+    [sessions],
+  );
+  const latestSession = recentSessions[0] ?? null;
 
   function changeSessionPlan(planId: string) {
     const plan = plans.find((item) => String(item.id) === planId) ?? null;
@@ -5083,38 +5163,11 @@ function TrainingPage({
           </Panel>
 
           <Panel title="Letzte Einheiten">
-            <div className="training-session-list">
-              {sessions.length === 0 ? (
-                <EmptyState label="Noch keine Trainingseinheiten" />
-              ) : (
-                sessions.slice(0, 8).map((session) => (
-                  <article className="training-session-item" key={session.id}>
-                    <div>
-                      <strong>{formatDate(getLocalDate(new Date(session.trained_at)))}</strong>
-                      <span>
-                        {session.plan.name} - {session.sets.length} Saetze
-                      </span>
-                    </div>
-                    <div className="training-session-sets">
-                      {session.sets.slice(0, 4).map((set) => (
-                        <span key={set.id}>
-                          {set.exercise.name}: {formatNumber(set.weight_kg)} kg x {set.reps}
-                          {set.notes ? ` - ${set.notes}` : ""}
-                        </span>
-                      ))}
-                    </div>
-                    <button
-                      className="icon-button danger"
-                      onClick={() => onDeleteSession(session.id)}
-                      title="Einheit loeschen"
-                      type="button"
-                    >
-                      <Trash2 size={16} />
-                    </button>
-                  </article>
-                ))
-              )}
-            </div>
+            <TrainingSessionList
+              emptyLabel="Noch keine Trainingseinheiten"
+              onDeleteSession={onDeleteSession}
+              sessions={recentSessions}
+            />
           </Panel>
         </div>
 
