@@ -1266,6 +1266,7 @@ button {
   grid-template-columns: minmax(300px, 0.9fr) minmax(0, 1.1fr);
 }
 
+.training-planning-results,
 .training-planning-history {
   grid-column: 1 / -1;
 }
@@ -1386,6 +1387,86 @@ button {
   background: var(--surface);
   color: var(--text);
   font-size: 0.78rem;
+}
+
+.training-history-matrix {
+  display: grid;
+  gap: 8px;
+  overflow-x: auto;
+  padding-bottom: 2px;
+}
+
+.training-history-head,
+.training-history-row {
+  display: grid;
+  grid-template-columns: minmax(150px, 0.9fr) repeat(5, minmax(108px, 1fr));
+  gap: 8px;
+  min-width: 760px;
+}
+
+.training-history-head {
+  align-items: center;
+  padding: 0 8px;
+  color: var(--muted);
+  font-size: 0.72rem;
+  font-weight: 900;
+  text-transform: uppercase;
+}
+
+.training-history-row {
+  align-items: stretch;
+  padding: 8px;
+  border: 1px solid var(--line);
+  border-left: 3px solid var(--training-accent);
+  border-radius: 8px;
+  background: var(--surface-soft);
+}
+
+.training-history-exercise,
+.training-history-result {
+  display: grid;
+  align-content: center;
+  gap: 3px;
+  min-width: 0;
+}
+
+.training-history-exercise strong,
+.training-history-result strong {
+  min-width: 0;
+  overflow: hidden;
+  color: var(--text-strong);
+  font-size: 0.86rem;
+  line-height: 1.15;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.training-history-exercise span,
+.training-history-result span,
+.training-history-result small {
+  min-width: 0;
+  overflow: hidden;
+  color: var(--muted);
+  font-size: 0.72rem;
+  font-weight: 800;
+  line-height: 1.15;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.training-history-result {
+  min-height: 62px;
+  padding: 8px;
+  border: 1px solid color-mix(in srgb, var(--line) 80%, transparent);
+  border-radius: 8px;
+  background: var(--field-bg);
+}
+
+.training-history-result.empty {
+  place-items: center;
+  border-style: dashed;
+  color: var(--muted);
+  opacity: 0.72;
 }
 
 .training-session-form {
@@ -6470,6 +6551,12 @@ th {
   .training-result-row {
     grid-template-columns: 1fr;
     align-items: stretch;
+  }
+
+  .training-history-head,
+  .training-history-row {
+    grid-template-columns: minmax(118px, 0.8fr) repeat(5, minmax(96px, 1fr));
+    min-width: 660px;
   }
 
   .training-set-row .icon-button {

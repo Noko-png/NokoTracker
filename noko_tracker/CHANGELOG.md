@@ -1,5 +1,10 @@
 # Changelog
 
+## 2.0.8
+
+- Trainingsplan zeigt letzte Ergebnisse als Matrix mit einer Zeile pro Uebung.
+- Pro Uebung werden bis zu fuenf kompakte Ergebnisse nebeneinander angezeigt.
+
 ## 2.0.7
 
 - Mealprep-Buchung fuer geplante Gerichte repariert.

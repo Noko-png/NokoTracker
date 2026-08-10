@@ -522,7 +522,7 @@ const macroMeta: Array<{
   { key: "carbs", label: "Kohlenhydrate", unit: "g", tone: "red" },
 ];
 
-const appVersion = "2.0.7";
+const appVersion = "2.0.8";
 const updateSourceLabel = "main / github.com/Noko-png/NokoTracker";
 
 const emptyNutrition: NutritionDay = {
@@ -4694,6 +4694,102 @@ function TrainingSessionList({
   );
 }
 
+type TrainingExerciseHistoryResult = {
+  date: string;
+  key: string;
+  notes?: string | null;
+  reps: number;
+  setIndex: number;
+  volume: number;
+  weightKg: number;
+};
+
+function latestResultsForExercise(
+  sessions: TrainingSession[],
+  exerciseId: number,
+): TrainingExerciseHistoryResult[] {
+  return sortTrainingSessionsNewestFirst(sessions)
+    .flatMap((session) =>
+      [...session.sets]
+        .filter((set) => set.exercise_id === exerciseId)
+        .sort((first, second) => first.set_index - second.set_index || first.id - second.id)
+        .map((set) => ({
+          date: getLocalDate(new Date(session.trained_at)),
+          key: `${session.id}-${set.id}`,
+          notes: set.notes,
+          reps: set.reps,
+          setIndex: set.set_index,
+          volume: roundQuantity(set.weight_kg * set.reps),
+          weightKg: set.weight_kg,
+        })),
+    )
+    .slice(0, 5);
+}
+
+function TrainingExerciseHistoryMatrix({
+  plans,
+  sessions,
+}: {
+  plans: TrainingPlan[];
+  sessions: TrainingSession[];
+}) {
+  const rows = useMemo(
+    () =>
+      plans.flatMap((plan) =>
+        plan.exercises.map((exercise) => ({
+          exercise,
+          plan,
+          results: latestResultsForExercise(sessions, exercise.id),
+        })),
+      ),
+    [plans, sessions],
+  );
+
+  if (rows.length === 0) {
+    return <EmptyState label="Noch keine Uebungen fuer Ergebniszeilen" />;
+  }
+
+  return (
+    <div className="training-history-matrix">
+      <div className="training-history-head" aria-hidden="true">
+        <span>Uebung</span>
+        <span>1</span>
+        <span>2</span>
+        <span>3</span>
+        <span>4</span>
+        <span>5</span>
+      </div>
+      {rows.map(({ exercise, plan, results }) => (
+        <article className="training-history-row" key={exercise.id}>
+          <div className="training-history-exercise">
+            <strong>{exercise.name}</strong>
+            <span>{plan.name}</span>
+          </div>
+          {Array.from({ length: 5 }, (_, index) => {
+            const result = results[index] ?? null;
+            return result ? (
+              <div className="training-history-result" key={result.key}>
+                <strong>
+                  {formatNumber(result.weightKg)} kg x {result.reps}
+                </strong>
+                <span>{formatDate(result.date)}</span>
+                <small>
+                  Satz {result.setIndex} | {formatNumber(result.volume)} kg
+                </small>
+                {result.notes && <small>{result.notes}</small>}
+              </div>
+            ) : (
+              <div className="training-history-result empty" key={`empty-${index}`}>
+                <span>-</span>
+              </div>
+            );
+          })}
+        </article>
+      ))}
+    </div>
+  );
+}
+
 function TrainingPlanningPanel({
   editingPlanId,
   exerciseForm,
@@ -4885,6 +4981,12 @@ function TrainingPlanningPanel({
                 ))
               )}
             </div>
+          </Panel>
+        </div>
+
+        <div className="training-column training-planning-results">
+          <Panel title="Letzte Ergebnisse pro Uebung">
+            <TrainingExerciseHistoryMatrix plans={plans} sessions={sessions} />
           </Panel>
         </div>
 
