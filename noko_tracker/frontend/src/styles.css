@@ -1396,7 +1396,7 @@ button {
 
 .training-set-row {
   display: grid;
-  grid-template-columns: 72px minmax(92px, 1fr) minmax(92px, 1fr) 38px;
+  grid-template-columns: 64px minmax(86px, 0.7fr) minmax(78px, 0.62fr) minmax(120px, 1fr) 38px;
   align-items: end;
   gap: 8px;
   padding: 8px;
@@ -1408,6 +1408,10 @@ button {
   align-self: center;
   color: var(--muted);
   font-weight: 900;
+}
+
+.training-set-note {
+  min-width: 0;
 }
 
 .training-result-row {

@@ -394,7 +394,6 @@ type TodoForm = {
 
 type TrainingPlanForm = {
   name: string;
-  notes: string;
 };
 
 type TrainingExerciseForm = {
@@ -414,7 +413,6 @@ type TrainingSetForm = {
 type TrainingSessionForm = {
   plan_id: string;
   date: string;
-  notes: string;
   sets: TrainingSetForm[];
 };
 
@@ -524,7 +522,7 @@ const macroMeta: Array<{
   { key: "carbs", label: "Kohlenhydrate", unit: "g", tone: "red" },
 ];
 
-const appVersion = "2.0.1";
+const appVersion = "2.0.2";
 const updateSourceLabel = "main / github.com/Noko-png/NokoTracker";
 
 const emptyNutrition: NutritionDay = {
@@ -675,7 +673,6 @@ const initialTodoForm: TodoForm = {
 
 const initialTrainingPlanForm: TrainingPlanForm = {
   name: "",
-  notes: "",
 };
 
 const initialTrainingExerciseForm: TrainingExerciseForm = {
@@ -687,7 +684,6 @@ const initialTrainingExerciseForm: TrainingExerciseForm = {
 const initialTrainingSessionForm: TrainingSessionForm = {
   plan_id: "",
   date: getLocalDate(),
-  notes: "",
   sets: [],
 };
 
@@ -3431,7 +3427,7 @@ export default function App() {
       setApiError(null);
       const payload = {
         name,
-        notes: optionalText(trainingPlanForm.notes),
+        notes: null,
         user_id: userId,
       };
       if (editingTrainingPlanId === null) {
@@ -3450,7 +3446,6 @@ export default function App() {
   function startEditingTrainingPlan(plan: TrainingPlan) {
     setTrainingPlanForm({
       name: plan.name,
-      notes: plan.notes ?? "",
     });
     setEditingTrainingPlanId(plan.id);
   }
@@ -3555,7 +3550,7 @@ export default function App() {
       await createTrainingSession({
         plan_id: planId,
         trained_at: `${trainingSessionForm.date}T12:00:00`,
-        notes: optionalText(trainingSessionForm.notes),
+        notes: null,
         user_id: userId,
         sets,
       });
@@ -4729,7 +4724,6 @@ function TrainingPage({
     onSessionFormChange({
       ...createTrainingSessionFormForPlan(plan),
       date: sessionForm.date,
-      notes: sessionForm.notes,
     });
   }
 
@@ -4815,16 +4809,6 @@ function TrainingPage({
                 required
                 value={planForm.name}
               />
-              <label>
-                <span>Notiz</span>
-                <textarea
-                  onChange={(event) =>
-                    onPlanFormChange({ ...planForm, notes: event.target.value })
-                  }
-                  rows={2}
-                  value={planForm.notes}
-                />
-              </label>
               <div className="form-actions full-width">
                 {editingPlanId !== null && (
                   <button
@@ -4933,10 +4917,7 @@ function TrainingPage({
                   <article className="training-plan-item" key={plan.id}>
                     <div>
                       <strong>{plan.name}</strong>
-                      <span>
-                        {plan.exercises.length} Uebungen
-                        {plan.notes ? ` - ${plan.notes}` : ""}
-                      </span>
+                      <span>{plan.exercises.length} Uebungen</span>
                     </div>
                     <div className="row-actions">
                       <button
@@ -4987,19 +4968,6 @@ function TrainingPage({
                 required
                 value={sessionForm.date}
               />
-              <label className="full-width">
-                <span>Notiz</span>
-                <textarea
-                  onChange={(event) =>
-                    onSessionFormChange({
-                      ...sessionForm,
-                      notes: event.target.value,
-                    })
-                  }
-                  rows={2}
-                  value={sessionForm.notes}
-                />
-              </label>
 
               <div className="training-set-editor full-width">
                 {selectedPlan === null ? (
@@ -5050,6 +5018,17 @@ function TrainingPage({
                                 onChange={(reps) => updateSessionSet(index, { reps })}
                                 value={set.reps}
                               />
+                              <label className="training-set-note">
+                                <span>Notiz</span>
+                                <input
+                                  onChange={(event) =>
+                                    updateSessionSet(index, {
+                                      notes: event.target.value,
+                                    })
+                                  }
+                                  value={set.notes}
+                                />
+                              </label>
                               <button
                                 className="icon-button danger"
                                 onClick={() => removeSessionSet(index)}
@@ -5097,6 +5076,7 @@ function TrainingPage({
                       {session.sets.slice(0, 4).map((set) => (
                         <span key={set.id}>
                           {set.exercise.name}: {formatNumber(set.weight_kg)} kg x {set.reps}
+                          {set.notes ? ` - ${set.notes}` : ""}
                         </span>
                       ))}
                     </div>

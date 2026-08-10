@@ -1,5 +1,10 @@
 # Changelog
 
+## 2.0.2
+
+- Notizfelder aus Trainingsplan und Trainingseinheit entfernt.
+- Satznotizen pro einzelnem Satz in der Trainingseinheit ergaenzt.
+
 ## 2.0.1
 
 - Training-UI kompakter und klarer strukturiert.
