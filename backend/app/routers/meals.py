@@ -170,7 +170,10 @@ def recipe_multiplier_for_meal_log(meal_log: models.MealLog) -> float:
     return quantity / servings
 
 
-def meal_log_inventory_requirements(meal_log: models.MealLog) -> list[dict]:
+def meal_log_inventory_requirements(
+    db: Session,
+    meal_log: models.MealLog,
+) -> list[dict]:
     if meal_log.quick_add_name is not None:
         raise HTTPException(
             status_code=422,
@@ -350,7 +353,7 @@ def deduct_meal_log_from_inventory(meal_log_id: int, db: Session = Depends(get_d
             detail="Bestand wurde fuer diesen Eintrag bereits gebucht",
         )
 
-    requirements = meal_log_inventory_requirements(meal_log)
+    requirements = meal_log_inventory_requirements(db, meal_log)
     rows = inventory_deduction_rows(db, requirements)
     consumed: list[dict] = []
 

@@ -1,5 +1,9 @@
 # Changelog
 
+## 2.0.7
+
+- Mealprep-Buchung fuer geplante Gerichte repariert.
+
 ## 2.0.6
 
 - Letzte Trainingseinheiten zeigen maximal fuenf neueste Einheiten mit allen Saetzen.
