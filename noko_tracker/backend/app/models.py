@@ -62,6 +62,16 @@ class User(Base):
         back_populates="user",
         cascade="all, delete-orphan",
     )
+    training_plans = relationship(
+        "TrainingPlan",
+        back_populates="user",
+        cascade="all, delete-orphan",
+    )
+    training_sessions = relationship(
+        "TrainingSession",
+        back_populates="user",
+        cascade="all, delete-orphan",
+    )
 
     __table_args__ = (
         CheckConstraint("daily_calories > 0", name="ck_users_daily_calories_positive"),
@@ -455,6 +465,110 @@ class WeightEntry(TimestampMixin, Base):
 
     __table_args__ = (
         CheckConstraint("weight_kg > 0", name="ck_weight_entries_weight_positive"),
+    )
+
+
+class TrainingPlan(TimestampMixin, Base):
+    __tablename__ = "training_plans"
+
+    id = Column(Integer, primary_key=True, index=True)
+    name = Column(String(200), nullable=False, index=True)
+    notes = Column(Text, nullable=True)
+    user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=True, index=True)
+
+    user = relationship("User", back_populates="training_plans")
+    exercises = relationship(
+        "TrainingExercise",
+        back_populates="plan",
+        cascade="all, delete-orphan",
+        order_by="TrainingExercise.position, TrainingExercise.id",
+    )
+    sessions = relationship(
+        "TrainingSession",
+        back_populates="plan",
+        cascade="all, delete-orphan",
+        order_by="TrainingSession.trained_at.desc(), TrainingSession.id.desc()",
+    )
+
+
+class TrainingExercise(TimestampMixin, Base):
+    __tablename__ = "training_exercises"
+
+    id = Column(Integer, primary_key=True, index=True)
+    plan_id = Column(
+        Integer,
+        ForeignKey("training_plans.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    name = Column(String(200), nullable=False, index=True)
+    notes = Column(Text, nullable=True)
+    position = Column(Integer, default=0, nullable=False, index=True)
+
+    plan = relationship("TrainingPlan", back_populates="exercises")
+    sets = relationship(
+        "TrainingSessionSet",
+        back_populates="exercise",
+        cascade="all, delete-orphan",
+    )
+
+    __table_args__ = (
+        CheckConstraint("position >= 0", name="ck_training_exercise_position_non_negative"),
+    )
+
+
+class TrainingSession(TimestampMixin, Base):
+    __tablename__ = "training_sessions"
+
+    id = Column(Integer, primary_key=True, index=True)
+    trained_at = Column(DateTime(timezone=True), default=datetime.utcnow, nullable=False, index=True)
+    notes = Column(Text, nullable=True)
+    user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=True, index=True)
+    plan_id = Column(
+        Integer,
+        ForeignKey("training_plans.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+
+    user = relationship("User", back_populates="training_sessions")
+    plan = relationship("TrainingPlan", back_populates="sessions")
+    sets = relationship(
+        "TrainingSessionSet",
+        back_populates="session",
+        cascade="all, delete-orphan",
+        order_by="TrainingSessionSet.set_index, TrainingSessionSet.id",
+    )
+
+
+class TrainingSessionSet(TimestampMixin, Base):
+    __tablename__ = "training_session_sets"
+
+    id = Column(Integer, primary_key=True, index=True)
+    session_id = Column(
+        Integer,
+        ForeignKey("training_sessions.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    exercise_id = Column(
+        Integer,
+        ForeignKey("training_exercises.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    set_index = Column(Integer, default=1, nullable=False, index=True)
+    weight_kg = Column(Float, default=0.0, nullable=False)
+    reps = Column(Integer, default=1, nullable=False)
+    notes = Column(Text, nullable=True)
+
+    session = relationship("TrainingSession", back_populates="sets")
+    exercise = relationship("TrainingExercise", back_populates="sets")
+
+    __table_args__ = (
+        CheckConstraint("set_index >= 1", name="ck_training_set_index_positive"),
+        CheckConstraint("weight_kg >= 0", name="ck_training_set_weight_non_negative"),
+        CheckConstraint("reps >= 1", name="ck_training_set_reps_positive"),
     )
 
 

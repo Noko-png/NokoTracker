@@ -12,6 +12,7 @@ import {
   Circle,
   Database,
   Download,
+  Dumbbell,
   Eye,
   EyeOff,
   Filter,
@@ -83,6 +84,11 @@ import {
   type StorageLocationCreate,
   type StorageLocationUpdate,
   type ThemeName,
+  type TrainingExercise,
+  type TrainingExerciseResult,
+  type TrainingPlan,
+  type TrainingResultSort,
+  type TrainingSession,
   type User,
   type UserCreate,
   type WeightEntry,
@@ -100,6 +106,9 @@ import {
   createStorageLocation,
   createMealLog,
   createRecipe,
+  createTrainingExercise,
+  createTrainingPlan,
+  createTrainingSession,
   createUser,
   createWeightEntry,
   decreaseInventoryItem,
@@ -116,6 +125,9 @@ import {
   deleteRecipeIngredient,
   deleteStorageLocation,
   deleteShoppingListItem,
+  deleteTrainingExercise,
+  deleteTrainingPlan,
+  deleteTrainingSession,
   deleteUser,
   exportDatabaseBackup,
   generateShoppingListFromLowStock,
@@ -133,6 +145,8 @@ import {
   getRecipes,
   getShoppingList,
   getStorageLocations,
+  getTrainingPlans,
+  getTrainingSessions,
   getUsers,
   getWeightEntries,
   importDatabaseBackup,
@@ -156,6 +170,7 @@ import {
   updateRecipe,
   updateRecipeIngredient,
   updateStorageLocation,
+  updateTrainingPlan,
   updateUser,
   updateCalendarEvent,
   updateWeightEntry,
@@ -189,6 +204,7 @@ type Page =
   | "masterData"
   | "recipes"
   | "nutrition"
+  | "training"
   | "shopping"
   | "settings";
 
@@ -376,6 +392,32 @@ type TodoForm = {
   notes: string;
 };
 
+type TrainingPlanForm = {
+  name: string;
+  notes: string;
+};
+
+type TrainingExerciseForm = {
+  plan_id: string;
+  name: string;
+  notes: string;
+};
+
+type TrainingSetForm = {
+  exercise_id: string;
+  set_index: string;
+  weight_kg: string;
+  reps: string;
+  notes: string;
+};
+
+type TrainingSessionForm = {
+  plan_id: string;
+  date: string;
+  notes: string;
+  sets: TrainingSetForm[];
+};
+
 const mealPrepSource = "mealprep";
 const mealPrepSlots: Array<{
   id: MealPrepSlotKey;
@@ -428,6 +470,7 @@ const navigation = [
   { id: "dashboard", label: "Dashboard", icon: LayoutDashboard },
   { id: "todos", label: "ToDo Tracker", icon: CheckCircle2 },
   { id: "nutrition", label: "Kalorientracker", icon: Gauge },
+  { id: "training", label: "Training", icon: Dumbbell },
   { id: "calendar", label: "Kalender", icon: CalendarDays },
   { id: "foods", label: "Bestandsübersicht", icon: Apple },
   { id: "shopping", label: "Einkaufsliste", icon: ShoppingCart },
@@ -481,7 +524,7 @@ const macroMeta: Array<{
   { key: "carbs", label: "Kohlenhydrate", unit: "g", tone: "red" },
 ];
 
-const appVersion = "1.0.13.07";
+const appVersion = "2.0.0";
 const updateSourceLabel = "main / github.com/Noko-png/NokoTracker";
 
 const emptyNutrition: NutritionDay = {
@@ -629,6 +672,47 @@ const initialShoppingForm: ShoppingForm = {
 const initialTodoForm: TodoForm = {
   notes: "",
 };
+
+const initialTrainingPlanForm: TrainingPlanForm = {
+  name: "",
+  notes: "",
+};
+
+const initialTrainingExerciseForm: TrainingExerciseForm = {
+  plan_id: "",
+  name: "",
+  notes: "",
+};
+
+const initialTrainingSessionForm: TrainingSessionForm = {
+  plan_id: "",
+  date: getLocalDate(),
+  notes: "",
+  sets: [],
+};
+
+function createTrainingSetForm(
+  exercise: TrainingExercise,
+  index: number,
+): TrainingSetForm {
+  return {
+    exercise_id: String(exercise.id),
+    set_index: String(index + 1),
+    weight_kg: "",
+    reps: "",
+    notes: "",
+  };
+}
+
+function createTrainingSessionFormForPlan(
+  plan?: TrainingPlan | null,
+): TrainingSessionForm {
+  return {
+    ...initialTrainingSessionForm,
+    plan_id: plan ? String(plan.id) : "",
+    sets: plan?.exercises.map(createTrainingSetForm) ?? [],
+  };
+}
 
 function createCalendarForm(date = getLocalDate()): CalendarForm {
   return {
@@ -1816,6 +1900,8 @@ export default function App() {
   const [recipes, setRecipes] = useState<Recipe[]>([]);
   const [mealLogs, setMealLogs] = useState<MealLog[]>([]);
   const [weightEntries, setWeightEntries] = useState<WeightEntry[]>([]);
+  const [trainingPlans, setTrainingPlans] = useState<TrainingPlan[]>([]);
+  const [trainingSessions, setTrainingSessions] = useState<TrainingSession[]>([]);
   const [shoppingList, setShoppingList] = useState<ShoppingListItem[]>([]);
   const [users, setUsers] = useState<User[]>([]);
   const [calendarEvents, setCalendarEvents] = useState<CalendarEvent[]>([]);
@@ -1888,6 +1974,19 @@ export default function App() {
   );
   const [todoForm, setTodoForm] = useState<TodoForm>(initialTodoForm);
   const [editingTodoId, setEditingTodoId] = useState<number | null>(null);
+  const [trainingPlanForm, setTrainingPlanForm] =
+    useState<TrainingPlanForm>(initialTrainingPlanForm);
+  const [editingTrainingPlanId, setEditingTrainingPlanId] = useState<number | null>(
+    null,
+  );
+  const [trainingExerciseForm, setTrainingExerciseForm] =
+    useState<TrainingExerciseForm>(initialTrainingExerciseForm);
+  const [trainingSessionForm, setTrainingSessionForm] =
+    useState<TrainingSessionForm>(initialTrainingSessionForm);
+  const [selectedTrainingExerciseId, setSelectedTrainingExerciseId] =
+    useState("");
+  const [trainingResultSort, setTrainingResultSort] =
+    useState<TrainingResultSort>("date-desc");
   const [shoppingForm, setShoppingForm] =
     useState<ShoppingForm>(initialShoppingForm);
   const [calendarForm, setCalendarForm] = useState<CalendarForm>(
@@ -1942,6 +2041,8 @@ export default function App() {
       load(getRecipes(), setRecipes),
       load(getMealLogs(), setMealLogs),
       load(getWeightEntries(500, userId), setWeightEntries),
+      load(getTrainingPlans(500, userId), setTrainingPlans),
+      load(getTrainingSessions(500, userId), setTrainingSessions),
       load(getShoppingList(), setShoppingList),
       load(getCalendarEvents(), setCalendarEvents),
       load(getCalendarGroups(), setCalendarGroups),
@@ -1966,6 +2067,45 @@ export default function App() {
       setUserId(users[0].id);
     }
   }, [userId, users]);
+
+  useEffect(() => {
+    if (trainingPlans.length === 0) {
+      if (trainingSessionForm.plan_id || selectedTrainingExerciseId) {
+        setTrainingSessionForm(initialTrainingSessionForm);
+        setSelectedTrainingExerciseId("");
+      }
+      return;
+    }
+
+    const selectedPlan =
+      trainingPlans.find((plan) => String(plan.id) === trainingSessionForm.plan_id) ??
+      trainingPlans[0];
+    if (String(selectedPlan.id) !== trainingSessionForm.plan_id) {
+      setTrainingSessionForm(createTrainingSessionFormForPlan(selectedPlan));
+    }
+    if (
+      !trainingExerciseForm.plan_id ||
+      !trainingPlans.some((plan) => String(plan.id) === trainingExerciseForm.plan_id)
+    ) {
+      setTrainingExerciseForm((form) => ({
+        ...form,
+        plan_id: String(selectedPlan.id),
+      }));
+    }
+
+    const allExercises = trainingPlans.flatMap((plan) => plan.exercises);
+    if (
+      allExercises.length > 0 &&
+      !allExercises.some((exercise) => String(exercise.id) === selectedTrainingExerciseId)
+    ) {
+      setSelectedTrainingExerciseId(String(allExercises[0].id));
+    }
+  }, [
+    selectedTrainingExerciseId,
+    trainingExerciseForm.plan_id,
+    trainingPlans,
+    trainingSessionForm.plan_id,
+  ]);
 
   const activeUser = useMemo(
     () => users.find((user) => user.id === userId) ?? null,
@@ -3279,6 +3419,161 @@ export default function App() {
     });
   }
 
+  async function submitTrainingPlan(event: FormEvent) {
+    event.preventDefault();
+    const name = trainingPlanForm.name.trim();
+    if (!name) {
+      setApiError("Bitte einen Namen fuer den Trainingsplan eintragen.");
+      return;
+    }
+
+    try {
+      setApiError(null);
+      const payload = {
+        name,
+        notes: optionalText(trainingPlanForm.notes),
+        user_id: userId,
+      };
+      if (editingTrainingPlanId === null) {
+        await createTrainingPlan({ ...payload, exercises: [] });
+      } else {
+        await updateTrainingPlan(editingTrainingPlanId, payload);
+      }
+      setTrainingPlanForm(initialTrainingPlanForm);
+      setEditingTrainingPlanId(null);
+      await loadData();
+    } catch (error) {
+      setApiError(error instanceof Error ? error.message : "API-Fehler");
+    }
+  }
+
+  function startEditingTrainingPlan(plan: TrainingPlan) {
+    setTrainingPlanForm({
+      name: plan.name,
+      notes: plan.notes ?? "",
+    });
+    setEditingTrainingPlanId(plan.id);
+  }
+
+  function cancelEditingTrainingPlan() {
+    setTrainingPlanForm(initialTrainingPlanForm);
+    setEditingTrainingPlanId(null);
+  }
+
+  async function removeTrainingPlan(planId: number) {
+    if (!window.confirm("Trainingsplan inklusive Uebungen und Einheiten loeschen?")) {
+      return;
+    }
+    await runAction(async () => {
+      await deleteTrainingPlan(planId);
+      if (editingTrainingPlanId === planId) {
+        cancelEditingTrainingPlan();
+      }
+      setTrainingSessionForm(initialTrainingSessionForm);
+      setSelectedTrainingExerciseId("");
+    });
+  }
+
+  async function submitTrainingExercise(event: FormEvent) {
+    event.preventDefault();
+    const planId = Number(trainingExerciseForm.plan_id);
+    const name = trainingExerciseForm.name.trim();
+    if (!planId || !name) {
+      setApiError("Bitte Trainingsplan und Uebungsnamen eintragen.");
+      return;
+    }
+
+    try {
+      setApiError(null);
+      const plan = trainingPlans.find((item) => item.id === planId);
+      const exercise = await createTrainingExercise(planId, {
+        name,
+        notes: optionalText(trainingExerciseForm.notes),
+        position: plan?.exercises.length ?? 0,
+      });
+      setTrainingExerciseForm({
+        plan_id: String(planId),
+        name: "",
+        notes: "",
+      });
+      setTrainingSessionForm((form) =>
+        form.plan_id === String(planId)
+          ? {
+              ...form,
+              sets: [...form.sets, createTrainingSetForm(exercise, form.sets.length)],
+            }
+          : form,
+      );
+      setSelectedTrainingExerciseId(String(exercise.id));
+      await loadData();
+    } catch (error) {
+      setApiError(error instanceof Error ? error.message : "API-Fehler");
+    }
+  }
+
+  async function removeTrainingExercise(exerciseId: number) {
+    if (!window.confirm("Uebung inklusive gespeicherter Ergebnisse loeschen?")) {
+      return;
+    }
+    await runAction(async () => {
+      await deleteTrainingExercise(exerciseId);
+      setTrainingSessionForm((form) => ({
+        ...form,
+        sets: form.sets.filter((set) => Number(set.exercise_id) !== exerciseId),
+      }));
+      if (selectedTrainingExerciseId === String(exerciseId)) {
+        setSelectedTrainingExerciseId("");
+      }
+    });
+  }
+
+  async function submitTrainingSession(event: FormEvent) {
+    event.preventDefault();
+    const planId = Number(trainingSessionForm.plan_id);
+    if (!planId) {
+      setApiError("Bitte einen Trainingsplan auswaehlen.");
+      return;
+    }
+
+    const sets = trainingSessionForm.sets
+      .filter((set) => Number(set.exercise_id) > 0 && toNumber(set.reps, 0) > 0)
+      .map((set, index) => ({
+        exercise_id: Number(set.exercise_id),
+        set_index: index + 1,
+        weight_kg: toNumber(set.weight_kg, 0),
+        reps: Math.trunc(toNumber(set.reps, 0)),
+        notes: optionalText(set.notes),
+      }));
+
+    if (sets.length === 0) {
+      setApiError("Bitte mindestens eine Uebung mit Wiederholungen erfassen.");
+      return;
+    }
+
+    try {
+      setApiError(null);
+      await createTrainingSession({
+        plan_id: planId,
+        trained_at: `${trainingSessionForm.date}T12:00:00`,
+        notes: optionalText(trainingSessionForm.notes),
+        user_id: userId,
+        sets,
+      });
+      const plan = trainingPlans.find((item) => item.id === planId);
+      setTrainingSessionForm(createTrainingSessionFormForPlan(plan));
+      await loadData();
+    } catch (error) {
+      setApiError(error instanceof Error ? error.message : "API-Fehler");
+    }
+  }
+
+  async function removeTrainingSession(sessionId: number) {
+    if (!window.confirm("Trainingseinheit loeschen?")) {
+      return;
+    }
+    await runAction(() => deleteTrainingSession(sessionId));
+  }
+
   async function submitCalendarGroup(event: FormEvent) {
     event.preventDefault();
     try {
@@ -3927,6 +4222,32 @@ export default function App() {
           />
         )}
 
+        {activePage === "training" && (
+          <TrainingPage
+            editingPlanId={editingTrainingPlanId}
+            exerciseForm={trainingExerciseForm}
+            onCancelPlanEdit={cancelEditingTrainingPlan}
+            onDeleteExercise={removeTrainingExercise}
+            onDeletePlan={removeTrainingPlan}
+            onDeleteSession={removeTrainingSession}
+            onEditPlan={startEditingTrainingPlan}
+            onExerciseFormChange={setTrainingExerciseForm}
+            onExerciseSubmit={submitTrainingExercise}
+            onPlanFormChange={setTrainingPlanForm}
+            onPlanSubmit={submitTrainingPlan}
+            onResultSortChange={setTrainingResultSort}
+            onSelectedExerciseChange={setSelectedTrainingExerciseId}
+            onSessionFormChange={setTrainingSessionForm}
+            onSessionSubmit={submitTrainingSession}
+            planForm={trainingPlanForm}
+            plans={trainingPlans}
+            resultSort={trainingResultSort}
+            selectedExerciseId={selectedTrainingExerciseId}
+            sessionForm={trainingSessionForm}
+            sessions={trainingSessions}
+          />
+        )}
+
         {activePage === "shopping" && (
           <ShoppingPage
             foods={foods}
@@ -4289,6 +4610,547 @@ function TodoPage({
           ) : (
             completedTodos.map((todo) => renderTodo(todo, true))
           )}
+        </div>
+      </section>
+    </div>
+  );
+}
+
+function TrainingPage({
+  editingPlanId,
+  exerciseForm,
+  onCancelPlanEdit,
+  onDeleteExercise,
+  onDeletePlan,
+  onDeleteSession,
+  onEditPlan,
+  onExerciseFormChange,
+  onExerciseSubmit,
+  onPlanFormChange,
+  onPlanSubmit,
+  onResultSortChange,
+  onSelectedExerciseChange,
+  onSessionFormChange,
+  onSessionSubmit,
+  planForm,
+  plans,
+  resultSort,
+  selectedExerciseId,
+  sessionForm,
+  sessions,
+}: {
+  editingPlanId: number | null;
+  exerciseForm: TrainingExerciseForm;
+  onCancelPlanEdit: () => void;
+  onDeleteExercise: (id: number) => void;
+  onDeletePlan: (id: number) => void;
+  onDeleteSession: (id: number) => void;
+  onEditPlan: (plan: TrainingPlan) => void;
+  onExerciseFormChange: (value: TrainingExerciseForm) => void;
+  onExerciseSubmit: (event: FormEvent) => void;
+  onPlanFormChange: (value: TrainingPlanForm) => void;
+  onPlanSubmit: (event: FormEvent) => void;
+  onResultSortChange: (value: TrainingResultSort) => void;
+  onSelectedExerciseChange: (value: string) => void;
+  onSessionFormChange: (value: TrainingSessionForm) => void;
+  onSessionSubmit: (event: FormEvent) => void;
+  planForm: TrainingPlanForm;
+  plans: TrainingPlan[];
+  resultSort: TrainingResultSort;
+  selectedExerciseId: string;
+  sessionForm: TrainingSessionForm;
+  sessions: TrainingSession[];
+}) {
+  const allExercises = useMemo(
+    () =>
+      plans.flatMap((plan) =>
+        plan.exercises.map((exercise) => ({
+          ...exercise,
+          planName: plan.name,
+        })),
+      ),
+    [plans],
+  );
+  const selectedPlan =
+    plans.find((plan) => String(plan.id) === sessionForm.plan_id) ?? null;
+  const exercisePlan =
+    plans.find((plan) => String(plan.id) === exerciseForm.plan_id) ??
+    selectedPlan ??
+    plans[0] ??
+    null;
+  const selectedExercise =
+    allExercises.find((exercise) => String(exercise.id) === selectedExerciseId) ??
+    allExercises[0] ??
+    null;
+
+  const results = useMemo<TrainingExerciseResult[]>(() => {
+    if (!selectedExercise) {
+      return [];
+    }
+
+    const rows = sessions.flatMap((session) =>
+      session.sets
+        .filter((set) => set.exercise_id === selectedExercise.id)
+        .map((set) => ({
+          set_id: set.id,
+          session_id: session.id,
+          plan_id: session.plan_id,
+          plan_name: session.plan.name,
+          trained_at: session.trained_at,
+          exercise_id: set.exercise_id,
+          exercise_name: set.exercise.name,
+          set_index: set.set_index,
+          weight_kg: set.weight_kg,
+          reps: set.reps,
+          volume: roundQuantity(set.weight_kg * set.reps),
+          notes: set.notes,
+        })),
+    );
+
+    const sorters: Record<TrainingResultSort, (row: TrainingExerciseResult) => number> = {
+      "date-desc": (row) => new Date(row.trained_at).getTime(),
+      "weight-desc": (row) => row.weight_kg,
+      "reps-desc": (row) => row.reps,
+      "volume-desc": (row) => row.volume,
+    };
+    return rows.sort((first, second) => sorters[resultSort](second) - sorters[resultSort](first));
+  }, [resultSort, selectedExercise, sessions]);
+
+  const sessionSummary = useMemo(() => {
+    const totalSessions = sessions.length;
+    const totalSets = sessions.reduce((sum, session) => sum + session.sets.length, 0);
+    const bestWeight = Math.max(0, ...sessions.flatMap((session) => session.sets.map((set) => set.weight_kg)));
+    return { totalSessions, totalSets, bestWeight };
+  }, [sessions]);
+
+  function changeSessionPlan(planId: string) {
+    const plan = plans.find((item) => String(item.id) === planId) ?? null;
+    onSessionFormChange({
+      ...createTrainingSessionFormForPlan(plan),
+      date: sessionForm.date,
+      notes: sessionForm.notes,
+    });
+  }
+
+  function updateSessionSet(index: number, patch: Partial<TrainingSetForm>) {
+    onSessionFormChange({
+      ...sessionForm,
+      sets: sessionForm.sets.map((set, setIndex) =>
+        setIndex === index ? { ...set, ...patch } : set,
+      ),
+    });
+  }
+
+  function addSetForExercise(exercise: TrainingExercise) {
+    const setCount = sessionForm.sets.filter(
+      (set) => Number(set.exercise_id) === exercise.id,
+    ).length;
+    onSessionFormChange({
+      ...sessionForm,
+      sets: [
+        ...sessionForm.sets,
+        {
+          exercise_id: String(exercise.id),
+          set_index: String(setCount + 1),
+          weight_kg: "",
+          reps: "",
+          notes: "",
+        },
+      ],
+    });
+  }
+
+  function removeSessionSet(index: number) {
+    onSessionFormChange({
+      ...sessionForm,
+      sets: sessionForm.sets.filter((_, setIndex) => setIndex !== index),
+    });
+  }
+
+  return (
+    <div className="training-page">
+      <section className="section training-hero">
+        <div>
+          <p className="eyebrow">Training</p>
+          <h2>Trainingsplaene und Einheiten</h2>
+        </div>
+        <div className="training-summary">
+          <article>
+            <span>Plaene</span>
+            <strong>{plans.length}</strong>
+          </article>
+          <article>
+            <span>Einheiten</span>
+            <strong>{sessionSummary.totalSessions}</strong>
+          </article>
+          <article>
+            <span>Saetze</span>
+            <strong>{sessionSummary.totalSets}</strong>
+          </article>
+          <article>
+            <span>Bestgewicht</span>
+            <strong>{formatNumber(sessionSummary.bestWeight)} kg</strong>
+          </article>
+        </div>
+      </section>
+
+      <section className="training-layout">
+        <div className="training-column">
+          <Panel title={editingPlanId === null ? "Plan anlegen" : "Plan bearbeiten"}>
+            <form className="form-grid single-column" onSubmit={onPlanSubmit}>
+              <TextInput
+                label="Name"
+                onChange={(name) => onPlanFormChange({ ...planForm, name })}
+                required
+                value={planForm.name}
+              />
+              <label>
+                <span>Notiz</span>
+                <textarea
+                  onChange={(event) =>
+                    onPlanFormChange({ ...planForm, notes: event.target.value })
+                  }
+                  rows={3}
+                  value={planForm.notes}
+                />
+              </label>
+              <div className="form-actions">
+                {editingPlanId !== null && (
+                  <button
+                    className="button secondary"
+                    onClick={onCancelPlanEdit}
+                    type="button"
+                  >
+                    Abbrechen
+                  </button>
+                )}
+                <button className="button primary" type="submit">
+                  <Check size={16} />
+                  Speichern
+                </button>
+              </div>
+            </form>
+          </Panel>
+
+          <Panel title="Plaene">
+            <div className="training-plan-list">
+              {plans.length === 0 ? (
+                <EmptyState label="Noch keine Trainingsplaene" />
+              ) : (
+                plans.map((plan) => (
+                  <article className="training-plan-item" key={plan.id}>
+                    <div>
+                      <strong>{plan.name}</strong>
+                      <span>
+                        {plan.exercises.length} Uebungen
+                        {plan.notes ? ` · ${plan.notes}` : ""}
+                      </span>
+                    </div>
+                    <div className="row-actions">
+                      <button
+                        className="icon-button"
+                        onClick={() => onEditPlan(plan)}
+                        title="Bearbeiten"
+                        type="button"
+                      >
+                        <Pencil size={16} />
+                      </button>
+                      <button
+                        className="icon-button danger"
+                        onClick={() => onDeletePlan(plan.id)}
+                        title="Loeschen"
+                        type="button"
+                      >
+                        <Trash2 size={16} />
+                      </button>
+                    </div>
+                  </article>
+                ))
+              )}
+            </div>
+          </Panel>
+
+          <Panel title="Uebung hinterlegen">
+            <form className="form-grid single-column" onSubmit={onExerciseSubmit}>
+              <label>
+                <span>Trainingsplan</span>
+                <select
+                  onChange={(event) =>
+                    onExerciseFormChange({
+                      ...exerciseForm,
+                      plan_id: event.target.value,
+                    })
+                  }
+                  value={exerciseForm.plan_id || (exercisePlan ? String(exercisePlan.id) : "")}
+                >
+                  <option value="">Plan waehlen</option>
+                  {plans.map((plan) => (
+                    <option key={plan.id} value={plan.id}>
+                      {plan.name}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <TextInput
+                label="Uebung"
+                onChange={(name) => onExerciseFormChange({ ...exerciseForm, name })}
+                required
+                value={exerciseForm.name}
+              />
+              <label>
+                <span>Notiz</span>
+                <textarea
+                  onChange={(event) =>
+                    onExerciseFormChange({
+                      ...exerciseForm,
+                      notes: event.target.value,
+                    })
+                  }
+                  rows={2}
+                  value={exerciseForm.notes}
+                />
+              </label>
+              <div className="form-actions">
+                <button className="button primary" disabled={plans.length === 0} type="submit">
+                  <Plus size={16} />
+                  Uebung hinzufuegen
+                </button>
+              </div>
+            </form>
+
+            <div className="training-exercise-list">
+              {exercisePlan?.exercises.length ? (
+                exercisePlan.exercises.map((exercise) => (
+                  <div className="training-exercise-row" key={exercise.id}>
+                    <div>
+                      <strong>{exercise.name}</strong>
+                      {exercise.notes && <span>{exercise.notes}</span>}
+                    </div>
+                    <button
+                      className="icon-button danger"
+                      onClick={() => onDeleteExercise(exercise.id)}
+                      title="Uebung loeschen"
+                      type="button"
+                    >
+                      <Trash2 size={16} />
+                    </button>
+                  </div>
+                ))
+              ) : (
+                <EmptyState label="Noch keine Uebungen in diesem Plan" />
+              )}
+            </div>
+          </Panel>
+        </div>
+
+        <div className="training-column wide">
+          <Panel title="Trainingseinheit erfassen">
+            <form className="form-grid training-session-form" onSubmit={onSessionSubmit}>
+              <label>
+                <span>Trainingsplan</span>
+                <select
+                  onChange={(event) => changeSessionPlan(event.target.value)}
+                  required
+                  value={sessionForm.plan_id}
+                >
+                  <option value="">Plan waehlen</option>
+                  {plans.map((plan) => (
+                    <option key={plan.id} value={plan.id}>
+                      {plan.name}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <DateInput
+                label="Datum"
+                onChange={(date) => onSessionFormChange({ ...sessionForm, date })}
+                required
+                value={sessionForm.date}
+              />
+              <label className="full-width">
+                <span>Notiz</span>
+                <textarea
+                  onChange={(event) =>
+                    onSessionFormChange({
+                      ...sessionForm,
+                      notes: event.target.value,
+                    })
+                  }
+                  rows={2}
+                  value={sessionForm.notes}
+                />
+              </label>
+
+              <div className="training-set-editor full-width">
+                {selectedPlan === null ? (
+                  <EmptyState label="Bitte zuerst einen Trainingsplan waehlen" />
+                ) : selectedPlan.exercises.length === 0 ? (
+                  <EmptyState label="Dieser Plan hat noch keine Uebungen" />
+                ) : (
+                  selectedPlan.exercises.map((exercise) => {
+                    const rows = sessionForm.sets
+                      .map((set, index) => ({ set, index }))
+                      .filter(({ set }) => Number(set.exercise_id) === exercise.id);
+                    return (
+                      <article className="training-set-group" key={exercise.id}>
+                        <div className="training-set-head">
+                          <strong>{exercise.name}</strong>
+                          <button
+                            className="icon-button"
+                            onClick={() => addSetForExercise(exercise)}
+                            title="Satz hinzufuegen"
+                            type="button"
+                          >
+                            <Plus size={16} />
+                          </button>
+                        </div>
+                        {rows.length === 0 ? (
+                          <button
+                            className="button secondary"
+                            onClick={() => addSetForExercise(exercise)}
+                            type="button"
+                          >
+                            <Plus size={16} />
+                            Satz erfassen
+                          </button>
+                        ) : (
+                          rows.map(({ set, index }) => (
+                            <div className="training-set-row" key={`${exercise.id}-${index}`}>
+                              <span>Satz {set.set_index}</span>
+                              <FractionNumberInput
+                                label="kg"
+                                onChange={(weight_kg) =>
+                                  updateSessionSet(index, { weight_kg })
+                                }
+                                value={set.weight_kg}
+                              />
+                              <NumberInput
+                                label="Wdh."
+                                min="1"
+                                onChange={(reps) => updateSessionSet(index, { reps })}
+                                value={set.reps}
+                              />
+                              <button
+                                className="icon-button danger"
+                                onClick={() => removeSessionSet(index)}
+                                title="Satz entfernen"
+                                type="button"
+                              >
+                                <Trash2 size={16} />
+                              </button>
+                            </div>
+                          ))
+                        )}
+                      </article>
+                    );
+                  })
+                )}
+              </div>
+
+              <div className="form-actions full-width">
+                <button
+                  className="button primary"
+                  disabled={selectedPlan === null || selectedPlan.exercises.length === 0}
+                  type="submit"
+                >
+                  <Check size={16} />
+                  Einheit speichern
+                </button>
+              </div>
+            </form>
+          </Panel>
+
+          <Panel title="Letzte Einheiten">
+            <div className="training-session-list">
+              {sessions.length === 0 ? (
+                <EmptyState label="Noch keine Trainingseinheiten" />
+              ) : (
+                sessions.slice(0, 8).map((session) => (
+                  <article className="training-session-item" key={session.id}>
+                    <div>
+                      <strong>{formatDate(getLocalDate(new Date(session.trained_at)))}</strong>
+                      <span>
+                        {session.plan.name} · {session.sets.length} Saetze
+                      </span>
+                    </div>
+                    <div className="training-session-sets">
+                      {session.sets.slice(0, 4).map((set) => (
+                        <span key={set.id}>
+                          {set.exercise.name}: {formatNumber(set.weight_kg)} kg x {set.reps}
+                        </span>
+                      ))}
+                    </div>
+                    <button
+                      className="icon-button danger"
+                      onClick={() => onDeleteSession(session.id)}
+                      title="Einheit loeschen"
+                      type="button"
+                    >
+                      <Trash2 size={16} />
+                    </button>
+                  </article>
+                ))
+              )}
+            </div>
+          </Panel>
+        </div>
+
+        <div className="training-column">
+          <Panel title="Uebungs-Ergebnisse">
+            <div className="form-grid single-column">
+              <label>
+                <span>Uebung</span>
+                <select
+                  onChange={(event) => onSelectedExerciseChange(event.target.value)}
+                  value={selectedExercise ? String(selectedExercise.id) : ""}
+                >
+                  <option value="">Uebung waehlen</option>
+                  {allExercises.map((exercise) => (
+                    <option key={exercise.id} value={exercise.id}>
+                      {exercise.name} · {exercise.planName}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <label>
+                <span>Sortierung</span>
+                <select
+                  onChange={(event) =>
+                    onResultSortChange(event.target.value as TrainingResultSort)
+                  }
+                  value={resultSort}
+                >
+                  <option value="date-desc">Neueste zuerst</option>
+                  <option value="weight-desc">Bestes Gewicht</option>
+                  <option value="reps-desc">Meiste Wiederholungen</option>
+                  <option value="volume-desc">Bestes Volumen</option>
+                </select>
+              </label>
+            </div>
+
+            <div className="training-results-list">
+              {results.length === 0 ? (
+                <EmptyState label="Noch keine Ergebnisse fuer diese Uebung" />
+              ) : (
+                results.map((result) => (
+                  <article className="training-result-row" key={result.set_id}>
+                    <div>
+                      <strong>{formatNumber(result.weight_kg)} kg</strong>
+                      <span>{result.reps} Wdh.</span>
+                    </div>
+                    <div>
+                      <strong>{formatNumber(result.volume)} kg</strong>
+                      <span>Volumen</span>
+                    </div>
+                    <div>
+                      <strong>{formatDate(getLocalDate(new Date(result.trained_at)))}</strong>
+                      <span>{result.plan_name}</span>
+                    </div>
+                  </article>
+                ))
+              )}
+            </div>
+          </Panel>
         </div>
       </section>
     </div>

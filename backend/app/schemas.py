@@ -941,6 +941,138 @@ class WeightEntryRead(WeightEntryBase, ORMBase):
     user: Optional[UserSummary] = None
 
 
+class TrainingExerciseBase(BaseModel):
+    name: str = Field(..., min_length=1, max_length=200)
+    notes: Optional[str] = None
+    position: int = Field(0, ge=0)
+
+
+class TrainingExerciseCreate(TrainingExerciseBase):
+    pass
+
+
+class TrainingExerciseUpdate(BaseModel):
+    name: Optional[str] = Field(None, min_length=1, max_length=200)
+    notes: Optional[str] = None
+    position: Optional[int] = Field(None, ge=0)
+
+
+class TrainingExerciseRead(TrainingExerciseBase, ORMBase):
+    id: int
+    plan_id: int
+    created_at: datetime
+    updated_at: datetime
+
+
+class TrainingPlanBase(BaseModel):
+    name: str = Field(..., min_length=1, max_length=200)
+    notes: Optional[str] = None
+    user_id: Optional[int] = None
+
+
+class TrainingPlanCreate(TrainingPlanBase):
+    exercises: list[TrainingExerciseCreate] = Field(default_factory=list)
+
+
+class TrainingPlanUpdate(BaseModel):
+    name: Optional[str] = Field(None, min_length=1, max_length=200)
+    notes: Optional[str] = None
+    user_id: Optional[int] = None
+
+
+class TrainingPlanSummary(TrainingPlanBase, ORMBase):
+    id: int
+
+
+class TrainingPlanRead(TrainingPlanBase, ORMBase):
+    id: int
+    created_at: datetime
+    updated_at: datetime
+    user: Optional[UserSummary] = None
+    exercises: list[TrainingExerciseRead] = Field(default_factory=list)
+
+
+class TrainingSessionSetBase(BaseModel):
+    exercise_id: int
+    set_index: int = Field(1, ge=1)
+    weight_kg: float = Field(0.0, ge=0)
+    reps: int = Field(..., ge=1)
+    notes: Optional[str] = None
+
+    @field_validator("weight_kg", mode="before")
+    @classmethod
+    def parse_fractional_weight(cls, value):
+        return parse_fractional_number(value)
+
+
+class TrainingSessionSetCreate(TrainingSessionSetBase):
+    pass
+
+
+class TrainingSessionSetUpdate(BaseModel):
+    exercise_id: Optional[int] = None
+    set_index: Optional[int] = Field(None, ge=1)
+    weight_kg: Optional[float] = Field(None, ge=0)
+    reps: Optional[int] = Field(None, ge=1)
+    notes: Optional[str] = None
+
+    @field_validator("weight_kg", mode="before")
+    @classmethod
+    def parse_fractional_weight(cls, value):
+        return parse_fractional_number(value)
+
+
+class TrainingSessionSetRead(TrainingSessionSetBase, ORMBase):
+    id: int
+    session_id: int
+    exercise: TrainingExerciseRead
+    created_at: datetime
+    updated_at: datetime
+
+
+class TrainingSessionBase(BaseModel):
+    trained_at: datetime = Field(default_factory=datetime.utcnow)
+    notes: Optional[str] = None
+    user_id: Optional[int] = None
+    plan_id: int
+
+
+class TrainingSessionCreate(TrainingSessionBase):
+    sets: list[TrainingSessionSetCreate] = Field(default_factory=list)
+
+
+class TrainingSessionUpdate(BaseModel):
+    trained_at: Optional[datetime] = None
+    notes: Optional[str] = None
+    user_id: Optional[int] = None
+    plan_id: Optional[int] = None
+    sets: Optional[list[TrainingSessionSetCreate]] = None
+
+
+class TrainingSessionRead(TrainingSessionBase, ORMBase):
+    id: int
+    created_at: datetime
+    updated_at: datetime
+    user: Optional[UserSummary] = None
+    plan: TrainingPlanSummary
+    sets: list[TrainingSessionSetRead] = Field(default_factory=list)
+
+
+class TrainingExerciseResultRead(BaseModel):
+    set_id: int
+    session_id: int
+    plan_id: int
+    plan_name: str
+    trained_at: datetime
+    exercise_id: int
+    exercise_name: str
+    set_index: int
+    weight_kg: float
+    reps: int
+    volume: float
+    notes: Optional[str] = None
+
+
 class ShoppingListItemBase(BaseModel):
     name: str = Field(..., min_length=1, max_length=200)
     food_id: Optional[int] = None

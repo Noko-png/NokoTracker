@@ -490,6 +490,104 @@ export type WeightEntryCreate = {
 
 export type WeightEntryUpdate = Partial<WeightEntryCreate>;
 
+export type TrainingExercise = {
+  id: number;
+  plan_id: number;
+  name: string;
+  notes?: string | null;
+  position: number;
+  created_at: string;
+  updated_at: string;
+};
+
+export type TrainingExerciseCreate = {
+  name: string;
+  notes?: string | null;
+  position?: number;
+};
+
+export type TrainingExerciseUpdate = Partial<TrainingExerciseCreate>;
+
+export type TrainingPlan = {
+  id: number;
+  name: string;
+  notes?: string | null;
+  user_id?: number | null;
+  user?: User | null;
+  exercises: TrainingExercise[];
+  created_at: string;
+  updated_at: string;
+};
+
+export type TrainingPlanCreate = {
+  name: string;
+  notes?: string | null;
+  user_id?: number | null;
+  exercises?: TrainingExerciseCreate[];
+};
+
+export type TrainingPlanUpdate = Partial<Omit<TrainingPlanCreate, "exercises">>;
+
+export type TrainingSessionSetCreate = {
+  exercise_id: number;
+  set_index: number;
+  weight_kg: number;
+  reps: number;
+  notes?: string | null;
+};
+
+export type TrainingSessionSet = TrainingSessionSetCreate & {
+  id: number;
+  session_id: number;
+  exercise: TrainingExercise;
+  created_at: string;
+  updated_at: string;
+};
+
+export type TrainingSession = {
+  id: number;
+  trained_at: string;
+  notes?: string | null;
+  user_id?: number | null;
+  user?: User | null;
+  plan_id: number;
+  plan: Omit<TrainingPlan, "exercises" | "created_at" | "updated_at">;
+  sets: TrainingSessionSet[];
+  created_at: string;
+  updated_at: string;
+};
+
+export type TrainingSessionCreate = {
+  trained_at: string;
+  notes?: string | null;
+  user_id?: number | null;
+  plan_id: number;
+  sets: TrainingSessionSetCreate[];
+};
+
+export type TrainingSessionUpdate = Partial<TrainingSessionCreate>;
+
+export type TrainingExerciseResult = {
+  set_id: number;
+  session_id: number;
+  plan_id: number;
+  plan_name: string;
+  trained_at: string;
+  exercise_id: number;
+  exercise_name: string;
+  set_index: number;
+  weight_kg: number;
+  reps: number;
+  volume: number;
+  notes?: string | null;
+};
+
+export type TrainingResultSort =
+  | "date-desc"
+  | "weight-desc"
+  | "reps-desc"
+  | "volume-desc";
+
 export type MealInventoryDeductionItem = {
   food_id: number;
   name: string;
@@ -944,6 +1042,105 @@ export function deleteWeightEntry(id: number) {
   return request<void>(`/weight-entries/${id}`, {
     method: "DELETE",
   });
+}
+
+export function getTrainingPlans(limit = 500, userId?: number) {
+  const params = new URLSearchParams({ limit: String(limit) });
+  if (userId !== undefined) {
+    params.set("user_id", String(userId));
+  }
+  return request<TrainingPlan[]>(`/training/plans?${params.toString()}`);
+}
+
+export function createTrainingPlan(plan: TrainingPlanCreate) {
+  return request<TrainingPlan>("/training/plans", {
+    method: "POST",
+    body: plan,
+  });
+}
+
+export function updateTrainingPlan(id: number, plan: TrainingPlanUpdate) {
+  return request<TrainingPlan>(`/training/plans/${id}`, {
+    method: "PATCH",
+    body: plan,
+  });
+}
+
+export function deleteTrainingPlan(id: number) {
+  return request<void>(`/training/plans/${id}`, {
+    method: "DELETE",
+  });
+}
+
+export function createTrainingExercise(
+  planId: number,
+  exercise: TrainingExerciseCreate,
+) {
+  return request<TrainingExercise>(`/training/plans/${planId}/exercises`, {
+    method: "POST",
+    body: exercise,
+  });
+}
+
+export function updateTrainingExercise(
+  id: number,
+  exercise: TrainingExerciseUpdate,
+) {
+  return request<TrainingExercise>(`/training/exercises/${id}`, {
+    method: "PATCH",
+    body: exercise,
+  });
+}
+
+export function deleteTrainingExercise(id: number) {
+  return request<void>(`/training/exercises/${id}`, {
+    method: "DELETE",
+  });
+}
+
+export function getTrainingSessions(limit = 500, userId?: number) {
+  const params = new URLSearchParams({ limit: String(limit) });
+  if (userId !== undefined) {
+    params.set("user_id", String(userId));
+  }
+  return request<TrainingSession[]>(`/training/sessions?${params.toString()}`);
+}
+
+export function createTrainingSession(session: TrainingSessionCreate) {
+  return request<TrainingSession>("/training/sessions", {
+    method: "POST",
+    body: session,
+  });
+}
+
+export function updateTrainingSession(
+  id: number,
+  session: TrainingSessionUpdate,
+) {
+  return request<TrainingSession>(`/training/sessions/${id}`, {
+    method: "PATCH",
+    body: session,
+  });
+}
+
+export function deleteTrainingSession(id: number) {
+  return request<void>(`/training/sessions/${id}`, {
+    method: "DELETE",
+  });
+}
+
+export function getTrainingExerciseResults(
+  exerciseId: number,
+  sort: TrainingResultSort = "date-desc",
+  userId?: number,
+) {
+  const params = new URLSearchParams({ sort });
+  if (userId !== undefined) {
+    params.set("user_id", String(userId));
+  }
+  return request<TrainingExerciseResult[]>(
+    `/training/exercises/${exerciseId}/results?${params.toString()}`,
+  );
 }
 
 export function getShoppingList() {

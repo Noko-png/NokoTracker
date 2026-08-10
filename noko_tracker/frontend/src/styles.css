@@ -1129,6 +1129,171 @@ button {
   line-height: 1.35;
 }
 
+.training-page {
+  display: grid;
+  gap: 18px;
+}
+
+.training-hero {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 18px;
+}
+
+.training-hero h2 {
+  margin: 4px 0 0;
+}
+
+.training-summary {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(96px, 1fr));
+  gap: 10px;
+  min-width: min(100%, 520px);
+}
+
+.training-summary article,
+.training-plan-item,
+.training-exercise-row,
+.training-session-item,
+.training-result-row,
+.training-set-group {
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--surface-soft);
+}
+
+.training-summary article {
+  display: grid;
+  gap: 4px;
+  padding: 12px;
+}
+
+.training-summary span,
+.training-plan-item span,
+.training-exercise-row span,
+.training-session-item span,
+.training-session-sets,
+.training-result-row span {
+  color: var(--muted);
+  font-weight: 800;
+}
+
+.training-summary strong {
+  color: var(--text-strong);
+  font-size: 1.35rem;
+}
+
+.training-layout {
+  display: grid;
+  grid-template-columns: minmax(260px, 0.9fr) minmax(420px, 1.35fr) minmax(280px, 0.95fr);
+  gap: 18px;
+  align-items: start;
+}
+
+.training-column {
+  display: grid;
+  gap: 18px;
+}
+
+.single-column {
+  grid-template-columns: 1fr;
+}
+
+.training-plan-list,
+.training-exercise-list,
+.training-session-list,
+.training-results-list,
+.training-set-editor {
+  display: grid;
+  gap: 10px;
+}
+
+.training-exercise-list {
+  margin-top: 14px;
+}
+
+.training-plan-item,
+.training-exercise-row,
+.training-session-item,
+.training-result-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 12px;
+  padding: 12px;
+}
+
+.training-plan-item > div:first-child,
+.training-exercise-row > div:first-child,
+.training-session-item > div:first-child {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+}
+
+.training-plan-item strong,
+.training-exercise-row strong,
+.training-session-item strong,
+.training-result-row strong {
+  color: var(--text-strong);
+}
+
+.training-session-item {
+  grid-template-columns: minmax(150px, 0.8fr) minmax(0, 1fr) auto;
+}
+
+.training-session-sets {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.training-session-sets span {
+  padding: 5px 8px;
+  border-radius: 999px;
+  background: var(--surface);
+}
+
+.training-session-form {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.training-set-group {
+  display: grid;
+  gap: 10px;
+  padding: 12px;
+}
+
+.training-set-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.training-set-row {
+  display: grid;
+  grid-template-columns: 72px minmax(92px, 1fr) minmax(92px, 1fr) 38px;
+  align-items: end;
+  gap: 10px;
+}
+
+.training-set-row > span {
+  align-self: center;
+  color: var(--muted);
+  font-weight: 900;
+}
+
+.training-result-row {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.training-result-row div {
+  display: grid;
+  gap: 4px;
+}
+
 .food-name-with-emoji,
 .recipe-title-with-emoji {
   display: inline-flex;
@@ -6108,17 +6273,44 @@ th {
   .weight-workspace,
   .weight-form,
   .todo-workspace,
-  .todo-form {
+  .todo-form,
+  .training-layout,
+  .training-session-form {
     grid-template-columns: 1fr;
   }
 
-  .todo-hero {
+  .todo-hero,
+  .training-hero {
     align-items: stretch;
     flex-direction: column;
   }
 
   .todo-summary {
     grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .training-summary {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    min-width: 0;
+  }
+
+  .training-session-item {
+    grid-template-columns: minmax(0, 1fr) auto;
+    align-items: start;
+  }
+
+  .training-session-sets {
+    grid-column: 1 / -1;
+  }
+
+  .training-set-row,
+  .training-result-row {
+    grid-template-columns: 1fr;
+    align-items: stretch;
+  }
+
+  .training-set-row .icon-button {
+    justify-self: end;
   }
 
   .todo-item {

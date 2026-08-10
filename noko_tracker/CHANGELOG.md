@@ -1,5 +1,11 @@
 # Changelog
 
+## 2.0.0
+
+- Neues Training-Modul mit Sidebar-Kategorie zwischen Kalorientracker und Kalender.
+- Trainingsplaene, Plan-Uebungen und Trainingseinheiten mit Datum, Gewicht und Wiederholungen ergaenzt.
+- Uebungs-Auswertung mit Sortierung nach neuestem Ergebnis, bestem Gewicht, Wiederholungen und Volumen hinzugefuegt.
+
 ## 1.0.13.07
 
 - ToDo Tasks werden nicht mehr im Kalender oder als Termine angezeigt.
