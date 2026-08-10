@@ -3422,7 +3422,7 @@ th {
 
 .nutrition-log-nav {
   display: grid;
-  grid-template-columns: 44px 44px minmax(0, 1fr) 44px;
+  grid-template-columns: 44px minmax(0, 1fr) 44px 44px;
   align-items: center;
   gap: 14px;
 }
@@ -5891,10 +5891,6 @@ th {
     font-weight: 800;
   }
 
-  .app-shell[data-page="nutrition"] .mobile-app-bar {
-    display: none;
-  }
-
   .app-shell[data-page="foods"] .topbar {
     display: none;
   }
@@ -6961,7 +6957,7 @@ th {
     --track: #2c3d57;
     --timeline-line: #32496b;
     width: 100%;
-    min-height: 100dvh;
+    min-height: calc(100dvh - 64px);
     margin: 0;
     border: 0;
     border-radius: 0;
@@ -6970,13 +6966,13 @@ th {
   }
 
   .nutrition-log-shell {
-    min-height: 100dvh;
+    min-height: calc(100dvh - 64px);
     padding-bottom: 86px;
     background: var(--surface);
   }
 
   .nutrition-log-header {
-    top: 0;
+    top: 64px;
     gap: 12px;
     padding: 14px 18px 16px;
     border-bottom-color: var(--line);
@@ -6984,7 +6980,7 @@ th {
   }
 
   .nutrition-log-nav {
-    grid-template-columns: 38px 34px minmax(0, 1fr) 34px;
+    grid-template-columns: 34px minmax(0, 1fr) 34px 38px;
     gap: 9px;
   }
 

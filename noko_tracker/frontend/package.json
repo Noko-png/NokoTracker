@@ -1,7 +1,7 @@
 {
   "name": "heim-erp-frontend",
   "private": true,
-  "version": "1.0.13.05",
+  "version": "1.0.13.06",
   "type": "module",
   "scripts": {
     "dev": "vite --host 127.0.0.1",

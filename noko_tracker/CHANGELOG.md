@@ -1,5 +1,10 @@
 # Changelog
 
+## 1.0.13.06
+
+- Mobiler Kalorientracker zeigt die globale Sidebar-Leiste wieder an.
+- Kalorientracker-Tools-Button nach rechts verschoben, damit er nicht mit dem Sidebar-Menue ueberlappt.
+
 ## 1.0.13.05
 
 - ToDo Tracker als eigener Sidebar-Menuepunkt mit offenen Aufgaben und Verlauf erledigter Tasks ergaenzt.

@@ -483,7 +483,7 @@ const macroMeta: Array<{
   { key: "carbs", label: "Kohlenhydrate", unit: "g", tone: "red" },
 ];
 
-const appVersion = "1.0.13.05";
+const appVersion = "1.0.13.06";
 const updateSourceLabel = "main / github.com/Noko-png/NokoTracker";
 
 const emptyNutrition: NutritionDay = {
@@ -11013,14 +11013,6 @@ function NutritionPage({
           <div className="nutrition-log-nav">
             <button
               className="nutrition-icon-button"
-              onClick={() => setToolMenuOpen(true)}
-              title="Tools"
-              type="button"
-            >
-              <Menu size={24} />
-            </button>
-            <button
-              className="nutrition-icon-button"
               onClick={() => onDateChange(moveCalendarView(selectedDate, "day", -1))}
               title="Vorheriger Tag"
               type="button"
@@ -11035,6 +11027,14 @@ function NutritionPage({
               type="button"
             >
               <ChevronRight size={28} />
+            </button>
+            <button
+              className="nutrition-icon-button nutrition-tools-button"
+              onClick={() => setToolMenuOpen(true)}
+              title="Tools"
+              type="button"
+            >
+              <Menu size={24} />
             </button>
           </div>
           <div className="nutrition-week-strip">
