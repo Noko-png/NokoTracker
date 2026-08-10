@@ -1,5 +1,10 @@
 # Changelog
 
+## 2.0.5
+
+- Training-Planung in die Stammdaten verschoben.
+- Obere Training-Kennzahlen aus dem Trainingslog entfernt.
+
 ## 2.0.4
 
 - Trainingseinheiten zeigen standardmaessig drei Saetze pro Uebung.

@@ -1258,6 +1258,14 @@ button {
   align-items: start;
 }
 
+.training-log-layout {
+  grid-template-columns: minmax(0, 1.42fr) minmax(300px, 0.88fr);
+}
+
+.training-planning-layout {
+  grid-template-columns: minmax(300px, 0.9fr) minmax(0, 1.1fr);
+}
+
 .training-column {
   display: grid;
   gap: 14px;

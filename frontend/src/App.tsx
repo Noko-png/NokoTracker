@@ -259,7 +259,7 @@ type InventoryForm = {
   carbs_per_100g: string;
 };
 
-type MasterDataTab = "foods" | "locations" | "units" | "groups";
+type MasterDataTab = "foods" | "locations" | "units" | "groups" | "training";
 
 type RecipeSort = "name" | "tag" | "servings" | "calories" | "calories-desc";
 
@@ -522,7 +522,7 @@ const macroMeta: Array<{
   { key: "carbs", label: "Kohlenhydrate", unit: "g", tone: "red" },
 ];
 
-const appVersion = "2.0.4";
+const appVersion = "2.0.5";
 const updateSourceLabel = "main / github.com/Noko-png/NokoTracker";
 
 const emptyNutrition: NutritionDay = {
@@ -4124,43 +4124,61 @@ export default function App() {
 
         {activePage === "masterData" && (
           <section className="section master-data-main-section">
-            <MasterDataPanel
-              activeTab={activeMasterDataTab}
-              editingFoodId={editingFoodId}
-              editingProductGroupId={editingProductGroupId}
-              editingProductUnitId={editingProductUnitId}
-              editingStorageLocationId={editingStorageLocationId}
-              foodForm={foodForm}
-              foods={foods}
-              onCancelEditingFood={cancelEditingFood}
-              onCancelEditingProductGroup={cancelEditingProductGroup}
-              onCancelEditingProductUnit={cancelEditingProductUnit}
-              onCancelEditingStorageLocation={cancelEditingStorageLocation}
-              onDeleteFood={removeFood}
-              onDeleteProductGroup={removeProductGroup}
-              onDeleteProductUnit={removeProductUnit}
-              onDeleteStorageLocation={removeStorageLocation}
-              onEditFood={startEditingFood}
-              onEditProductGroup={startEditingProductGroup}
-              onEditProductUnit={startEditingProductUnit}
-              onEditStorageLocation={startEditingStorageLocation}
-              onFoodFormChange={setFoodForm}
-              onFoodSubmit={submitFood}
-              onProductGroupFormChange={setMasterProductGroupForm}
-              onProductGroupSubmit={submitMasterProductGroup}
-              onProductUnitFormChange={setMasterProductUnitForm}
-              onProductUnitSubmit={submitMasterProductUnit}
-              onStoreFood={startStoringFood}
-              onStorageLocationFormChange={setStorageLocationForm}
-              onStorageLocationSubmit={submitStorageLocation}
-              productGroupForm={masterProductGroupForm}
-              productGroups={productGroups}
-              productUnitForm={masterProductUnitForm}
-              productUnits={productUnits}
-              showTabs={false}
-              storageLocationForm={storageLocationForm}
-              storageLocations={storageLocations}
-            />
+            {activeMasterDataTab === "training" ? (
+              <TrainingPlanningPanel
+                editingPlanId={editingTrainingPlanId}
+                exerciseForm={trainingExerciseForm}
+                onCancelPlanEdit={cancelEditingTrainingPlan}
+                onDeleteExercise={removeTrainingExercise}
+                onDeletePlan={removeTrainingPlan}
+                onEditPlan={startEditingTrainingPlan}
+                onExerciseFormChange={setTrainingExerciseForm}
+                onExerciseSubmit={submitTrainingExercise}
+                onPlanFormChange={setTrainingPlanForm}
+                onPlanSubmit={submitTrainingPlan}
+                planForm={trainingPlanForm}
+                plans={trainingPlans}
+                selectedPlanId={trainingSessionForm.plan_id}
+              />
+            ) : (
+              <MasterDataPanel
+                activeTab={activeMasterDataTab}
+                editingFoodId={editingFoodId}
+                editingProductGroupId={editingProductGroupId}
+                editingProductUnitId={editingProductUnitId}
+                editingStorageLocationId={editingStorageLocationId}
+                foodForm={foodForm}
+                foods={foods}
+                onCancelEditingFood={cancelEditingFood}
+                onCancelEditingProductGroup={cancelEditingProductGroup}
+                onCancelEditingProductUnit={cancelEditingProductUnit}
+                onCancelEditingStorageLocation={cancelEditingStorageLocation}
+                onDeleteFood={removeFood}
+                onDeleteProductGroup={removeProductGroup}
+                onDeleteProductUnit={removeProductUnit}
+                onDeleteStorageLocation={removeStorageLocation}
+                onEditFood={startEditingFood}
+                onEditProductGroup={startEditingProductGroup}
+                onEditProductUnit={startEditingProductUnit}
+                onEditStorageLocation={startEditingStorageLocation}
+                onFoodFormChange={setFoodForm}
+                onFoodSubmit={submitFood}
+                onProductGroupFormChange={setMasterProductGroupForm}
+                onProductGroupSubmit={submitMasterProductGroup}
+                onProductUnitFormChange={setMasterProductUnitForm}
+                onProductUnitSubmit={submitMasterProductUnit}
+                onStoreFood={startStoringFood}
+                onStorageLocationFormChange={setStorageLocationForm}
+                onStorageLocationSubmit={submitStorageLocation}
+                productGroupForm={masterProductGroupForm}
+                productGroups={productGroups}
+                productUnitForm={masterProductUnitForm}
+                productUnits={productUnits}
+                showTabs={false}
+                storageLocationForm={storageLocationForm}
+                storageLocations={storageLocations}
+              />
+            )}
           </section>
         )}
 
@@ -4237,22 +4255,11 @@ export default function App() {
 
         {activePage === "training" && (
           <TrainingPage
-            editingPlanId={editingTrainingPlanId}
-            exerciseForm={trainingExerciseForm}
-            onCancelPlanEdit={cancelEditingTrainingPlan}
-            onDeleteExercise={removeTrainingExercise}
-            onDeletePlan={removeTrainingPlan}
             onDeleteSession={removeTrainingSession}
-            onEditPlan={startEditingTrainingPlan}
-            onExerciseFormChange={setTrainingExerciseForm}
-            onExerciseSubmit={submitTrainingExercise}
-            onPlanFormChange={setTrainingPlanForm}
-            onPlanSubmit={submitTrainingPlan}
             onResultSortChange={setTrainingResultSort}
             onSelectedExerciseChange={setSelectedTrainingExerciseId}
             onSessionFormChange={setTrainingSessionForm}
             onSessionSubmit={submitTrainingSession}
-            planForm={trainingPlanForm}
             plans={trainingPlans}
             resultSort={trainingResultSort}
             selectedExerciseId={selectedTrainingExerciseId}
@@ -4629,195 +4636,46 @@ function TodoPage({
   );
 }
 
-function TrainingPage({
+function TrainingPlanningPanel({
   editingPlanId,
   exerciseForm,
   onCancelPlanEdit,
   onDeleteExercise,
   onDeletePlan,
-  onDeleteSession,
   onEditPlan,
   onExerciseFormChange,
   onExerciseSubmit,
   onPlanFormChange,
   onPlanSubmit,
-  onResultSortChange,
-  onSelectedExerciseChange,
-  onSessionFormChange,
-  onSessionSubmit,
   planForm,
   plans,
-  resultSort,
-  selectedExerciseId,
-  sessionForm,
-  sessions,
+  selectedPlanId,
 }: {
   editingPlanId: number | null;
   exerciseForm: TrainingExerciseForm;
   onCancelPlanEdit: () => void;
   onDeleteExercise: (id: number) => void;
   onDeletePlan: (id: number) => void;
-  onDeleteSession: (id: number) => void;
   onEditPlan: (plan: TrainingPlan) => void;
   onExerciseFormChange: (value: TrainingExerciseForm) => void;
   onExerciseSubmit: (event: FormEvent) => void;
   onPlanFormChange: (value: TrainingPlanForm) => void;
   onPlanSubmit: (event: FormEvent) => void;
-  onResultSortChange: (value: TrainingResultSort) => void;
-  onSelectedExerciseChange: (value: string) => void;
-  onSessionFormChange: (value: TrainingSessionForm) => void;
-  onSessionSubmit: (event: FormEvent) => void;
   planForm: TrainingPlanForm;
   plans: TrainingPlan[];
-  resultSort: TrainingResultSort;
-  selectedExerciseId: string;
-  sessionForm: TrainingSessionForm;
-  sessions: TrainingSession[];
+  selectedPlanId: string;
 }) {
-  const allExercises = useMemo(
-    () =>
-      plans.flatMap((plan) =>
-        plan.exercises.map((exercise) => ({
-          ...exercise,
-          planName: plan.name,
-        })),
-      ),
-    [plans],
-  );
   const selectedPlan =
-    plans.find((plan) => String(plan.id) === sessionForm.plan_id) ?? null;
+    plans.find((plan) => String(plan.id) === selectedPlanId) ?? null;
   const exercisePlan =
     plans.find((plan) => String(plan.id) === exerciseForm.plan_id) ??
     selectedPlan ??
     plans[0] ??
     null;
-  const selectedExercise =
-    allExercises.find((exercise) => String(exercise.id) === selectedExerciseId) ??
-    allExercises[0] ??
-    null;
-
-  const results = useMemo<TrainingExerciseResult[]>(() => {
-    if (!selectedExercise) {
-      return [];
-    }
-
-    const rows = sessions.flatMap((session) =>
-      session.sets
-        .filter((set) => set.exercise_id === selectedExercise.id)
-        .map((set) => ({
-          set_id: set.id,
-          session_id: session.id,
-          plan_id: session.plan_id,
-          plan_name: session.plan.name,
-          trained_at: session.trained_at,
-          exercise_id: set.exercise_id,
-          exercise_name: set.exercise.name,
-          set_index: set.set_index,
-          weight_kg: set.weight_kg,
-          reps: set.reps,
-          volume: roundQuantity(set.weight_kg * set.reps),
-          notes: set.notes,
-        })),
-    );
-
-    const sorters: Record<TrainingResultSort, (row: TrainingExerciseResult) => number> = {
-      "date-desc": (row) => new Date(row.trained_at).getTime(),
-      "weight-desc": (row) => row.weight_kg,
-      "reps-desc": (row) => row.reps,
-      "volume-desc": (row) => row.volume,
-    };
-    return rows.sort((first, second) => sorters[resultSort](second) - sorters[resultSort](first));
-  }, [resultSort, selectedExercise, sessions]);
-
-  const sessionSummary = useMemo(() => {
-    const totalSessions = sessions.length;
-    const totalSets = sessions.reduce((sum, session) => sum + session.sets.length, 0);
-    const bestWeight = Math.max(0, ...sessions.flatMap((session) => session.sets.map((set) => set.weight_kg)));
-    return { totalSessions, totalSets, bestWeight };
-  }, [sessions]);
-  const latestSession = sessions[0] ?? null;
-
-  function changeSessionPlan(planId: string) {
-    const plan = plans.find((item) => String(item.id) === planId) ?? null;
-    onSessionFormChange({
-      ...createTrainingSessionFormForPlan(plan),
-      date: sessionForm.date,
-    });
-  }
-
-  function updateSessionSet(index: number, patch: Partial<TrainingSetForm>) {
-    onSessionFormChange({
-      ...sessionForm,
-      sets: sessionForm.sets.map((set, setIndex) =>
-        setIndex === index ? { ...set, ...patch } : set,
-      ),
-    });
-  }
-
-  function addSetForExercise(exercise: TrainingExercise) {
-    const setCount = sessionForm.sets.filter(
-      (set) => Number(set.exercise_id) === exercise.id,
-    ).length;
-    onSessionFormChange({
-      ...sessionForm,
-      sets: [
-        ...sessionForm.sets,
-        {
-          exercise_id: String(exercise.id),
-          set_index: String(setCount + 1),
-          weight_kg: "",
-          reps: "",
-          notes: "",
-        },
-      ],
-    });
-  }
-
-  function removeSessionSet(index: number) {
-    onSessionFormChange({
-      ...sessionForm,
-      sets: sessionForm.sets.filter((_, setIndex) => setIndex !== index),
-    });
-  }
 
   return (
-    <div className="training-page">
-      <section className="section training-hero">
-        <div className="training-hero-copy">
-          <span className="training-hero-icon">
-            <Dumbbell size={24} />
-          </span>
-          <div>
-            <p className="eyebrow">Training</p>
-            <h2>Trainingslog</h2>
-            <span>
-              {latestSession
-                ? `${latestSession.plan.name} - ${formatDate(getLocalDate(new Date(latestSession.trained_at)))}`
-                : "Noch keine Einheit gespeichert"}
-            </span>
-          </div>
-        </div>
-        <div className="training-summary">
-          <article>
-            <span>Plaene</span>
-            <strong>{plans.length}</strong>
-          </article>
-          <article>
-            <span>Einheiten</span>
-            <strong>{sessionSummary.totalSessions}</strong>
-          </article>
-          <article>
-            <span>Saetze</span>
-            <strong>{sessionSummary.totalSets}</strong>
-          </article>
-          <article>
-            <span>Bestgewicht</span>
-            <strong>{formatNumber(sessionSummary.bestWeight)} kg</strong>
-          </article>
-        </div>
-      </section>
-
-      <section className="training-layout">
+    <div className="training-page training-master-page">
+      <section className="training-layout training-planning-layout">
         <div className="training-column">
           <Panel title="Planung">
             <form className="form-grid training-plan-form" onSubmit={onPlanSubmit}>
@@ -4925,7 +4783,9 @@ function TrainingPage({
               </div>
             )}
           </Panel>
+        </div>
 
+        <div className="training-column">
           <Panel title="Trainingsplaene">
             <div className="training-plan-list">
               {plans.length === 0 ? (
@@ -4961,7 +4821,149 @@ function TrainingPage({
             </div>
           </Panel>
         </div>
+      </section>
+    </div>
+  );
+}
 
+function TrainingPage({
+  onDeleteSession,
+  onResultSortChange,
+  onSelectedExerciseChange,
+  onSessionFormChange,
+  onSessionSubmit,
+  plans,
+  resultSort,
+  selectedExerciseId,
+  sessionForm,
+  sessions,
+}: {
+  onDeleteSession: (id: number) => void;
+  onResultSortChange: (value: TrainingResultSort) => void;
+  onSelectedExerciseChange: (value: string) => void;
+  onSessionFormChange: (value: TrainingSessionForm) => void;
+  onSessionSubmit: (event: FormEvent) => void;
+  plans: TrainingPlan[];
+  resultSort: TrainingResultSort;
+  selectedExerciseId: string;
+  sessionForm: TrainingSessionForm;
+  sessions: TrainingSession[];
+}) {
+  const allExercises = useMemo(
+    () =>
+      plans.flatMap((plan) =>
+        plan.exercises.map((exercise) => ({
+          ...exercise,
+          planName: plan.name,
+        })),
+      ),
+    [plans],
+  );
+  const selectedPlan =
+    plans.find((plan) => String(plan.id) === sessionForm.plan_id) ?? null;
+  const selectedExercise =
+    allExercises.find((exercise) => String(exercise.id) === selectedExerciseId) ??
+    allExercises[0] ??
+    null;
+
+  const results = useMemo<TrainingExerciseResult[]>(() => {
+    if (!selectedExercise) {
+      return [];
+    }
+
+    const rows = sessions.flatMap((session) =>
+      session.sets
+        .filter((set) => set.exercise_id === selectedExercise.id)
+        .map((set) => ({
+          set_id: set.id,
+          session_id: session.id,
+          plan_id: session.plan_id,
+          plan_name: session.plan.name,
+          trained_at: session.trained_at,
+          exercise_id: set.exercise_id,
+          exercise_name: set.exercise.name,
+          set_index: set.set_index,
+          weight_kg: set.weight_kg,
+          reps: set.reps,
+          volume: roundQuantity(set.weight_kg * set.reps),
+          notes: set.notes,
+        })),
+    );
+
+    const sorters: Record<TrainingResultSort, (row: TrainingExerciseResult) => number> = {
+      "date-desc": (row) => new Date(row.trained_at).getTime(),
+      "weight-desc": (row) => row.weight_kg,
+      "reps-desc": (row) => row.reps,
+      "volume-desc": (row) => row.volume,
+    };
+    return rows.sort((first, second) => sorters[resultSort](second) - sorters[resultSort](first));
+  }, [resultSort, selectedExercise, sessions]);
+
+  const latestSession = sessions[0] ?? null;
+
+  function changeSessionPlan(planId: string) {
+    const plan = plans.find((item) => String(item.id) === planId) ?? null;
+    onSessionFormChange({
+      ...createTrainingSessionFormForPlan(plan),
+      date: sessionForm.date,
+    });
+  }
+
+  function updateSessionSet(index: number, patch: Partial<TrainingSetForm>) {
+    onSessionFormChange({
+      ...sessionForm,
+      sets: sessionForm.sets.map((set, setIndex) =>
+        setIndex === index ? { ...set, ...patch } : set,
+      ),
+    });
+  }
+
+  function addSetForExercise(exercise: TrainingExercise) {
+    const setCount = sessionForm.sets.filter(
+      (set) => Number(set.exercise_id) === exercise.id,
+    ).length;
+    onSessionFormChange({
+      ...sessionForm,
+      sets: [
+        ...sessionForm.sets,
+        {
+          exercise_id: String(exercise.id),
+          set_index: String(setCount + 1),
+          weight_kg: "",
+          reps: "",
+          notes: "",
+        },
+      ],
+    });
+  }
+
+  function removeSessionSet(index: number) {
+    onSessionFormChange({
+      ...sessionForm,
+      sets: sessionForm.sets.filter((_, setIndex) => setIndex !== index),
+    });
+  }
+
+  return (
+    <div className="training-page">
+      <section className="section training-hero">
+        <div className="training-hero-copy">
+          <span className="training-hero-icon">
+            <Dumbbell size={24} />
+          </span>
+          <div>
+            <p className="eyebrow">Training</p>
+            <h2>Trainingslog</h2>
+            <span>
+              {latestSession
+                ? `${latestSession.plan.name} - ${formatDate(getLocalDate(new Date(latestSession.trained_at)))}`
+                : "Noch keine Einheit gespeichert"}
+            </span>
+          </div>
+        </div>
+      </section>
+
+      <section className="training-layout training-log-layout">
         <div className="training-column wide">
           <Panel title="Trainingseinheit erfassen">
             <form className="form-grid training-session-form" onSubmit={onSessionSubmit}>
@@ -8106,6 +8108,7 @@ const masterDataTabs: Array<{ id: MasterDataTab; label: string }> = [
   { id: "locations", label: "Standorte" },
   { id: "units", label: "Mengeneinheiten" },
   { id: "groups", label: "Produktgruppen" },
+  { id: "training", label: "Training" },
 ];
 
 function MasterDataPanel({
