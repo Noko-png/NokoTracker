@@ -1,5 +1,11 @@
 # Changelog
 
+## 2.1.0
+
+- Kalorientracker gruppiert Mahlzeiten pro Stunden-Slot unterhalb des Plus-Buttons.
+- Jeder Stunden-Slot zeigt eine kompakte Summe fuer Kalorien, Protein, Fett und Kohlenhydrate.
+- Bestandsstatus fuer gebuchte/geplante Mahlzeiten sitzt jetzt in der Essenskarte und ueberlappt den Slot nicht mehr.
+
 ## 2.0.11
 
 - Datenbankimport prueft und zaehlt alle aktuellen NokoTracker-Tabellen.

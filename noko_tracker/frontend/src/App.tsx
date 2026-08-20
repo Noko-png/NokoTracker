@@ -522,7 +522,7 @@ const macroMeta: Array<{
   { key: "carbs", label: "Kohlenhydrate", unit: "g", tone: "red" },
 ];
 
-const appVersion = "2.0.11";
+const appVersion = "2.1.0";
 const updateSourceLabel = "main / github.com/Noko-png/NokoTracker";
 
 const emptyNutrition: NutritionDay = {
@@ -11543,7 +11543,7 @@ function NutritionPage({
         ),
     [mealLogs, nutrition.user_id, selectedDate],
   );
-  const mealLogSlotGroups = useMemo(() => {
+  const mealLogsBySlot = useMemo(() => {
     const groups = new Map<number, MealLog[]>();
 
     for (const mealLog of dayMealLogs) {
@@ -11557,10 +11557,7 @@ function NutritionPage({
       groups.set(slot, logs);
     }
 
-    return Array.from(groups.entries()).map(([slot, logs]) => ({
-      logs,
-      slot,
-    }));
+    return groups;
   }, [dayMealLogs]);
   const draggedMealLog =
     draggedMealLogId === null
@@ -11677,6 +11674,38 @@ function NutritionPage({
       values.protein,
       0,
     )}P ${formatNumber(values.fat, 0)}F ${formatNumber(values.carbs, 0)}C`;
+  }
+
+  function formatSlotMacroLine(values: MacroValues) {
+    return `${formatNumber(values.calories, 0)} kcal · P ${formatNumber(
+      values.protein,
+      0,
+    )} · F ${formatNumber(values.fat, 0)} · K ${formatNumber(values.carbs, 0)}`;
+  }
+
+  function addMacroValues(total: MacroValues, values: MacroValues) {
+    total.calories += values.calories;
+    total.protein += values.protein;
+    total.fat += values.fat;
+    total.carbs += values.carbs;
+  }
+
+  function mealLogsForHourSlot(slot: number) {
+    return [
+      ...(mealLogsBySlot.get(slot) ?? []),
+      ...(mealLogsBySlot.get(slot + 1) ?? []),
+    ].sort(
+      (first, second) =>
+        new Date(first.eaten_at).getTime() - new Date(second.eaten_at).getTime(),
+    );
+  }
+
+  function getMealLogTotals(logs: MealLog[]) {
+    const total = emptyNutritionValues();
+    for (const mealLog of logs) {
+      addMacroValues(total, getMealLogMacros(mealLog));
+    }
+    return total;
   }
 
   function macroProgress(key: keyof MacroValues) {
@@ -12207,98 +12236,116 @@ function NutritionPage({
             />
           ))}
           {hourSlots.map((slot) => (
-            <div
-              className="nutrition-hour-row"
-              key={`nutrition-hour-${slot}`}
-              style={{ gridRow: slot - timelineStartSlot + 1 }}
-            >
-              <span>{timeSlotLabel(slot)}</span>
-              <button onClick={() => openAddAt(slot)} type="button">
-                <Plus size={22} />
-              </button>
-            </div>
-          ))}
-          {mealLogSlotGroups.map(({ logs, slot }) => (
-            <div
-              className={`nutrition-time-entry-stack ${
-                logs.length > 1 ? "multiple" : ""
-              }`}
-              key={`meal-slot-${slot}`}
-              style={{
-                gridColumn: 3,
-                gridRow: `${slot - timelineStartSlot + 1} / ${Math.min(
-                  slot - timelineStartSlot + 3,
-                  timelineEndSlot - timelineStartSlot + 2,
-                )}`,
-              }}
-            >
-              {logs.map((mealLog) => {
-                const values = getMealLogMacros(mealLog);
+            (() => {
+              const logs = mealLogsForHourSlot(slot);
+              const slotTotals = getMealLogTotals(logs);
 
-                return (
-                  <article
-                    className={`nutrition-time-entry ${
-                      mealLog.quick_add_name
-                        ? "quick"
-                        : mealLog.food_id
-                          ? "food"
-                          : "recipe"
-                    } ${editingMealLogId === mealLog.id ? "editing" : ""}`}
-                    draggable
-                    key={mealLog.id}
-                    onDragEnd={() => setDraggedMealLogId(null)}
-                    onDragStart={() => setDraggedMealLogId(mealLog.id)}
+              return (
+                <div
+                  className={`nutrition-hour-row ${logs.length > 0 ? "has-entries" : ""}`}
+                  key={`nutrition-hour-${slot}`}
+                  onDragOver={(event) => event.preventDefault()}
+                  onDrop={(event) => {
+                    event.preventDefault();
+                    dropMealLog(slot);
+                  }}
+                  style={{ gridRow: slot - timelineStartSlot + 1 }}
+                >
+                  <span className="nutrition-hour-label">{timeSlotLabel(slot)}</span>
+                  <button
+                    className="nutrition-hour-add"
+                    onClick={() => openAddAt(slot)}
+                    type="button"
                   >
-                    <button
-                      className="nutrition-time-entry-main"
-                      onClick={() => onEdit(mealLog)}
-                      type="button"
+                    <Plus size={22} />
+                  </button>
+                  <div
+                    className={`nutrition-slot-summary ${
+                      logs.length === 0 ? "empty" : ""
+                    }`}
+                  >
+                    <strong>{formatSlotMacroLine(slotTotals)}</strong>
+                    <span>{logs.length} Eintrag{logs.length === 1 ? "" : "e"}</span>
+                  </div>
+                  {logs.length > 0 && (
+                    <div
+                      className={`nutrition-slot-entries ${
+                        logs.length > 1 ? "multiple" : ""
+                      }`}
                     >
-                      <strong>{getMealLogTitle(mealLog)}</strong>
-                      <span>
-                        {formatMacroLine(values)}
-                        {mealLog.quick_add_name
-                          ? ""
-                          : ` | ${formatFractionalQuantity(mealLog.quantity)} ${
-                              mealLog.unit
-                            }`}
-                        {mealLog.meal_type ? ` | ${mealLog.meal_type}` : ""}
-                      </span>
-                    </button>
-                    {mealLog.planned_inventory_deduction && (
-                      <span
-                        className={`nutrition-inventory-status ${
-                          mealLog.inventory_deducted_at ? "booked" : "pending"
-                        }`}
-                      >
-                        {mealLog.inventory_deducted_at
-                          ? "Bestand gebucht"
-                          : "Bestand geplant"}
-                      </span>
-                    )}
-                    {mealLog.planned_inventory_deduction &&
-                      !mealLog.inventory_deducted_at && (
-                        <button
-                          className="nutrition-card-edit"
-                          onClick={() => void onDeductMealLogInventory(mealLog.id)}
-                          title="Bestand buchen"
-                          type="button"
-                        >
-                          <Check size={17} />
-                        </button>
-                      )}
-                    <button
-                      className="nutrition-card-edit"
-                      onClick={() => onEdit(mealLog)}
-                      title="Bearbeiten"
-                      type="button"
-                    >
-                      <Pencil size={17} />
-                    </button>
-                  </article>
-                );
-              })}
-            </div>
+                      {logs.map((mealLog) => {
+                        const values = getMealLogMacros(mealLog);
+
+                        return (
+                          <article
+                            className={`nutrition-time-entry ${
+                              mealLog.quick_add_name
+                                ? "quick"
+                                : mealLog.food_id
+                                  ? "food"
+                                  : "recipe"
+                            } ${editingMealLogId === mealLog.id ? "editing" : ""}`}
+                            draggable
+                            key={mealLog.id}
+                            onDragEnd={() => setDraggedMealLogId(null)}
+                            onDragStart={() => setDraggedMealLogId(mealLog.id)}
+                          >
+                            <button
+                              className="nutrition-time-entry-main"
+                              onClick={() => onEdit(mealLog)}
+                              type="button"
+                            >
+                              <strong>{getMealLogTitle(mealLog)}</strong>
+                              <span>
+                                {getMealLogTime(mealLog)} · {formatMacroLine(values)}
+                                {mealLog.quick_add_name
+                                  ? ""
+                                  : ` · ${formatFractionalQuantity(mealLog.quantity)} ${
+                                      mealLog.unit
+                                    }`}
+                                {mealLog.meal_type ? ` · ${mealLog.meal_type}` : ""}
+                              </span>
+                              {mealLog.planned_inventory_deduction && (
+                                <span
+                                  className={`nutrition-inventory-status ${
+                                    mealLog.inventory_deducted_at ? "booked" : "pending"
+                                  }`}
+                                >
+                                  {mealLog.inventory_deducted_at
+                                    ? "Bestand gebucht"
+                                    : "Bestand geplant"}
+                                </span>
+                              )}
+                            </button>
+                            {mealLog.planned_inventory_deduction &&
+                              !mealLog.inventory_deducted_at && (
+                                <button
+                                  className="nutrition-card-edit"
+                                  onClick={() =>
+                                    void onDeductMealLogInventory(mealLog.id)
+                                  }
+                                  title="Bestand buchen"
+                                  type="button"
+                                >
+                                  <Check size={17} />
+                                </button>
+                              )}
+                            <button
+                              className="nutrition-card-edit"
+                              onClick={() => onEdit(mealLog)}
+                              title="Bearbeiten"
+                              type="button"
+                            >
+                              <Pencil size={17} />
+                            </button>
+                          </article>
+                        );
+                      })}
+                    </div>
+                  )}
+                </div>
+              );
+            })()
           ))}
         </div>
 

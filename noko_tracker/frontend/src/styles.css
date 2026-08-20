@@ -4075,8 +4075,8 @@ th {
   position: relative;
   z-index: 3;
   display: grid;
-  grid-column: 1 / 3;
-  grid-template-columns: 86px 46px;
+  grid-column: 1 / -1;
+  grid-template-columns: 86px 46px minmax(0, 1fr);
   align-items: start;
   min-height: 30px;
 }
@@ -4091,7 +4091,7 @@ th {
   content: "";
 }
 
-.nutrition-hour-row span {
+.nutrition-hour-label {
   z-index: 1;
   display: inline-grid;
   place-items: center;
@@ -4105,7 +4105,7 @@ th {
   font-weight: 800;
 }
 
-.nutrition-hour-row button {
+.nutrition-hour-add {
   z-index: 1;
   display: inline-grid;
   place-items: center;
@@ -4118,14 +4118,57 @@ th {
   color: var(--text-strong);
 }
 
-.nutrition-hour-row button:hover {
+.nutrition-hour-add:hover {
   background: var(--hover-soft);
+}
+
+.nutrition-slot-summary {
+  z-index: 1;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  min-height: 30px;
+  padding: 4px 0 4px 8px;
+  color: var(--text-strong);
+}
+
+.nutrition-slot-summary strong,
+.nutrition-slot-summary span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.nutrition-slot-summary strong {
+  font-size: 0.86rem;
+  font-weight: 900;
+}
+
+.nutrition-slot-summary span {
+  color: var(--muted);
+  font-size: 0.76rem;
+  font-weight: 850;
+}
+
+.nutrition-slot-summary.empty {
+  opacity: 0.58;
+}
+
+.nutrition-slot-entries {
+  z-index: 2;
+  display: grid;
+  grid-column: 2 / -1;
+  gap: 6px;
+  min-width: 0;
+  margin: 4px 4px 10px 8px;
 }
 
 .nutrition-time-entry {
   z-index: 4;
   display: grid;
-  grid-template-columns: minmax(0, 1fr) auto auto auto;
+  grid-template-columns: minmax(0, 1fr) auto auto;
   align-items: center;
   gap: 10px;
   min-height: 60px;
@@ -4185,6 +4228,15 @@ th {
   font-size: 0.9rem;
 }
 
+.nutrition-time-entry-main .nutrition-inventory-status {
+  justify-self: start;
+  overflow: visible;
+  max-width: 100%;
+  color: var(--green);
+  text-overflow: clip;
+  white-space: normal;
+}
+
 .nutrition-time-entry-stack {
   z-index: 4;
   display: grid;
@@ -4201,7 +4253,12 @@ th {
 }
 
 .nutrition-time-entry-stack.multiple .nutrition-time-entry {
-  grid-template-columns: minmax(0, 1fr) auto 36px 36px;
+  grid-template-columns: minmax(0, 1fr) 36px 36px;
+  min-height: 48px;
+  padding: 8px 10px 8px 14px;
+}
+
+.nutrition-slot-entries.multiple .nutrition-time-entry {
   min-height: 48px;
   padding: 8px 10px 8px 14px;
 }
@@ -7587,7 +7644,7 @@ th {
   }
 
   .nutrition-hour-row {
-    grid-template-columns: 70px 44px;
+    grid-template-columns: 70px 44px minmax(0, 1fr);
     min-height: 26px;
   }
 
@@ -7598,7 +7655,7 @@ th {
     background: var(--timeline-line);
   }
 
-  .nutrition-hour-row span {
+  .nutrition-hour-label {
     width: 62px;
     min-height: 28px;
     margin-left: 8px;
@@ -7608,12 +7665,34 @@ th {
     font-weight: 950;
   }
 
-  .nutrition-hour-row button {
+  .nutrition-hour-add {
     width: 30px;
     height: 30px;
     margin-left: 7px;
     background: #2d3c53;
     color: var(--text-strong);
+  }
+
+  .nutrition-slot-summary {
+    align-content: center;
+    gap: 4px 7px;
+    min-height: 30px;
+    padding: 0 0 0 8px;
+  }
+
+  .nutrition-slot-summary strong {
+    width: 100%;
+    font-size: 0.72rem;
+  }
+
+  .nutrition-slot-summary span {
+    font-size: 0.66rem;
+  }
+
+  .nutrition-slot-entries {
+    grid-column: 2 / -1;
+    gap: 6px;
+    margin: 4px 0 8px 8px;
   }
 
   .nutrition-time-entry-stack {
@@ -7622,8 +7701,9 @@ th {
   }
 
   .nutrition-time-entry,
-  .nutrition-time-entry-stack.multiple .nutrition-time-entry {
-    grid-template-columns: minmax(0, 1fr) 40px;
+  .nutrition-time-entry-stack.multiple .nutrition-time-entry,
+  .nutrition-slot-entries.multiple .nutrition-time-entry {
+    grid-template-columns: minmax(0, 1fr) 40px 40px;
     min-height: 52px;
     padding: 8px 10px 8px 14px;
     border: 0;
@@ -7648,16 +7728,16 @@ th {
   .nutrition-time-entry-stack.multiple .nutrition-time-entry-main span {
     color: #c8d0dc;
     font-size: 0.88rem;
-    white-space: nowrap;
+    white-space: normal;
   }
 
   .nutrition-inventory-status {
-    grid-column: 1 / -1;
     justify-self: start;
   }
 
   .nutrition-card-edit,
-  .nutrition-time-entry-stack.multiple .nutrition-card-edit {
+  .nutrition-time-entry-stack.multiple .nutrition-card-edit,
+  .nutrition-slot-entries.multiple .nutrition-card-edit {
     min-width: 40px;
     min-height: 40px;
     background: #343a44;
