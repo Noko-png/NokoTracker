@@ -1575,22 +1575,41 @@ button {
 
 .training-set-row {
   display: grid;
-  grid-template-columns: 64px minmax(86px, 0.7fr) minmax(78px, 0.62fr) minmax(120px, 1fr) 38px;
-  align-items: end;
-  gap: 8px;
+  gap: 6px;
   padding: 8px;
   border-radius: 8px;
   background: var(--field-bg);
 }
 
-.training-set-row > span {
+.training-set-main-row {
+  display: grid;
+  grid-template-columns: 64px minmax(86px, 0.7fr) minmax(78px, 0.62fr) 38px 38px;
+  align-items: end;
+  gap: 8px;
+}
+
+.training-set-main-row > span {
   align-self: center;
   color: var(--muted);
   font-weight: 900;
 }
 
+.training-set-main-row label {
+  min-width: 0;
+}
+
+.training-set-main-row input {
+  min-height: 38px;
+}
+
 .training-set-note {
   min-width: 0;
+}
+
+.training-note-toggle.active {
+  border-color: color-mix(in srgb, var(--training-accent) 52%, var(--line));
+  background: color-mix(in srgb, var(--training-accent) 18%, var(--field-bg));
+  color: var(--training-accent);
 }
 
 .training-result-row {
@@ -6679,20 +6698,55 @@ th {
     overflow-x: auto;
   }
 
-  .training-set-row,
   .training-result-row {
     grid-template-columns: 1fr;
     align-items: stretch;
+  }
+
+  .training-set-row {
+    gap: 6px;
+    padding: 7px;
+  }
+
+  .training-set-main-row {
+    grid-template-columns: minmax(42px, 0.72fr) minmax(66px, 1fr) minmax(62px, 0.92fr) 34px 34px;
+    gap: 5px;
+  }
+
+  .training-set-main-row > span {
+    font-size: 0.74rem;
+    line-height: 1.1;
+  }
+
+  .training-set-main-row label {
+    gap: 3px;
+    font-size: 0.66rem;
+  }
+
+  .training-set-main-row input {
+    min-height: 34px;
+    padding: 6px 7px;
+  }
+
+  .training-set-main-row .icon-button {
+    width: 34px;
+    min-width: 34px;
+    min-height: 34px;
+  }
+
+  .training-set-note {
+    padding-top: 2px;
+  }
+
+  .training-set-note input {
+    min-height: 34px;
+    padding: 6px 8px;
   }
 
   .training-history-head,
   .training-history-row {
     grid-template-columns: minmax(118px, 0.8fr) repeat(5, minmax(96px, 1fr));
     min-width: 660px;
-  }
-
-  .training-set-row .icon-button {
-    justify-self: end;
   }
 
   .todo-item {

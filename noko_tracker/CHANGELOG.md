@@ -1,5 +1,11 @@
 # Changelog
 
+## 2.1.1
+
+- Trainingseinheit-Erfassung auf dem Handy kompakter skaliert.
+- Satzzeilen zeigen kg, Wiederholungen, Notiz-Button und Loeschen nebeneinander.
+- Satznotizen werden erst nach Klick auf den Notiz-Button eingeblendet.
+
 ## 2.1.0
 
 - Kalorientracker gruppiert Mahlzeiten pro Stunden-Slot unterhalb des Plus-Buttons.

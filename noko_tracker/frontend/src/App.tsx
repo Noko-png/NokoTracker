@@ -522,7 +522,7 @@ const macroMeta: Array<{
   { key: "carbs", label: "Kohlenhydrate", unit: "g", tone: "red" },
 ];
 
-const appVersion = "2.1.0";
+const appVersion = "2.1.1";
 const updateSourceLabel = "main / github.com/Noko-png/NokoTracker";
 
 const emptyNutrition: NutritionDay = {
@@ -5138,6 +5138,9 @@ function TrainingPage({
   sessionForm: TrainingSessionForm;
   sessions: TrainingSession[];
 }) {
+  const [openTrainingSetNotes, setOpenTrainingSetNotes] = useState<Set<string>>(
+    () => new Set(),
+  );
   const allExercises = useMemo(
     () =>
       plans.flatMap((plan) =>
@@ -5237,6 +5240,18 @@ function TrainingPage({
     });
   }
 
+  function toggleTrainingSetNote(noteKey: string, hasNote: boolean) {
+    setOpenTrainingSetNotes((currentKeys) => {
+      const nextKeys = new Set(currentKeys);
+      if (nextKeys.has(noteKey) && !hasNote) {
+        nextKeys.delete(noteKey);
+      } else {
+        nextKeys.add(noteKey);
+      }
+      return nextKeys;
+    });
+  }
+
   return (
     <div className="training-page">
       <section className="section training-hero">
@@ -5318,43 +5333,77 @@ function TrainingPage({
                             Satz erfassen
                           </button>
                         ) : (
-                          rows.map(({ set, index }) => (
-                            <div className="training-set-row" key={`${exercise.id}-${index}`}>
-                              <span>Satz {set.set_index}</span>
-                              <FractionNumberInput
-                                label="kg"
-                                onChange={(weight_kg) =>
-                                  updateSessionSet(index, { weight_kg })
-                                }
-                                value={set.weight_kg}
-                              />
-                              <NumberInput
-                                label="Wdh."
-                                min="1"
-                                onChange={(reps) => updateSessionSet(index, { reps })}
-                                value={set.reps}
-                              />
-                              <label className="training-set-note">
-                                <span>Notiz</span>
-                                <input
-                                  onChange={(event) =>
-                                    updateSessionSet(index, {
-                                      notes: event.target.value,
-                                    })
-                                  }
-                                  value={set.notes}
-                                />
-                              </label>
-                              <button
-                                className="icon-button danger"
-                                onClick={() => removeSessionSet(index)}
-                                title="Satz entfernen"
-                                type="button"
+                          rows.map(({ set, index }) => {
+                            const noteKey = `${sessionForm.plan_id}-${exercise.id}-${index}`;
+                            const hasNote = set.notes.trim() !== "";
+                            const noteOpen =
+                              hasNote || openTrainingSetNotes.has(noteKey);
+
+                            return (
+                              <div
+                                className={`training-set-row ${
+                                  noteOpen ? "has-note" : ""
+                                }`}
+                                key={`${exercise.id}-${index}`}
                               >
-                                <Trash2 size={16} />
-                              </button>
-                            </div>
-                          ))
+                                <div className="training-set-main-row">
+                                  <span>Satz {set.set_index}</span>
+                                  <FractionNumberInput
+                                    label="kg"
+                                    onChange={(weight_kg) =>
+                                      updateSessionSet(index, { weight_kg })
+                                    }
+                                    value={set.weight_kg}
+                                  />
+                                  <NumberInput
+                                    label="Wdh."
+                                    min="1"
+                                    onChange={(reps) =>
+                                      updateSessionSet(index, { reps })
+                                    }
+                                    value={set.reps}
+                                  />
+                                  <button
+                                    className={`icon-button training-note-toggle ${
+                                      noteOpen ? "active" : ""
+                                    }`}
+                                    onClick={() =>
+                                      toggleTrainingSetNote(noteKey, hasNote)
+                                    }
+                                    title={
+                                      noteOpen
+                                        ? "Notiz bearbeiten"
+                                        : "Notiz hinzufuegen"
+                                    }
+                                    type="button"
+                                  >
+                                    <Pencil size={15} />
+                                  </button>
+                                  <button
+                                    className="icon-button danger"
+                                    onClick={() => removeSessionSet(index)}
+                                    title="Satz entfernen"
+                                    type="button"
+                                  >
+                                    <Trash2 size={16} />
+                                  </button>
+                                </div>
+                                {noteOpen && (
+                                  <label className="training-set-note">
+                                    <span>Notiz</span>
+                                    <input
+                                      onChange={(event) =>
+                                        updateSessionSet(index, {
+                                          notes: event.target.value,
+                                        })
+                                      }
+                                      value={set.notes}
+                                    />
+                                  </label>
+                                )}
+                              </div>
+                            );
+                          })
                         )}
                       </article>
                     );
