@@ -1,5 +1,9 @@
 # Changelog
 
+## 2.1.8
+
+- Kalorientracker zeigt Slot-Naehrwerte und Eintragszaehler nur noch bei Slots mit eingetragenen Mahlzeiten.
+
 ## 2.1.7
 
 - Trainingseinheit-Erfassung zeigt pro Plan, Uebung und Satz den letzten gespeicherten kg-/Wdh.-Wert als hellen Altwert im Eingabefeld.

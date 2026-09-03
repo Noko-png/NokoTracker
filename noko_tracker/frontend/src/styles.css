@@ -4230,10 +4230,6 @@ th {
   justify-self: end;
 }
 
-.nutrition-slot-summary.empty {
-  opacity: 0.58;
-}
-
 .nutrition-slot-entries {
   z-index: 2;
   display: grid;

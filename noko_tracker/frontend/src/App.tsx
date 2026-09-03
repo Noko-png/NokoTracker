@@ -520,7 +520,7 @@ const macroMeta: Array<{
   { key: "carbs", label: "Kohlenhydrate", unit: "g", tone: "red" },
 ];
 
-const appVersion = "2.1.7";
+const appVersion = "2.1.8";
 const updateSourceLabel = "main / github.com/Noko-png/NokoTracker";
 
 const emptyNutrition: NutritionDay = {
@@ -12286,23 +12286,21 @@ function NutritionPage({
                   >
                     <Plus size={22} />
                   </button>
-                  <div
-                    className={`nutrition-slot-summary ${
-                      logs.length === 0 ? "empty" : ""
-                    }`}
-                  >
-                    {macroMeta.map((macro) => (
-                      <span className={macro.tone} key={macro.key}>
-                        <strong>{formatNumber(slotTotals[macro.key], 0)}</strong>
-                        <small>
-                          {macro.key === "calories"
-                            ? "kcal"
-                            : macro.label.slice(0, 1)}
-                        </small>
-                      </span>
-                    ))}
-                    <em>{logs.length} Eintrag{logs.length === 1 ? "" : "e"}</em>
-                  </div>
+                  {logs.length > 0 && (
+                    <div className="nutrition-slot-summary">
+                      {macroMeta.map((macro) => (
+                        <span className={macro.tone} key={macro.key}>
+                          <strong>{formatNumber(slotTotals[macro.key], 0)}</strong>
+                          <small>
+                            {macro.key === "calories"
+                              ? "kcal"
+                              : macro.label.slice(0, 1)}
+                          </small>
+                        </span>
+                      ))}
+                      <em>{logs.length} Eintrag{logs.length === 1 ? "" : "e"}</em>
+                    </div>
+                  )}
                   {logs.length > 0 && (
                     <div
                       className={`nutrition-slot-entries ${
