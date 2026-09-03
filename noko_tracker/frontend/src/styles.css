@@ -1594,6 +1594,36 @@ button {
   font-weight: 900;
 }
 
+.training-set-field {
+  position: relative;
+  min-width: 0;
+}
+
+.training-set-field label {
+  min-width: 0;
+  width: 100%;
+}
+
+.training-set-field.has-previous input {
+  padding-right: 88px;
+}
+
+.training-set-previous {
+  position: absolute;
+  right: 10px;
+  bottom: 12px;
+  max-width: 76px;
+  overflow: hidden;
+  color: color-mix(in srgb, var(--text-strong) 62%, var(--muted));
+  font-size: 0.72rem;
+  font-weight: 900;
+  line-height: 1;
+  opacity: 0.7;
+  pointer-events: none;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .training-set-main-row label {
   min-width: 0;
 }
@@ -6752,9 +6782,20 @@ th {
     font-size: 0.66rem;
   }
 
+  .training-set-previous {
+    right: 6px;
+    bottom: 9px;
+    max-width: 42px;
+    font-size: 0.58rem;
+  }
+
   .training-set-main-row input {
     min-height: 34px;
     padding: 6px 7px;
+  }
+
+  .training-set-field.has-previous input {
+    padding-right: 48px;
   }
 
   .training-set-main-row .icon-button {

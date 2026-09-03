@@ -520,7 +520,7 @@ const macroMeta: Array<{
   { key: "carbs", label: "Kohlenhydrate", unit: "g", tone: "red" },
 ];
 
-const appVersion = "2.1.6";
+const appVersion = "2.1.7";
 const updateSourceLabel = "main / github.com/Noko-png/NokoTracker";
 
 const emptyNutrition: NutritionDay = {
@@ -4837,6 +4837,16 @@ type TrainingExerciseHistoryResult = {
   weightKg: number;
 };
 
+type PreviousTrainingSetResult = {
+  date: string;
+  reps: number;
+  weightKg: number;
+};
+
+function previousTrainingSetKey(exerciseId: number, setIndex: number) {
+  return `${exerciseId}-${setIndex}`;
+}
+
 function latestResultsForExercise(
   sessions: TrainingSession[],
   exerciseId: number,
@@ -5157,6 +5167,40 @@ function TrainingPage({
   );
   const selectedPlan =
     plans.find((plan) => String(plan.id) === sessionForm.plan_id) ?? null;
+  const previousSetResults = useMemo(() => {
+    const results = new Map<string, PreviousTrainingSetResult>();
+    if (!selectedPlan) {
+      return results;
+    }
+
+    const parsedCutoffTime = sessionForm.date
+      ? new Date(`${sessionForm.date}T23:59:59`).getTime()
+      : Number.POSITIVE_INFINITY;
+    const cutoffTime = Number.isFinite(parsedCutoffTime)
+      ? parsedCutoffTime
+      : Number.POSITIVE_INFINITY;
+    for (const session of sortTrainingSessionsNewestFirst(sessions)) {
+      const trainedAt = new Date(session.trained_at).getTime();
+      if (session.plan_id !== selectedPlan.id || trainedAt > cutoffTime) {
+        continue;
+      }
+
+      for (const set of [...session.sets].sort(
+        (first, second) => first.set_index - second.set_index || first.id - second.id,
+      )) {
+        const key = previousTrainingSetKey(set.exercise_id, set.set_index);
+        if (!results.has(key)) {
+          results.set(key, {
+            date: getLocalDate(new Date(session.trained_at)),
+            reps: set.reps,
+            weightKg: set.weight_kg,
+          });
+        }
+      }
+    }
+
+    return results;
+  }, [selectedPlan, sessionForm.date, sessions]);
   const recentSessions = useMemo(
     () => sortTrainingSessionsNewestFirst(sessions).slice(0, 5),
     [sessions],
@@ -5304,6 +5348,15 @@ function TrainingPage({
                             const hasNote = set.notes.trim() !== "";
                             const noteOpen =
                               hasNote || openTrainingSetNotes.has(noteKey);
+                            const previousSet = previousSetResults.get(
+                              previousTrainingSetKey(
+                                exercise.id,
+                                Math.trunc(toNumber(set.set_index, index + 1)),
+                              ),
+                            );
+                            const previousDate = previousSet
+                              ? formatDate(previousSet.date)
+                              : "";
 
                             return (
                               <div
@@ -5314,21 +5367,49 @@ function TrainingPage({
                               >
                                 <div className="training-set-main-row">
                                   <span>Satz {set.set_index}</span>
-                                  <FractionNumberInput
-                                    label="kg"
-                                    onChange={(weight_kg) =>
-                                      updateSessionSet(index, { weight_kg })
-                                    }
-                                    value={set.weight_kg}
-                                  />
-                                  <NumberInput
-                                    label="Wdh."
-                                    min="1"
-                                    onChange={(reps) =>
-                                      updateSessionSet(index, { reps })
-                                    }
-                                    value={set.reps}
-                                  />
+                                  <div
+                                    className={`training-set-field ${
+                                      previousSet ? "has-previous" : ""
+                                    }`}
+                                  >
+                                    <FractionNumberInput
+                                      label="kg"
+                                      onChange={(weight_kg) =>
+                                        updateSessionSet(index, { weight_kg })
+                                      }
+                                      value={set.weight_kg}
+                                    />
+                                    {previousSet && (
+                                      <span
+                                        className="training-set-previous"
+                                        title={`Alter Wert vom ${previousDate}`}
+                                      >
+                                        alt {formatNumber(previousSet.weightKg)} kg
+                                      </span>
+                                    )}
+                                  </div>
+                                  <div
+                                    className={`training-set-field ${
+                                      previousSet ? "has-previous" : ""
+                                    }`}
+                                  >
+                                    <NumberInput
+                                      label="Wdh."
+                                      min="1"
+                                      onChange={(reps) =>
+                                        updateSessionSet(index, { reps })
+                                      }
+                                      value={set.reps}
+                                    />
+                                    {previousSet && (
+                                      <span
+                                        className="training-set-previous"
+                                        title={`Alter Wert vom ${previousDate}`}
+                                      >
+                                        alt {previousSet.reps}
+                                      </span>
+                                    )}
+                                  </div>
                                   <button
                                     className={`icon-button training-note-toggle ${
                                       noteOpen ? "active" : ""

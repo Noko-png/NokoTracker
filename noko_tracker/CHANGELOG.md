@@ -1,5 +1,9 @@
 # Changelog
 
+## 2.1.7
+
+- Trainingseinheit-Erfassung zeigt pro Plan, Uebung und Satz den letzten gespeicherten kg-/Wdh.-Wert als hellen Altwert im Eingabefeld.
+
 ## 2.1.6
 
 - Kalorientracker-Rasterfelder sind nicht mehr per Maus auswählbar.
