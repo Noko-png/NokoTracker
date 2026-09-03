@@ -85,9 +85,7 @@ import {
   type StorageLocationUpdate,
   type ThemeName,
   type TrainingExercise,
-  type TrainingExerciseResult,
   type TrainingPlan,
-  type TrainingResultSort,
   type TrainingSession,
   type User,
   type UserCreate,
@@ -522,7 +520,7 @@ const macroMeta: Array<{
   { key: "carbs", label: "Kohlenhydrate", unit: "g", tone: "red" },
 ];
 
-const appVersion = "2.1.4";
+const appVersion = "2.1.5";
 const updateSourceLabel = "main / github.com/Noko-png/NokoTracker";
 
 const emptyNutrition: NutritionDay = {
@@ -2072,10 +2070,6 @@ export default function App() {
       () => readStoredTrainingSessionDraft() ?? initialTrainingSessionForm,
     );
   const trainingSessionFormRef = useRef(trainingSessionForm);
-  const [selectedTrainingExerciseId, setSelectedTrainingExerciseId] =
-    useState("");
-  const [trainingResultSort, setTrainingResultSort] =
-    useState<TrainingResultSort>("date-desc");
   const [shoppingForm, setShoppingForm] =
     useState<ShoppingForm>(initialShoppingForm);
   const [calendarForm, setCalendarForm] = useState<CalendarForm>(
@@ -2177,16 +2171,7 @@ export default function App() {
         plan_id: String(selectedPlan.id),
       }));
     }
-
-    const allExercises = trainingPlans.flatMap((plan) => plan.exercises);
-    if (
-      allExercises.length > 0 &&
-      !allExercises.some((exercise) => String(exercise.id) === selectedTrainingExerciseId)
-    ) {
-      setSelectedTrainingExerciseId(String(allExercises[0].id));
-    }
   }, [
-    selectedTrainingExerciseId,
     trainingExerciseForm.plan_id,
     trainingPlans,
     trainingSessionForm.plan_id,
@@ -3584,7 +3569,6 @@ export default function App() {
         cancelEditingTrainingPlan();
       }
       setTrainingSessionForm(initialTrainingSessionForm);
-      setSelectedTrainingExerciseId("");
     });
   }
 
@@ -3623,7 +3607,6 @@ export default function App() {
             }
           : form,
       );
-      setSelectedTrainingExerciseId(String(exercise.id));
       await loadData();
     } catch (error) {
       setApiError(error instanceof Error ? error.message : "API-Fehler");
@@ -3640,9 +3623,6 @@ export default function App() {
         ...form,
         sets: form.sets.filter((set) => Number(set.exercise_id) !== exerciseId),
       }));
-      if (selectedTrainingExerciseId === String(exerciseId)) {
-        setSelectedTrainingExerciseId("");
-      }
     });
   }
 
@@ -4370,13 +4350,9 @@ export default function App() {
         {activePage === "training" && (
           <TrainingPage
             onDeleteSession={removeTrainingSession}
-            onResultSortChange={setTrainingResultSort}
-            onSelectedExerciseChange={setSelectedTrainingExerciseId}
             onSessionFormChange={setTrainingSessionForm}
             onSessionSubmit={submitTrainingSession}
             plans={trainingPlans}
-            resultSort={trainingResultSort}
-            selectedExerciseId={selectedTrainingExerciseId}
             sessionForm={trainingSessionForm}
             sessions={trainingSessions}
           />
@@ -5163,80 +5139,24 @@ function TrainingPlanningPanel({
 
 function TrainingPage({
   onDeleteSession,
-  onResultSortChange,
-  onSelectedExerciseChange,
   onSessionFormChange,
   onSessionSubmit,
   plans,
-  resultSort,
-  selectedExerciseId,
   sessionForm,
   sessions,
 }: {
   onDeleteSession: (id: number) => void;
-  onResultSortChange: (value: TrainingResultSort) => void;
-  onSelectedExerciseChange: (value: string) => void;
   onSessionFormChange: (value: TrainingSessionForm) => void;
   onSessionSubmit: (event: FormEvent) => void;
   plans: TrainingPlan[];
-  resultSort: TrainingResultSort;
-  selectedExerciseId: string;
   sessionForm: TrainingSessionForm;
   sessions: TrainingSession[];
 }) {
   const [openTrainingSetNotes, setOpenTrainingSetNotes] = useState<Set<string>>(
     () => new Set(),
   );
-  const allExercises = useMemo(
-    () =>
-      plans.flatMap((plan) =>
-        plan.exercises.map((exercise) => ({
-          ...exercise,
-          planName: plan.name,
-        })),
-      ),
-    [plans],
-  );
   const selectedPlan =
     plans.find((plan) => String(plan.id) === sessionForm.plan_id) ?? null;
-  const selectedExercise =
-    allExercises.find((exercise) => String(exercise.id) === selectedExerciseId) ??
-    allExercises[0] ??
-    null;
-
-  const results = useMemo<TrainingExerciseResult[]>(() => {
-    if (!selectedExercise) {
-      return [];
-    }
-
-    const rows = sessions.flatMap((session) =>
-      session.sets
-        .filter((set) => set.exercise_id === selectedExercise.id)
-        .map((set) => ({
-          set_id: set.id,
-          session_id: session.id,
-          plan_id: session.plan_id,
-          plan_name: session.plan.name,
-          trained_at: session.trained_at,
-          exercise_id: set.exercise_id,
-          exercise_name: set.exercise.name,
-          set_index: set.set_index,
-          weight_kg: set.weight_kg,
-          reps: set.reps,
-          volume: roundQuantity(set.weight_kg * set.reps),
-          notes: set.notes,
-        })),
-    );
-
-    const sorters: Record<TrainingResultSort, (row: TrainingExerciseResult) => number> = {
-      "date-desc": (row) => new Date(row.trained_at).getTime(),
-      "weight-desc": (row) => row.weight_kg,
-      "reps-desc": (row) => row.reps,
-      "volume-desc": (row) => row.volume,
-    };
-    return rows.sort((first, second) => sorters[resultSort](second) - sorters[resultSort](first));
-  }, [resultSort, selectedExercise, sessions]);
-
   const recentSessions = useMemo(
     () => sortTrainingSessionsNewestFirst(sessions).slice(0, 5),
     [sessions],
@@ -5479,63 +5399,6 @@ function TrainingPage({
           </Panel>
         </div>
 
-        <div className="training-column">
-          <Panel title="Uebungs-Ergebnisse">
-            <div className="form-grid single-column">
-              <label>
-                <span>Uebung</span>
-                <select
-                  onChange={(event) => onSelectedExerciseChange(event.target.value)}
-                  value={selectedExercise ? String(selectedExercise.id) : ""}
-                >
-                  <option value="">Uebung waehlen</option>
-                  {allExercises.map((exercise) => (
-                    <option key={exercise.id} value={exercise.id}>
-                      {exercise.name} - {exercise.planName}
-                    </option>
-                  ))}
-                </select>
-              </label>
-              <label>
-                <span>Sortierung</span>
-                <select
-                  onChange={(event) =>
-                    onResultSortChange(event.target.value as TrainingResultSort)
-                  }
-                  value={resultSort}
-                >
-                  <option value="date-desc">Neueste zuerst</option>
-                  <option value="weight-desc">Bestes Gewicht</option>
-                  <option value="reps-desc">Meiste Wiederholungen</option>
-                  <option value="volume-desc">Bestes Volumen</option>
-                </select>
-              </label>
-            </div>
-
-            <div className="training-results-list">
-              {results.length === 0 ? (
-                <EmptyState label="Noch keine Ergebnisse fuer diese Uebung" />
-              ) : (
-                results.map((result) => (
-                  <article className="training-result-row" key={result.set_id}>
-                    <div>
-                      <strong>{formatNumber(result.weight_kg)} kg</strong>
-                      <span>{result.reps} Wdh.</span>
-                    </div>
-                    <div>
-                      <strong>{formatNumber(result.volume)} kg</strong>
-                      <span>Volumen</span>
-                    </div>
-                    <div>
-                      <strong>{formatDate(getLocalDate(new Date(result.trained_at)))}</strong>
-                      <span>{result.plan_name}</span>
-                    </div>
-                  </article>
-                ))
-              )}
-            </div>
-          </Panel>
-        </div>
       </section>
     </div>
   );

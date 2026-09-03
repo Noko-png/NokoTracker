@@ -1,5 +1,10 @@
 # Changelog
 
+## 2.1.5
+
+- Uebungs-Ergebnisse-Panel aus dem Trainingslog entfernt.
+- Trainingslog nutzt ohne das entfernte Panel die verfuegbare Breite.
+
 ## 2.1.4
 
 - Aktiver Rahmen im Kalorientracker-Zeitslot entfernt, damit eingetragene Mahlzeiten nicht mehr wie in einem extra Fenster liegen.

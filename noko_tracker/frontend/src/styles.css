@@ -1258,7 +1258,7 @@ button {
 }
 
 .training-log-layout {
-  grid-template-columns: minmax(0, 1.42fr) minmax(300px, 0.88fr);
+  grid-template-columns: minmax(0, 1fr);
 }
 
 .training-planning-layout {
