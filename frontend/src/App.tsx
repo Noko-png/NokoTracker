@@ -522,7 +522,7 @@ const macroMeta: Array<{
   { key: "carbs", label: "Kohlenhydrate", unit: "g", tone: "red" },
 ];
 
-const appVersion = "2.1.2";
+const appVersion = "2.1.3";
 const updateSourceLabel = "main / github.com/Noko-png/NokoTracker";
 
 const emptyNutrition: NutritionDay = {
@@ -1236,6 +1236,9 @@ function addRecurrenceStep(
   if (frequency === "daily") {
     next.setDate(next.getDate() + interval);
   }
+  if (frequency === "weekdays" || frequency === "weekends") {
+    next.setDate(next.getDate() + 1);
+  }
   if (frequency === "weekly") {
     next.setDate(next.getDate() + interval * 7);
   }
@@ -1246,6 +1249,43 @@ function addRecurrenceStep(
     next.setFullYear(next.getFullYear() + interval);
   }
   return next;
+}
+
+function calendarWeekStart(value: Date) {
+  const weekStart = new Date(value);
+  weekStart.setHours(0, 0, 0, 0);
+  weekStart.setDate(weekStart.getDate() - ((weekStart.getDay() + 6) % 7));
+  return weekStart;
+}
+
+function groupedRecurrenceMatchesDate(
+  baseStart: Date,
+  occurrenceStart: Date,
+  frequency: CalendarEvent["recurrence_frequency"],
+  interval: number,
+) {
+  const day = occurrenceStart.getDay();
+  const matchesDay =
+    frequency === "weekdays"
+      ? day >= 1 && day <= 5
+      : frequency === "weekends"
+        ? day === 0 || day === 6
+        : true;
+
+  if (!matchesDay) {
+    return false;
+  }
+  if (frequency !== "weekdays" && frequency !== "weekends") {
+    return true;
+  }
+
+  const millisecondsPerWeek = 7 * 24 * 60 * 60 * 1000;
+  const weekDistance = Math.floor(
+    (calendarWeekStart(occurrenceStart).getTime() -
+      calendarWeekStart(baseStart).getTime()) /
+      millisecondsPerWeek,
+  );
+  return weekDistance % Math.max(interval, 1) === 0;
 }
 
 function sortCalendarOccurrences(occurrences: CalendarOccurrence[]) {
@@ -1285,6 +1325,12 @@ function getCalendarOccurrences(
 
       if (
         occurrenceStart >= rangeStart &&
+        groupedRecurrenceMatchesDate(
+          baseStart,
+          occurrenceStart,
+          frequency,
+          interval,
+        ) &&
         !excludedStarts.has(occurrenceStart.getTime())
       ) {
         occurrences.push({
@@ -6431,6 +6477,8 @@ function CalendarPage({
                   <option value="none">Keine</option>
                   <option value="daily">TÃ¤glich</option>
                   <option value="weekly">WÃ¶chentlich</option>
+                  <option value="weekdays">Unter der Woche (Mo-Fr)</option>
+                  <option value="weekends">Am Wochenende (Sa & So)</option>
                   <option value="monthly">Monatlich</option>
                   <option value="yearly">JÃ¤hrlich</option>
                 </select>
@@ -6703,6 +6751,8 @@ function CalendarPage({
               <option value="none">Keine</option>
               <option value="daily">Täglich</option>
               <option value="weekly">Wöchentlich</option>
+              <option value="weekdays">Unter der Woche (Mo-Fr)</option>
+              <option value="weekends">Am Wochenende (Sa & So)</option>
               <option value="monthly">Monatlich</option>
               <option value="yearly">Jährlich</option>
             </select>

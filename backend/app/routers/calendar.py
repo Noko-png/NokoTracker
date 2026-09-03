@@ -12,6 +12,10 @@ router = APIRouter(prefix="/calendar/events", tags=["calendar"])
 groups_router = APIRouter(prefix="/calendar/groups", tags=["calendar"])
 
 MAX_RECURRENCE_OCCURRENCES = 4000
+GROUPED_RECURRENCE_DAYS = {
+    "weekdays": {0, 1, 2, 3, 4},
+    "weekends": {5, 6},
+}
 MIN_EVENT_SEGMENT = timedelta(minutes=1)
 
 
@@ -187,6 +191,8 @@ def add_recurrence_step(
     interval = max(interval, 1)
     if frequency == "daily":
         return value + timedelta(days=interval)
+    if frequency in GROUPED_RECURRENCE_DAYS:
+        return value + timedelta(days=1)
     if frequency == "weekly":
         return value + timedelta(weeks=interval)
     if frequency == "monthly":
@@ -207,6 +213,33 @@ def add_recurrence_step(
         except ValueError:
             return value.replace(year=value.year + interval, month=2, day=28)
     return value + timedelta(days=1)
+
+
+def calendar_week_start(value: datetime) -> datetime:
+    return (value - timedelta(days=value.weekday())).replace(
+        hour=0,
+        minute=0,
+        second=0,
+        microsecond=0,
+    )
+
+
+def grouped_recurrence_matches_date(
+    base_start: datetime,
+    occurrence_start: datetime,
+    frequency: str,
+    interval: int,
+) -> bool:
+    days = GROUPED_RECURRENCE_DAYS.get(frequency)
+    if days is None:
+        return True
+    if occurrence_start.weekday() not in days:
+        return False
+
+    week_distance = (
+        calendar_week_start(occurrence_start) - calendar_week_start(base_start)
+    ).days // 7
+    return week_distance % max(interval, 1) == 0
 
 
 def event_occurrences_between(
@@ -234,6 +267,12 @@ def event_occurrences_between(
         occurrence_end = interval_end(occurrence_start, duration)
         if (
             intervals_overlap(occurrence_start, occurrence_end, range_start, range_end)
+            and grouped_recurrence_matches_date(
+                event.start_at,
+                occurrence_start,
+                frequency,
+                event.recurrence_interval,
+            )
             and occurrence_start not in excluded_starts
         ):
             occurrences.append((occurrence_start, occurrence_end))

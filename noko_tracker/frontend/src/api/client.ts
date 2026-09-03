@@ -388,7 +388,14 @@ export type CalendarEvent = {
   entry_type: "event" | "task";
   all_day: boolean;
   is_completed: boolean;
-  recurrence_frequency: "none" | "daily" | "weekly" | "monthly" | "yearly";
+  recurrence_frequency:
+    | "none"
+    | "daily"
+    | "weekly"
+    | "weekdays"
+    | "weekends"
+    | "monthly"
+    | "yearly";
   recurrence_interval: number;
   recurrence_until?: string | null;
   user_id?: number | null;

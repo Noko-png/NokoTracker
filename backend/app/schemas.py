@@ -267,7 +267,15 @@ class CalendarEventBase(BaseModel):
     entry_type: Literal["event", "task"] = "event"
     all_day: bool = False
     is_completed: bool = False
-    recurrence_frequency: Literal["none", "daily", "weekly", "monthly", "yearly"] = "none"
+    recurrence_frequency: Literal[
+        "none",
+        "daily",
+        "weekly",
+        "weekdays",
+        "weekends",
+        "monthly",
+        "yearly",
+    ] = "none"
     recurrence_interval: int = Field(1, ge=1, le=365)
     recurrence_until: Optional[datetime] = None
     user_id: Optional[int] = None
@@ -296,7 +304,15 @@ class CalendarEventUpdate(BaseModel):
     all_day: Optional[bool] = None
     is_completed: Optional[bool] = None
     recurrence_frequency: Optional[
-        Literal["none", "daily", "weekly", "monthly", "yearly"]
+        Literal[
+            "none",
+            "daily",
+            "weekly",
+            "weekdays",
+            "weekends",
+            "monthly",
+            "yearly",
+        ]
     ] = None
     recurrence_interval: Optional[int] = Field(None, ge=1, le=365)
     recurrence_until: Optional[datetime] = None

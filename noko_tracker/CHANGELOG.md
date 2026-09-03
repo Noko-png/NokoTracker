@@ -1,5 +1,10 @@
 # Changelog
 
+## 2.1.3
+
+- Kalender-Wiederholung fuer Unter der Woche (Mo-Fr) und Am Wochenende (Sa & So) ergaenzt.
+- Wiederholungen fuer diese Modi werden tageweise innerhalb passender Wochen erzeugt.
+
 ## 2.1.2
 
 - Kalorientracker-Slots zeigen Nährwerte als gleichmaessige Makro-Felder statt als gedrueckte Textzeile.
