@@ -522,7 +522,7 @@ const macroMeta: Array<{
   { key: "carbs", label: "Kohlenhydrate", unit: "g", tone: "red" },
 ];
 
-const appVersion = "2.1.1";
+const appVersion = "2.1.2";
 const updateSourceLabel = "main / github.com/Noko-png/NokoTracker";
 
 const emptyNutrition: NutritionDay = {
@@ -11725,13 +11725,6 @@ function NutritionPage({
     )}P ${formatNumber(values.fat, 0)}F ${formatNumber(values.carbs, 0)}C`;
   }
 
-  function formatSlotMacroLine(values: MacroValues) {
-    return `${formatNumber(values.calories, 0)} kcal · P ${formatNumber(
-      values.protein,
-      0,
-    )} · F ${formatNumber(values.fat, 0)} · K ${formatNumber(values.carbs, 0)}`;
-  }
-
   function addMacroValues(total: MacroValues, values: MacroValues) {
     total.calories += values.calories;
     total.protein += values.protein;
@@ -12313,8 +12306,17 @@ function NutritionPage({
                       logs.length === 0 ? "empty" : ""
                     }`}
                   >
-                    <strong>{formatSlotMacroLine(slotTotals)}</strong>
-                    <span>{logs.length} Eintrag{logs.length === 1 ? "" : "e"}</span>
+                    {macroMeta.map((macro) => (
+                      <span className={macro.tone} key={macro.key}>
+                        <strong>{formatNumber(slotTotals[macro.key], 0)}</strong>
+                        <small>
+                          {macro.key === "calories"
+                            ? "kcal"
+                            : macro.label.slice(0, 1)}
+                        </small>
+                      </span>
+                    ))}
+                    <em>{logs.length} Eintrag{logs.length === 1 ? "" : "e"}</em>
                   </div>
                   {logs.length > 0 && (
                     <div

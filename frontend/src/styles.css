@@ -4143,32 +4143,70 @@ th {
 
 .nutrition-slot-summary {
   z-index: 1;
-  display: flex;
-  flex-wrap: wrap;
+  display: grid;
+  grid-template-columns: repeat(4, minmax(54px, 1fr)) auto;
   align-items: center;
-  gap: 8px;
+  gap: 6px;
   min-width: 0;
-  min-height: 30px;
-  padding: 4px 0 4px 8px;
+  min-height: 34px;
+  padding: 2px 0 2px 8px;
   color: var(--text-strong);
 }
 
 .nutrition-slot-summary strong,
-.nutrition-slot-summary span {
+.nutrition-slot-summary span,
+.nutrition-slot-summary small,
+.nutrition-slot-summary em {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
+.nutrition-slot-summary span {
+  display: flex;
+  align-items: baseline;
+  justify-content: center;
+  gap: 3px;
+  min-width: 0;
+  min-height: 26px;
+  padding: 3px 5px;
+  border: 1px solid color-mix(in srgb, var(--line) 72%, transparent);
+  border-radius: 7px;
+  background: color-mix(in srgb, var(--surface-soft) 72%, transparent);
+}
+
+.nutrition-slot-summary span.blue {
+  border-color: color-mix(in srgb, #6ea2ff 42%, var(--line));
+}
+
+.nutrition-slot-summary span.green {
+  border-color: color-mix(in srgb, #ff8a69 42%, var(--line));
+}
+
+.nutrition-slot-summary span.amber {
+  border-color: color-mix(in srgb, #ffd569 42%, var(--line));
+}
+
+.nutrition-slot-summary span.red {
+  border-color: color-mix(in srgb, #63c98a 42%, var(--line));
+}
+
 .nutrition-slot-summary strong {
-  font-size: 0.86rem;
+  color: var(--text-strong);
+  font-size: 0.84rem;
   font-weight: 900;
 }
 
-.nutrition-slot-summary span {
+.nutrition-slot-summary small,
+.nutrition-slot-summary em {
   color: var(--muted);
-  font-size: 0.76rem;
+  font-size: 0.68rem;
   font-weight: 850;
+  font-style: normal;
+}
+
+.nutrition-slot-summary em {
+  justify-self: end;
 }
 
 .nutrition-slot-summary.empty {
@@ -4190,9 +4228,9 @@ th {
   grid-template-columns: minmax(0, 1fr) auto auto;
   align-items: center;
   gap: 10px;
-  min-height: 60px;
-  margin: 4px;
-  padding: 10px 12px 10px 18px;
+  min-height: 52px;
+  margin: 2px 0;
+  padding: 8px 10px 8px 14px;
   border: 1px solid var(--line);
   border-left: 4px solid var(--primary);
   border-radius: 8px;
@@ -7728,19 +7766,31 @@ th {
   }
 
   .nutrition-slot-summary {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
     align-content: center;
-    gap: 4px 7px;
-    min-height: 30px;
-    padding: 0 0 0 8px;
-  }
-
-  .nutrition-slot-summary strong {
-    width: 100%;
-    font-size: 0.72rem;
+    gap: 4px;
+    min-height: 32px;
+    padding: 0 0 0 6px;
   }
 
   .nutrition-slot-summary span {
-    font-size: 0.66rem;
+    justify-content: center;
+    min-height: 24px;
+    padding: 2px 3px;
+  }
+
+  .nutrition-slot-summary strong {
+    font-size: 0.7rem;
+  }
+
+  .nutrition-slot-summary small {
+    font-size: 0.58rem;
+  }
+
+  .nutrition-slot-summary em {
+    grid-column: 1 / -1;
+    justify-self: start;
+    font-size: 0.6rem;
   }
 
   .nutrition-slot-entries {
@@ -7758,8 +7808,8 @@ th {
   .nutrition-time-entry-stack.multiple .nutrition-time-entry,
   .nutrition-slot-entries.multiple .nutrition-time-entry {
     grid-template-columns: minmax(0, 1fr) 40px 40px;
-    min-height: 52px;
-    padding: 8px 10px 8px 14px;
+    min-height: 48px;
+    padding: 7px 8px 7px 10px;
     border: 0;
     border-left: 0;
     border-radius: 8px;

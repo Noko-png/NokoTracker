@@ -1,5 +1,10 @@
 # Changelog
 
+## 2.1.2
+
+- Kalorientracker-Slots zeigen Nährwerte als gleichmaessige Makro-Felder statt als gedrueckte Textzeile.
+- Essenskarten im Slot sind kompakter skaliert.
+
 ## 2.1.1
 
 - Trainingseinheit-Erfassung auf dem Handy kompakter skaliert.
