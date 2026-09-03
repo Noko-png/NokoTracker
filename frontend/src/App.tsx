@@ -520,7 +520,7 @@ const macroMeta: Array<{
   { key: "carbs", label: "Kohlenhydrate", unit: "g", tone: "red" },
 ];
 
-const appVersion = "2.1.5";
+const appVersion = "2.1.6";
 const updateSourceLabel = "main / github.com/Noko-png/NokoTracker";
 
 const emptyNutrition: NutritionDay = {
@@ -11525,7 +11525,6 @@ function NutritionPage({
     draggedMealLogId === null
       ? null
       : mealLogs.find((mealLog) => mealLog.id === draggedMealLogId) ?? null;
-  const selectedSlot = timeValueToSlot(form.time, 18);
   const today = getLocalDate();
   const yesterday = getLocalDate(addDays(dateFromLocalValue(today), -1));
   const dateTitle =
@@ -11972,10 +11971,6 @@ function NutritionPage({
 
   useEffect(() => () => stopBarcodeScanner(), []);
 
-  function selectSlot(slot: number) {
-    onFormChange({ ...form, time: timeSlotLabel(slot) });
-  }
-
   function openFoodSearch(slot?: number) {
     stopBarcodeScanner();
     setBarcodeFoodOverride(null);
@@ -12172,12 +12167,9 @@ function NutritionPage({
 
         <div className="nutrition-time-grid">
           {timelineSlots.map((slot) => (
-            <button
-              className={`nutrition-drop-slot ${
-                selectedSlot === slot ? "selecting" : ""
-              } ${slot % 2 !== 0 ? "half" : ""}`}
+            <div
+              className={`nutrition-drop-slot ${slot % 2 !== 0 ? "half" : ""}`}
               key={`nutrition-slot-${slot}`}
-              onClick={() => selectSlot(slot)}
               onDragOver={(event) => event.preventDefault()}
               onDrop={(event) => {
                 event.preventDefault();
@@ -12187,7 +12179,6 @@ function NutritionPage({
                 gridColumn: 3,
                 gridRow: slot - timelineStartSlot + 1,
               }}
-              type="button"
             />
           ))}
           {hourSlots.map((slot) => (

@@ -1,5 +1,10 @@
 # Changelog
 
+## 2.1.6
+
+- Kalorientracker-Rasterfelder sind nicht mehr per Maus auswählbar.
+- Plus-Buttons und Drag-and-drop zum Verschieben von Mahlzeiten bleiben erhalten.
+
 ## 2.1.5
 
 - Uebungs-Ergebnisse-Panel aus dem Trainingslog entfernt.

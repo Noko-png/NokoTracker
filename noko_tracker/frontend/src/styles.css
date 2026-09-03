@@ -4081,15 +4081,6 @@ th {
   border-top-color: color-mix(in srgb, var(--track) 45%, transparent);
 }
 
-.nutrition-drop-slot:hover,
-.nutrition-drop-slot.selecting {
-  background: var(--surface-soft);
-}
-
-.nutrition-drop-slot.selecting {
-  box-shadow: none;
-}
-
 .nutrition-hour-row {
   position: relative;
   z-index: 3;
