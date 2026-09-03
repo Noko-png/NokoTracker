@@ -1,5 +1,9 @@
 # Changelog
 
+## 2.1.4
+
+- Aktiver Rahmen im Kalorientracker-Zeitslot entfernt, damit eingetragene Mahlzeiten nicht mehr wie in einem extra Fenster liegen.
+
 ## 2.1.3
 
 - Kalender-Wiederholung fuer Unter der Woche (Mo-Fr) und Am Wochenende (Sa & So) ergaenzt.
