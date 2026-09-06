@@ -39,6 +39,7 @@ import type {
   CSSProperties,
   FormEvent,
   MouseEvent as ReactMouseEvent,
+  PointerEvent as ReactPointerEvent,
 } from "react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
@@ -445,6 +446,15 @@ type CalendarDateSelection = {
   endIndex: number;
 };
 
+type CalendarDateSelectionPointer = {
+  pointerId: number;
+  pointerType: string;
+  startIndex: number;
+  startX: number;
+  startY: number;
+  active: boolean;
+};
+
 type UserForm = {
   username: string;
   password: string;
@@ -526,7 +536,7 @@ const macroMeta: Array<{
   { key: "carbs", label: "Kohlenhydrate", unit: "g", tone: "red" },
 ];
 
-const appVersion = "2.1.14";
+const appVersion = "2.1.15";
 const updateSourceLabel = "main / github.com/Noko-png/NokoTracker";
 
 const emptyNutrition: NutritionDay = {
@@ -5760,6 +5770,9 @@ function CalendarPage({
   const [dateSelection, setDateSelection] =
     useState<CalendarDateSelection | null>(null);
   const suppressMonthDateClickRef = useRef(false);
+  const dateSelectionHoldTimerRef = useRef<number | null>(null);
+  const dateSelectionPointerRef =
+    useRef<CalendarDateSelectionPointer | null>(null);
   const [createMenuOpen, setCreateMenuOpen] = useState(false);
   const createMenuRef = useCloseOnOutsideClick<HTMLDivElement>(
     createMenuOpen,
@@ -5781,6 +5794,15 @@ function CalendarPage({
       setCreatePanel("group");
     }
   }, [editingGroupId]);
+
+  useEffect(
+    () => () => {
+      if (dateSelectionHoldTimerRef.current !== null) {
+        window.clearTimeout(dateSelectionHoldTimerRef.current);
+      }
+    },
+    [],
+  );
 
   const gridDates = getVisibleCalendarDates(view, selectedDate);
   const gridStart = gridDates[0];
@@ -5980,10 +6002,118 @@ function CalendarPage({
     setDateSelection({ startIndex: dayIndex, endIndex: dayIndex });
   }
 
+  function clearDateSelectionHoldTimer() {
+    if (dateSelectionHoldTimerRef.current !== null) {
+      window.clearTimeout(dateSelectionHoldTimerRef.current);
+      dateSelectionHoldTimerRef.current = null;
+    }
+  }
+
+  function cancelDateSelection() {
+    clearDateSelectionHoldTimer();
+    dateSelectionPointerRef.current = null;
+    setDateSelection(null);
+  }
+
   function extendDateSelection(dayIndex: number) {
     setDateSelection((current) =>
       current ? { ...current, endIndex: dayIndex } : current,
     );
+  }
+
+  function dayIndexFromPointerPosition(
+    event: ReactPointerEvent<HTMLElement>,
+  ) {
+    const target = document.elementFromPoint(event.clientX, event.clientY);
+    const dayElement = target?.closest("[data-calendar-day-index]");
+    if (!(dayElement instanceof HTMLElement)) {
+      return null;
+    }
+    const dayIndex = Number(dayElement.dataset.calendarDayIndex);
+    return Number.isInteger(dayIndex) ? dayIndex : null;
+  }
+
+  function handleDateSelectionPointerDown(
+    dayIndex: number,
+    event: ReactPointerEvent<HTMLButtonElement>,
+  ) {
+    if (event.button !== 0) {
+      return;
+    }
+
+    clearDateSelectionHoldTimer();
+    const selectionPointer: CalendarDateSelectionPointer = {
+      pointerId: event.pointerId,
+      pointerType: event.pointerType,
+      startIndex: dayIndex,
+      startX: event.clientX,
+      startY: event.clientY,
+      active: false,
+    };
+    dateSelectionPointerRef.current = selectionPointer;
+
+    if (event.pointerType === "mouse") {
+      event.preventDefault();
+      event.currentTarget.setPointerCapture(event.pointerId);
+      selectionPointer.active = true;
+      startDateSelection(dayIndex);
+      return;
+    }
+
+    const target = event.currentTarget;
+    dateSelectionHoldTimerRef.current = window.setTimeout(() => {
+      const current = dateSelectionPointerRef.current;
+      if (!current || current.pointerId !== event.pointerId) {
+        return;
+      }
+      current.active = true;
+      suppressMonthDateClickRef.current = true;
+      target.setPointerCapture(event.pointerId);
+      startDateSelection(current.startIndex);
+    }, 300);
+  }
+
+  function handleDateSelectionPointerMove(
+    event: ReactPointerEvent<HTMLDivElement>,
+  ) {
+    const current = dateSelectionPointerRef.current;
+    if (!current || current.pointerId !== event.pointerId) {
+      return;
+    }
+
+    if (!current.active) {
+      const movedDistance = Math.hypot(
+        event.clientX - current.startX,
+        event.clientY - current.startY,
+      );
+      if (movedDistance > 10) {
+        clearDateSelectionHoldTimer();
+        dateSelectionPointerRef.current = null;
+      }
+      return;
+    }
+
+    event.preventDefault();
+    const dayIndex = dayIndexFromPointerPosition(event);
+    if (dayIndex !== null) {
+      extendDateSelection(dayIndex);
+    }
+  }
+
+  function handleDateSelectionPointerUp(
+    event: ReactPointerEvent<HTMLDivElement>,
+  ) {
+    const current = dateSelectionPointerRef.current;
+    const shouldFinish = Boolean(
+      current && current.pointerId === event.pointerId && current.active,
+    );
+    clearDateSelectionHoldTimer();
+    dateSelectionPointerRef.current = null;
+
+    if (shouldFinish) {
+      event.preventDefault();
+      finishDateSelection();
+    }
   }
 
   function finishDateSelection() {
@@ -6122,9 +6252,15 @@ function CalendarPage({
               ))}
             </div>
             <div
-              className="calendar-grid"
-              onPointerLeave={() => setDateSelection(null)}
-              onPointerUp={finishDateSelection}
+              className={`calendar-grid ${dateSelection ? "selecting" : ""}`}
+              onPointerCancel={cancelDateSelection}
+              onPointerLeave={(event) => {
+                if (event.pointerType === "mouse") {
+                  cancelDateSelection();
+                }
+              }}
+              onPointerMove={handleDateSelectionPointerMove}
+              onPointerUp={handleDateSelectionPointerUp}
             >
               {gridDates.map((date, dayIndex) => {
                 const dateValue = getLocalDate(date);
@@ -6142,6 +6278,7 @@ function CalendarPage({
                 return (
                   <button
                     className={dayClasses}
+                    data-calendar-day-index={dayIndex}
                     key={dateValue}
                     onClick={() => {
                       if (suppressMonthDateClickRef.current) {
@@ -6151,11 +6288,9 @@ function CalendarPage({
                       onDateChange(dateValue);
                     }}
                     onPointerDown={(event) => {
-                      event.preventDefault();
-                      startDateSelection(dayIndex);
+                      handleDateSelectionPointerDown(dayIndex, event);
                     }}
                     onPointerEnter={() => extendDateSelection(dayIndex)}
-                    onPointerUp={finishDateSelection}
                     type="button"
                   >
                     <span className="day-number">{date.getDate()}</span>

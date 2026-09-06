@@ -5314,8 +5314,12 @@ th {
   color: var(--text);
   cursor: pointer;
   text-align: left;
-  touch-action: none;
+  touch-action: pan-y;
   user-select: none;
+}
+
+.calendar-grid.selecting .calendar-day {
+  cursor: grabbing;
 }
 
 .calendar-day:hover,

@@ -1,5 +1,9 @@
 # Changelog
 
+## 2.1.15
+
+- Kalender unterscheidet mobil zwischen Scrollen und Mehrtages-Auswahl per Halten.
+
 ## 2.1.14
 
 - Kalorientracker nutzt mobil eine kompaktere Darstellung mit vier nebeneinanderliegenden Restwerten.
