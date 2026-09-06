@@ -359,6 +359,7 @@ type CalendarForm = {
   entry_type: "event" | "task";
   title: string;
   date: string;
+  end_date: string;
   start_time: string;
   end_time: string;
   all_day: boolean;
@@ -437,6 +438,11 @@ type CalendarTimeSelection = {
   dayIndex: number;
   startSlot: number;
   endSlot: number;
+};
+
+type CalendarDateSelection = {
+  startIndex: number;
+  endIndex: number;
 };
 
 type UserForm = {
@@ -520,7 +526,7 @@ const macroMeta: Array<{
   { key: "carbs", label: "Kohlenhydrate", unit: "g", tone: "red" },
 ];
 
-const appVersion = "2.1.8";
+const appVersion = "2.1.10";
 const updateSourceLabel = "main / github.com/Noko-png/NokoTracker";
 
 const emptyNutrition: NutritionDay = {
@@ -720,6 +726,7 @@ function createCalendarForm(date = getLocalDate()): CalendarForm {
     entry_type: "event",
     title: "",
     date,
+    end_date: date,
     start_time: "09:00",
     end_time: "10:00",
     all_day: false,
@@ -1163,6 +1170,15 @@ function dateAtEndOfDay(value: string) {
   return new Date(`${value}T23:59:59`);
 }
 
+function datesOverlap(
+  start: Date,
+  end: Date,
+  rangeStart: Date,
+  rangeEnd: Date,
+) {
+  return start <= rangeEnd && end >= rangeStart;
+}
+
 function addDays(date: Date, amount: number) {
   const next = new Date(date);
   next.setDate(next.getDate() + amount);
@@ -1320,9 +1336,13 @@ function getCalendarOccurrences(
       if (recurrenceUntil && occurrenceStart > recurrenceUntil) {
         break;
       }
+      const occurrenceEnd =
+        duration === null
+          ? new Date(occurrenceStart)
+          : new Date(occurrenceStart.getTime() + duration);
 
       if (
-        occurrenceStart >= rangeStart &&
+        datesOverlap(occurrenceStart, occurrenceEnd, rangeStart, rangeEnd) &&
         groupedRecurrenceMatchesDate(
           baseStart,
           occurrenceStart,
@@ -1331,13 +1351,28 @@ function getCalendarOccurrences(
         ) &&
         !excludedStarts.has(occurrenceStart.getTime())
       ) {
-        occurrences.push({
-          key: `${event.id}-${occurrenceStart.toISOString()}`,
-          date: getLocalDate(occurrenceStart),
-          event,
-          startAt: new Date(occurrenceStart),
-          endAt: duration === null ? null : new Date(occurrenceStart.getTime() + duration),
-        });
+        const lastDate = dateFromLocalValue(getLocalDate(occurrenceEnd));
+        let segmentDate = dateFromLocalValue(getLocalDate(occurrenceStart));
+        while (segmentDate <= lastDate) {
+          const date = getLocalDate(segmentDate);
+          if (datesOverlap(segmentDate, dateAtEndOfDay(date), rangeStart, rangeEnd)) {
+            const firstSegment = date === getLocalDate(occurrenceStart);
+            const lastSegment = date === getLocalDate(occurrenceEnd);
+            occurrences.push({
+              key: `${event.id}-${occurrenceStart.toISOString()}-${date}`,
+              date,
+              event,
+              startAt: firstSegment ? new Date(occurrenceStart) : dateFromLocalValue(date),
+              endAt:
+                duration === null
+                  ? null
+                  : lastSegment
+                    ? new Date(occurrenceEnd)
+                    : dateAtEndOfDay(date),
+            });
+          }
+          segmentDate = addDays(segmentDate, 1);
+        }
       }
 
       if (frequency === "none") {
@@ -1369,6 +1404,7 @@ function createCalendarFormFromEvent(event: CalendarEvent): CalendarForm {
     entry_type: event.entry_type,
     title: event.title,
     date: getLocalDate(startAt),
+    end_date: endAt ? getLocalDate(endAt) : getLocalDate(startAt),
     start_time: formatTimeInput(startAt),
     end_time: endAt ? formatTimeInput(endAt) : "",
     all_day: event.all_day,
@@ -3366,13 +3402,18 @@ export default function App() {
     event.preventDefault();
     try {
       setApiError(null);
+      const startDate = calendarForm.date;
+      const endDate =
+        calendarForm.end_date && calendarForm.end_date >= startDate
+          ? calendarForm.end_date
+          : startDate;
       const startAt = calendarForm.all_day
-        ? `${calendarForm.date}T00:00:00`
-        : `${calendarForm.date}T${calendarForm.start_time}:00`;
+        ? `${startDate}T00:00:00`
+        : `${startDate}T${calendarForm.start_time}:00`;
       const endAt = calendarForm.all_day
-        ? `${calendarForm.date}T23:59:00`
+        ? `${endDate}T23:59:00`
         : calendarForm.end_time
-          ? `${calendarForm.date}T${calendarForm.end_time}:00`
+          ? `${endDate}T${calendarForm.end_time}:00`
           : null;
       const payload = {
         title: calendarForm.title,
@@ -3406,7 +3447,11 @@ export default function App() {
 
   function selectCalendarDate(value: string) {
     setCalendarDate(value);
-    setCalendarForm((current) => ({ ...current, date: value }));
+    setCalendarForm((current) => ({
+      ...current,
+      date: value,
+      end_date: current.end_date && current.end_date >= value ? current.end_date : value,
+    }));
   }
 
   function startEditingCalendarEntry(event: CalendarEvent) {
@@ -5372,11 +5417,13 @@ function TrainingPage({
                                       previousSet ? "has-previous" : ""
                                     }`}
                                   >
-                                    <FractionNumberInput
+                                    <NumberInput
                                       label="kg"
+                                      min="0"
                                       onChange={(weight_kg) =>
                                         updateSessionSet(index, { weight_kg })
                                       }
+                                      step="0.1"
                                       value={set.weight_kg}
                                     />
                                     {previousSet && (
@@ -5710,6 +5757,9 @@ function CalendarPage({
 }) {
   const [timeSelection, setTimeSelection] =
     useState<CalendarTimeSelection | null>(null);
+  const [dateSelection, setDateSelection] =
+    useState<CalendarDateSelection | null>(null);
+  const suppressMonthDateClickRef = useRef(false);
   const [createMenuOpen, setCreateMenuOpen] = useState(false);
   const createMenuRef = useCloseOnOutsideClick<HTMLDivElement>(
     createMenuOpen,
@@ -5909,6 +5959,7 @@ function CalendarPage({
     onFormChange({
       ...form,
       date,
+      end_date: date,
       start_time: timeSlotLabel(startSlot),
       end_time: timeSlotEndLabel(endSlot),
       all_day: false,
@@ -5923,6 +5974,58 @@ function CalendarPage({
     const start = Math.min(timeSelection.startSlot, timeSelection.endSlot);
     const end = Math.max(timeSelection.startSlot, timeSelection.endSlot);
     return slot >= start && slot <= end;
+  }
+
+  function startDateSelection(dayIndex: number) {
+    setDateSelection({ startIndex: dayIndex, endIndex: dayIndex });
+  }
+
+  function extendDateSelection(dayIndex: number) {
+    setDateSelection((current) =>
+      current ? { ...current, endIndex: dayIndex } : current,
+    );
+  }
+
+  function finishDateSelection() {
+    if (!dateSelection) {
+      return;
+    }
+
+    const startIndex = Math.min(dateSelection.startIndex, dateSelection.endIndex);
+    const endIndex = Math.max(dateSelection.startIndex, dateSelection.endIndex);
+    const startDate = getLocalDate(gridDates[startIndex]);
+    const endDate = getLocalDate(gridDates[endIndex]);
+    if (startIndex === endIndex) {
+      onDateChange(startDate);
+      setDateSelection(null);
+      return;
+    }
+
+    if (editingEventId !== null) {
+      onCancelEdit();
+    }
+    onDateChange(startDate);
+    onFormChange({
+      ...createCalendarForm(startDate),
+      entry_type: "event",
+      end_date: endDate,
+      all_day: true,
+      start_time: "00:00",
+      end_time: "23:59",
+    });
+    suppressMonthDateClickRef.current = true;
+    setCreatePanel("event");
+    setCreateMenuOpen(false);
+    setDateSelection(null);
+  }
+
+  function isDateSelectedForRange(dayIndex: number) {
+    if (!dateSelection) {
+      return false;
+    }
+    const start = Math.min(dateSelection.startIndex, dateSelection.endIndex);
+    const end = Math.max(dateSelection.startIndex, dateSelection.endIndex);
+    return dayIndex >= start && dayIndex <= end;
   }
 
   const draftDayIndex = gridDates.findIndex(
@@ -6018,13 +6121,18 @@ function CalendarPage({
                 <span key={weekday}>{weekday}</span>
               ))}
             </div>
-            <div className="calendar-grid">
-              {gridDates.map((date) => {
+            <div
+              className="calendar-grid"
+              onPointerLeave={() => setDateSelection(null)}
+              onPointerUp={finishDateSelection}
+            >
+              {gridDates.map((date, dayIndex) => {
                 const dateValue = getLocalDate(date);
                 const dayOccurrences = occurrencesByDate.get(dateValue) ?? [];
                 const dayClasses = [
                   "calendar-day",
                   dateValue === selectedDate ? "selected" : "",
+                  isDateSelectedForRange(dayIndex) ? "range" : "",
                   dateValue === today ? "today" : "",
                   date.getMonth() !== selectedMonth ? "outside" : "",
                 ]
@@ -6035,7 +6143,19 @@ function CalendarPage({
                   <button
                     className={dayClasses}
                     key={dateValue}
-                    onClick={() => onDateChange(dateValue)}
+                    onClick={() => {
+                      if (suppressMonthDateClickRef.current) {
+                        suppressMonthDateClickRef.current = false;
+                        return;
+                      }
+                      onDateChange(dateValue);
+                    }}
+                    onPointerDown={(event) => {
+                      event.preventDefault();
+                      startDateSelection(dayIndex);
+                    }}
+                    onPointerEnter={() => extendDateSelection(dayIndex)}
+                    onPointerUp={finishDateSelection}
                     type="button"
                   >
                     <span className="day-number">{date.getDate()}</span>
@@ -6351,11 +6471,25 @@ function CalendarPage({
                 required
                 value={form.title}
               />
-              <DateInput
-                label="Datum"
-                onChange={(date) => onFormChange({ ...form, date })}
-                value={form.date}
-              />
+              <div className="time-fields">
+                <DateInput
+                  label="Datum"
+                  onChange={(date) =>
+                    onFormChange({
+                      ...form,
+                      date,
+                      end_date:
+                        form.end_date && form.end_date >= date ? form.end_date : date,
+                    })
+                  }
+                  value={form.date}
+                />
+                <DateInput
+                  label="Bis"
+                  onChange={(end_date) => onFormChange({ ...form, end_date })}
+                  value={form.end_date}
+                />
+              </div>
               <label className="check-field">
                 <input
                   checked={form.all_day}
@@ -6627,11 +6761,25 @@ function CalendarPage({
             required
             value={form.title}
           />
-          <DateInput
-            label="Datum"
-            onChange={(date) => onFormChange({ ...form, date })}
-            value={form.date}
-          />
+          <div className="time-fields">
+            <DateInput
+              label="Datum"
+              onChange={(date) =>
+                onFormChange({
+                  ...form,
+                  date,
+                  end_date:
+                    form.end_date && form.end_date >= date ? form.end_date : date,
+                })
+              }
+              value={form.date}
+            />
+            <DateInput
+              label="Bis"
+              onChange={(end_date) => onFormChange({ ...form, end_date })}
+              value={form.end_date}
+            />
+          </div>
           <label className="check-field">
             <input
               checked={form.all_day}

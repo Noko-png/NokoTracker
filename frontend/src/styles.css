@@ -5297,12 +5297,19 @@ th {
   border-radius: 0;
   background: var(--surface);
   color: var(--text);
+  cursor: pointer;
   text-align: left;
+  touch-action: none;
+  user-select: none;
 }
 
 .calendar-day:hover,
 .calendar-day.selected {
   background: var(--blue-soft);
+}
+
+.calendar-day.range {
+  background: color-mix(in srgb, var(--primary) 13%, var(--surface));
 }
 
 .calendar-day.selected {
@@ -5312,6 +5319,10 @@ th {
 .calendar-day.outside {
   background: var(--surface-soft);
   color: var(--muted);
+}
+
+.calendar-day.outside.range {
+  background: color-mix(in srgb, var(--primary) 11%, var(--surface-soft));
 }
 
 .day-number {

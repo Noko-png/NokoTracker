@@ -1,5 +1,14 @@
 # Changelog
 
+## 2.1.10
+
+- Gewicht in Trainingseinheiten wird als Dezimalzahlfeld erfasst und als Float an die API uebergeben.
+
+## 2.1.9
+
+- Kalendertermine koennen in der Monatsansicht per Ziehen ueber mehrere Tage als ganztägige Mehrtagestermine angelegt werden.
+- Mehrtagestermine werden an allen betroffenen Tagen angezeigt.
+
 ## 2.1.8
 
 - Kalorientracker zeigt Slot-Naehrwerte und Eintragszaehler nur noch bei Slots mit eingetragenen Mahlzeiten.
