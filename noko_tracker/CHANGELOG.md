@@ -1,5 +1,9 @@
 # Changelog
 
+## 2.1.16
+
+- Bestandsuebersicht zeigt mobil eine kompakte Liste mit Aktionen, Produkt und Menge.
+
 ## 2.1.15
 
 - Kalender unterscheidet mobil zwischen Scrollen und Mehrtages-Auswahl per Halten.

@@ -536,7 +536,7 @@ const macroMeta: Array<{
   { key: "carbs", label: "Kohlenhydrate", unit: "g", tone: "red" },
 ];
 
-const appVersion = "2.1.15";
+const appVersion = "2.1.16";
 const updateSourceLabel = "main / github.com/Noko-png/NokoTracker";
 
 const emptyNutrition: NutritionDay = {
@@ -7920,100 +7920,64 @@ function InventoryPage({
           </table>
         </div>
 
-        <div className="inventory-mobile-list" aria-label="Bestand als Karten">
+        <div className="inventory-mobile-list" aria-label="Bestand als Liste">
           {displayedInventory.length === 0 ? (
             <EmptyState label="Keine Artikel vorhanden" />
           ) : (
-            displayedInventory.map((item) => {
-              const status = getInventoryStatus(item);
-              const productGroup =
-                item.product_group?.name || item.category || "Ohne Produktgruppe";
-              const itemBrand = item.brand?.trim();
-
-              return (
-                <article
-                  className={`inventory-mobile-card ${
-                    editingItemId === item.id ? "is-editing" : ""
-                  }`}
-                  key={`inventory-mobile-${item.id}`}
-                >
-                  <div className="inventory-mobile-card-head">
-                    <div className="inventory-mobile-product">
-                      <strong className="inventory-item-name">
-                        <span aria-hidden="true" className="inventory-item-emoji">
-                          {item.food?.emoji || item.emoji || defaultInventoryEmoji}
-                        </span>
-                        <span>{item.name}</span>
-                      </strong>
-                      <span className="muted-line">
-                        {[productGroup, itemBrand].filter(Boolean).join(" | ")}
-                      </span>
-                    </div>
-                    <StatusBadge status={status.status} label={status.label} />
-                  </div>
-
-                  <dl className="inventory-mobile-meta">
-                    <div>
-                      <dt>Menge</dt>
-                      <dd>
-                        {formatFractionalQuantity(item.quantity)} {item.unit}
-                      </dd>
-                    </div>
-                    <div>
-                      <dt>Lagerort</dt>
-                      <dd>{item.storage_location || "-"}</dd>
-                    </div>
-                    <div>
-                      <dt>Faellig</dt>
-                      <dd>{formatDueDateWithDistance(item.expiry_date)}</dd>
-                    </div>
-                    <div>
-                      <dt>Minimum</dt>
-                      <dd>
-                        {formatFractionalQuantity(item.minimum_quantity)} {item.unit}
-                      </dd>
-                    </div>
-                  </dl>
-
-                  <div className="inventory-mobile-actions">
-                    <button
-                      className="stock-action decrement"
-                      onClick={() => onDecrease(item.id)}
-                      title="Menge reduzieren"
-                      type="button"
-                    >
-                      <Minus size={17} />
-                    </button>
-                    <button
-                      className="stock-action increment"
-                      onClick={() => onIncrease(item.id)}
-                      title="Menge erhoehen"
-                      type="button"
-                    >
-                      <Plus size={17} />
-                    </button>
-                    <button
-                      className={`stock-action edit ${
-                        editingItemId === item.id ? "active" : ""
-                      }`}
-                      onClick={() => onEdit(item)}
-                      title="Bearbeiten"
-                      type="button"
-                    >
-                      <Pencil size={17} />
-                    </button>
-                    <button
-                      className="stock-action delete"
-                      onClick={() => onDelete(item.id)}
-                      title="Loeschen"
-                      type="button"
-                    >
-                      <Trash2 size={17} />
-                    </button>
-                  </div>
-                </article>
-              );
-            })
+            displayedInventory.map((item) => (
+              <article
+                className={`inventory-mobile-card ${
+                  editingItemId === item.id ? "is-editing" : ""
+                }`}
+                key={`inventory-mobile-${item.id}`}
+              >
+                <div className="inventory-mobile-actions">
+                  <button
+                    className="stock-action decrement"
+                    onClick={() => onDecrease(item.id)}
+                    title="Menge reduzieren"
+                    type="button"
+                  >
+                    <Minus size={15} />
+                  </button>
+                  <button
+                    className="stock-action increment"
+                    onClick={() => onIncrease(item.id)}
+                    title="Menge erhoehen"
+                    type="button"
+                  >
+                    <Plus size={15} />
+                  </button>
+                  <button
+                    className={`stock-action edit ${
+                      editingItemId === item.id ? "active" : ""
+                    }`}
+                    onClick={() => onEdit(item)}
+                    title="Bearbeiten"
+                    type="button"
+                  >
+                    <Pencil size={15} />
+                  </button>
+                  <button
+                    className="stock-action delete"
+                    onClick={() => onDelete(item.id)}
+                    title="Loeschen"
+                    type="button"
+                  >
+                    <Trash2 size={15} />
+                  </button>
+                </div>
+                <strong className="inventory-mobile-product">
+                  <span aria-hidden="true" className="inventory-item-emoji">
+                    {item.food?.emoji || item.emoji || defaultInventoryEmoji}
+                  </span>
+                  <span>{item.name}</span>
+                </strong>
+                <span className="inventory-mobile-quantity">
+                  {formatFractionalQuantity(item.quantity)} {item.unit}
+                </span>
+              </article>
+            ))
           )}
         </div>
       </section>
