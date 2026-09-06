@@ -1,5 +1,9 @@
 # Changelog
 
+## 2.1.12
+
+- Das Gewicht in Trainingseinheiten wird intern als Zahl statt als String gefuehrt.
+
 ## 2.1.11
 
 - Alte Trainingswerte werden ohne den Zusatz "alt" angezeigt.

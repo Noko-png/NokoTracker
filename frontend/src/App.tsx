@@ -404,7 +404,7 @@ type TrainingExerciseForm = {
 type TrainingSetForm = {
   exercise_id: string;
   set_index: string;
-  weight_kg: string;
+  weight_kg: number;
   reps: string;
   notes: string;
 };
@@ -526,7 +526,7 @@ const macroMeta: Array<{
   { key: "carbs", label: "Kohlenhydrate", unit: "g", tone: "red" },
 ];
 
-const appVersion = "2.1.11";
+const appVersion = "2.1.12";
 const updateSourceLabel = "main / github.com/Noko-png/NokoTracker";
 
 const emptyNutrition: NutritionDay = {
@@ -700,7 +700,7 @@ function createTrainingSetForm(
   return {
     exercise_id: String(exercise.id),
     set_index: String(index + 1),
-    weight_kg: "",
+    weight_kg: 0,
     reps: "",
     notes: "",
   };
@@ -1512,7 +1512,7 @@ function isStoredTrainingSessionForm(value: unknown): value is TrainingSessionFo
         set !== null &&
         typeof (set as Partial<TrainingSetForm>).exercise_id === "string" &&
         typeof (set as Partial<TrainingSetForm>).set_index === "string" &&
-        typeof (set as Partial<TrainingSetForm>).weight_kg === "string" &&
+        typeof (set as Partial<TrainingSetForm>).weight_kg === "number" &&
         typeof (set as Partial<TrainingSetForm>).reps === "string" &&
         typeof (set as Partial<TrainingSetForm>).notes === "string",
     )
@@ -3689,7 +3689,7 @@ export default function App() {
         return {
           exercise_id: exerciseId,
           set_index: setIndex,
-          weight_kg: toNumber(set.weight_kg, 0),
+          weight_kg: Number.isFinite(set.weight_kg) ? set.weight_kg : 0,
           reps: Math.trunc(toNumber(set.reps, 0)),
           notes: optionalText(set.notes),
         };
@@ -5280,7 +5280,7 @@ function TrainingPage({
         {
           exercise_id: String(exercise.id),
           set_index: String(setCount + 1),
-          weight_kg: "",
+          weight_kg: 0,
           reps: "",
           notes: "",
         },
@@ -5417,13 +5417,13 @@ function TrainingPage({
                                       previousSet ? "has-previous" : ""
                                     }`}
                                   >
-                                    <NumberInput
+                                    <DecimalNumberInput
                                       label="kg"
-                                      min="0"
+                                      min={0}
                                       onChange={(weight_kg) =>
                                         updateSessionSet(index, { weight_kg })
                                       }
-                                      step="0.1"
+                                      step={0.1}
                                       value={set.weight_kg}
                                     />
                                     {previousSet && (
@@ -14131,6 +14131,54 @@ function NumberInput({
       type="number"
       value={value}
     />
+  );
+}
+
+function DecimalNumberInput({
+  label,
+  min,
+  onChange,
+  required,
+  step = 0.1,
+  value,
+}: {
+  label: string;
+  min?: number;
+  onChange: (value: number) => void;
+  required?: boolean;
+  step?: number;
+  value: number;
+}) {
+  const [draft, setDraft] = useState(value === 0 ? "" : String(value));
+
+  useEffect(() => {
+    setDraft(value === 0 ? "" : String(value));
+  }, [value]);
+
+  return (
+    <label>
+      <span>{label}</span>
+      <input
+        inputMode="decimal"
+        min={min}
+        onChange={(event) => {
+          const nextDraft = event.target.value;
+          setDraft(nextDraft);
+          if (nextDraft.trim() === "") {
+            onChange(0);
+            return;
+          }
+          const nextValue = Number(nextDraft);
+          if (Number.isFinite(nextValue)) {
+            onChange(nextValue);
+          }
+        }}
+        required={required}
+        step={step}
+        type="number"
+        value={draft}
+      />
+    </label>
   );
 }
 
