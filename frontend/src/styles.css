@@ -91,6 +91,14 @@ button {
   background: rgba(255, 255, 255, 0.14);
 }
 
+.mobile-menu-backdrop {
+  pointer-events: none;
+}
+
+.mobile-menu-backdrop.open {
+  pointer-events: auto;
+}
+
 .app-shell[data-theme="dark"] {
   --page-bg: #0f172a;
   --text: #e5e7eb;

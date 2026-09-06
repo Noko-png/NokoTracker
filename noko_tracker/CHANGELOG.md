@@ -1,5 +1,9 @@
 # Changelog
 
+## 2.1.17
+
+- Mobile Home-Assistant-Ingress-Ansicht setzt Fokus und Pointer-Zustand nach Sidebar-/Viewport-Wechseln automatisch zurueck.
+
 ## 2.1.16
 
 - Bestandsuebersicht zeigt mobil eine kompakte Liste mit Aktionen, Produkt und Menge.

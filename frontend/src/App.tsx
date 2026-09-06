@@ -536,7 +536,7 @@ const macroMeta: Array<{
   { key: "carbs", label: "Kohlenhydrate", unit: "g", tone: "red" },
 ];
 
-const appVersion = "2.1.16";
+const appVersion = "2.1.17";
 const updateSourceLabel = "main / github.com/Noko-png/NokoTracker";
 
 const emptyNutrition: NutritionDay = {
@@ -2015,6 +2015,7 @@ function getStoredUserId() {
 export default function App() {
   const [activePage, setActivePage] = useState<Page>("dashboard");
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const [ingressFocusResetTick, setIngressFocusResetTick] = useState(0);
   const [masterDataOpen, setMasterDataOpen] = useState(false);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [activeMasterDataTab, setActiveMasterDataTab] =
@@ -2186,6 +2187,78 @@ export default function App() {
   useEffect(() => {
     void loadData();
   }, [loadData]);
+
+  useEffect(() => {
+    let lastResetAt = 0;
+
+    function resetIngressInteractionState() {
+      const now = window.performance.now();
+      if (now - lastResetAt < 160) {
+        return;
+      }
+      lastResetAt = now;
+      setMobileMenuOpen(false);
+      setIngressFocusResetTick((tick) => tick + 1);
+      requestAnimationFrame(() => {
+        document.documentElement.style.setProperty(
+          "--noko-viewport-width",
+          `${window.innerWidth}px`,
+        );
+        document.documentElement.style.setProperty(
+          "--noko-viewport-height",
+          `${window.innerHeight}px`,
+        );
+      });
+    }
+
+    function focusInputTarget(event: Event) {
+      const target = event.target;
+      if (
+        target instanceof HTMLInputElement ||
+        target instanceof HTMLSelectElement ||
+        target instanceof HTMLTextAreaElement
+      ) {
+        target.focus({ preventScroll: true });
+      }
+    }
+
+    function resetIngressInteractionStateFromTouch(event: Event) {
+      const target = event.target;
+      if (
+        target instanceof Element &&
+        (target.closest(".sidebar") || target.closest(".mobile-app-bar"))
+      ) {
+        return;
+      }
+      resetIngressInteractionState();
+    }
+
+    window.addEventListener("focus", resetIngressInteractionState);
+    window.addEventListener("pageshow", resetIngressInteractionState);
+    window.addEventListener("resize", resetIngressInteractionState);
+    window.visualViewport?.addEventListener("resize", resetIngressInteractionState);
+    document.addEventListener("pointerdown", focusInputTarget, true);
+    document.addEventListener("touchstart", resetIngressInteractionStateFromTouch, {
+      capture: true,
+      passive: true,
+    });
+
+    return () => {
+      window.removeEventListener("focus", resetIngressInteractionState);
+      window.removeEventListener("pageshow", resetIngressInteractionState);
+      window.removeEventListener("resize", resetIngressInteractionState);
+      window.visualViewport?.removeEventListener(
+        "resize",
+        resetIngressInteractionState,
+      );
+      document.removeEventListener("pointerdown", focusInputTarget, true);
+      document.removeEventListener(
+        "touchstart",
+        resetIngressInteractionStateFromTouch,
+        true,
+      );
+    };
+  }, []);
 
   useEffect(() => {
     writeStoredValue(userIdStorageKey, String(userId));
@@ -3975,6 +4048,7 @@ export default function App() {
   return (
     <div
       className="app-shell"
+      data-ingress-reset={ingressFocusResetTick}
       data-page={activePage}
       data-sidebar={sidebarCollapsed ? "collapsed" : "expanded"}
       data-theme={appliedTheme}
