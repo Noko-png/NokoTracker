@@ -526,7 +526,7 @@ const macroMeta: Array<{
   { key: "carbs", label: "Kohlenhydrate", unit: "g", tone: "red" },
 ];
 
-const appVersion = "2.1.10";
+const appVersion = "2.1.11";
 const updateSourceLabel = "main / github.com/Noko-png/NokoTracker";
 
 const emptyNutrition: NutritionDay = {
@@ -5431,7 +5431,7 @@ function TrainingPage({
                                         className="training-set-previous"
                                         title={`Alter Wert vom ${previousDate}`}
                                       >
-                                        alt {formatNumber(previousSet.weightKg)} kg
+                                        {formatNumber(previousSet.weightKg)} kg
                                       </span>
                                     )}
                                   </div>
@@ -5453,7 +5453,7 @@ function TrainingPage({
                                         className="training-set-previous"
                                         title={`Alter Wert vom ${previousDate}`}
                                       >
-                                        alt {previousSet.reps}
+                                        {previousSet.reps}
                                       </span>
                                     )}
                                   </div>

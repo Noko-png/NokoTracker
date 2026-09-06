@@ -1,5 +1,9 @@
 # Changelog
 
+## 2.1.11
+
+- Alte Trainingswerte werden ohne den Zusatz "alt" angezeigt.
+
 ## 2.1.10
 
 - Gewicht in Trainingseinheiten wird als Dezimalzahlfeld erfasst und als Float an die API uebergeben.
