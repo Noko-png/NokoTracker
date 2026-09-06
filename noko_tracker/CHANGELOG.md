@@ -1,5 +1,9 @@
 # Changelog
 
+## 2.1.13
+
+- Der Button zum Speichern einer Trainingseinheit bleibt unten im Erfassungsbereich sichtbar.
+
 ## 2.1.12
 
 - Das Gewicht in Trainingseinheiten wird intern als Zahl statt als String gefuehrt.

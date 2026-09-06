@@ -1535,7 +1535,22 @@ button {
 }
 
 .training-session-form {
+  min-height: 62vh;
   grid-template-columns: minmax(0, 1fr) minmax(150px, 0.42fr);
+}
+
+.training-session-panel,
+.training-session-panel .training-session-form {
+  display: flex;
+  flex-direction: column;
+}
+
+.training-session-panel .training-set-editor {
+  flex: 1 1 auto;
+}
+
+.training-session-panel .form-actions {
+  margin-top: auto;
 }
 
 .training-set-group {

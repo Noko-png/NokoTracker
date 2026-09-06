@@ -526,7 +526,7 @@ const macroMeta: Array<{
   { key: "carbs", label: "Kohlenhydrate", unit: "g", tone: "red" },
 ];
 
-const appVersion = "2.1.12";
+const appVersion = "2.1.13";
 const updateSourceLabel = "main / github.com/Noko-png/NokoTracker";
 
 const emptyNutrition: NutritionDay = {
@@ -5328,7 +5328,7 @@ function TrainingPage({
 
       <section className="training-layout training-log-layout">
         <div className="training-column wide">
-          <Panel title="Trainingseinheit erfassen">
+          <Panel className="training-session-panel" title="Trainingseinheit erfassen">
             <form className="form-grid training-session-form" onSubmit={onSessionSubmit}>
               <label>
                 <span>Trainingsplan</span>
@@ -13982,13 +13982,15 @@ function SettingsPage({
 
 function Panel({
   children,
+  className = "",
   title,
 }: {
   children: React.ReactNode;
+  className?: string;
   title: string;
 }) {
   return (
-    <section className="panel">
+    <section className={["panel", className].filter(Boolean).join(" ")}>
       <div className="panel-header">
         <h2>{title}</h2>
       </div>
