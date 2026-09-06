@@ -7689,14 +7689,14 @@ th {
 
   .nutrition-log-shell {
     min-height: calc(100dvh - 64px);
-    padding-bottom: 86px;
+    padding-bottom: 78px;
     background: var(--surface);
   }
 
   .nutrition-log-header {
     top: 64px;
-    gap: 12px;
-    padding: 14px 18px 16px;
+    gap: 10px;
+    padding: 12px 16px 13px;
     border-bottom-color: var(--line);
     background: color-mix(in srgb, var(--surface) 94%, #111827);
   }
@@ -7707,7 +7707,7 @@ th {
   }
 
   .nutrition-log-nav h2 {
-    font-size: 1.7rem;
+    font-size: 1.52rem;
     font-weight: 950;
     line-height: 1.05;
   }
@@ -7719,13 +7719,13 @@ th {
   }
 
   .nutrition-week-strip {
-    gap: 7px;
+    gap: 6px;
   }
 
   .nutrition-week-strip button {
-    width: min(100%, 44px);
-    min-height: 54px;
-    padding: 6px 0;
+    width: min(100%, 40px);
+    min-height: 49px;
+    padding: 5px 0;
     background: transparent;
   }
 
@@ -7744,44 +7744,46 @@ th {
   }
 
   .nutrition-week-strip span {
-    font-size: 0.72rem;
+    font-size: 0.66rem;
     letter-spacing: 0;
   }
 
   .nutrition-week-strip strong {
-    font-size: 1.02rem;
+    font-size: 0.94rem;
   }
 
   .nutrition-macro-strip {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-    gap: 8px;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 6px;
   }
 
   .nutrition-macro-strip article {
-    gap: 5px;
-    min-height: 44px;
+    gap: 4px;
+    min-height: 36px;
   }
 
   .nutrition-macro-strip strong {
-    font-size: 0.82rem;
+    font-size: 0.64rem;
     font-weight: 950;
+    line-height: 1.1;
+    text-align: center;
   }
 
   .nutrition-macro-strip span {
-    height: 7px;
+    height: 6px;
     background: #2d405b;
   }
 
   .nutrition-time-grid {
-    grid-template-columns: 70px 44px minmax(0, 1fr);
-    grid-template-rows: repeat(33, minmax(26px, auto));
-    margin-top: 10px;
-    padding: 0 18px 0 0;
+    grid-template-columns: 64px 40px minmax(0, 1fr);
+    grid-template-rows: repeat(33, minmax(24px, auto));
+    margin-top: 8px;
+    padding: 0 12px 0 0;
     background: var(--surface);
   }
 
   .nutrition-drop-slot {
-    min-height: 26px;
+    min-height: 24px;
     border-top-color: rgba(148, 163, 184, 0.22);
   }
 
@@ -7790,31 +7792,31 @@ th {
   }
 
   .nutrition-hour-row {
-    grid-template-columns: 70px 44px minmax(0, 1fr);
-    min-height: 26px;
+    grid-template-columns: 64px 40px minmax(0, 1fr);
+    min-height: 24px;
   }
 
   .nutrition-hour-row::before {
-    top: -26px;
-    left: 35px;
+    top: -24px;
+    left: 32px;
     width: 2px;
     background: var(--timeline-line);
   }
 
   .nutrition-hour-label {
-    width: 62px;
-    min-height: 28px;
-    margin-left: 8px;
+    width: 58px;
+    min-height: 25px;
+    margin-left: 5px;
     background: #1e293b;
     color: var(--text-strong);
-    font-size: 0.82rem;
+    font-size: 0.76rem;
     font-weight: 950;
   }
 
   .nutrition-hour-add {
-    width: 30px;
-    height: 30px;
-    margin-left: 7px;
+    width: 28px;
+    height: 28px;
+    margin-left: 6px;
     background: #2d3c53;
     color: var(--text-strong);
   }
@@ -7861,9 +7863,9 @@ th {
   .nutrition-time-entry,
   .nutrition-time-entry-stack.multiple .nutrition-time-entry,
   .nutrition-slot-entries.multiple .nutrition-time-entry {
-    grid-template-columns: minmax(0, 1fr) 40px 40px;
-    min-height: 48px;
-    padding: 7px 8px 7px 10px;
+    grid-template-columns: minmax(0, 1fr) 36px 36px;
+    min-height: 43px;
+    padding: 6px 7px 6px 9px;
     border: 0;
     border-left: 0;
     border-radius: 8px;
@@ -7872,20 +7874,20 @@ th {
   }
 
   .nutrition-time-entry-main {
-    gap: 4px;
+    gap: 3px;
   }
 
   .nutrition-time-entry-main strong,
   .nutrition-time-entry-stack.multiple .nutrition-time-entry-main strong {
     color: var(--text-strong);
-    font-size: 1rem;
+    font-size: 0.91rem;
     font-weight: 900;
   }
 
   .nutrition-time-entry-main span,
   .nutrition-time-entry-stack.multiple .nutrition-time-entry-main span {
     color: #c8d0dc;
-    font-size: 0.88rem;
+    font-size: 0.78rem;
     white-space: normal;
   }
 
@@ -7896,36 +7898,37 @@ th {
   .nutrition-card-edit,
   .nutrition-time-entry-stack.multiple .nutrition-card-edit,
   .nutrition-slot-entries.multiple .nutrition-card-edit {
-    min-width: 40px;
-    min-height: 40px;
+    min-width: 36px;
+    min-height: 36px;
     background: #343a44;
     color: var(--text-strong);
   }
 
   .nutrition-search-actions {
     position: fixed;
-    right: 14px;
-    bottom: calc(12px + env(safe-area-inset-bottom));
-    left: 14px;
+    right: 12px;
+    bottom: calc(10px + env(safe-area-inset-bottom));
+    left: 12px;
     z-index: 31;
-    grid-template-columns: minmax(0, 1fr) 54px;
-    gap: 8px;
+    grid-template-columns: minmax(0, 1fr) 48px;
+    gap: 7px;
     width: auto;
     margin: 0;
   }
 
   .nutrition-search-pill,
   .nutrition-barcode-pill {
-    min-height: 54px;
-    padding: 0 16px;
+    min-height: 48px;
+    padding: 0 14px;
     border: 0;
     background: #343a44;
     color: var(--text-strong);
-    font-size: 0.94rem;
+    font-size: 0.84rem;
   }
 
   .nutrition-search-pill {
-    grid-template-columns: 28px minmax(0, 1fr);
+    grid-template-columns: 24px minmax(0, 1fr);
+    gap: 10px;
   }
 
   .nutrition-barcode-pill {
@@ -7946,22 +7949,158 @@ th {
   }
 
   .nutrition-add-sheet {
-    padding: 14px 18px 24px;
+    gap: 12px;
+    max-height: 88dvh;
+    padding: 10px 14px 18px;
   }
 
   .nutrition-sheet-top {
-    grid-template-columns: 48px minmax(0, auto) minmax(0, 1fr) 48px;
-    gap: 8px;
+    grid-template-columns: 40px minmax(0, auto) minmax(0, 1fr) 40px;
+    gap: 7px;
   }
 
   .nutrition-sheet-round {
-    min-width: 48px;
+    min-width: 40px;
+    min-height: 40px;
+  }
+
+  .nutrition-sheet-time {
+    gap: 1px;
+  }
+
+  .nutrition-sheet-time strong {
+    font-size: 0.9rem;
+  }
+
+  .nutrition-sheet-time span,
+  .nutrition-sheet-mini span {
+    font-size: 0.72rem;
+  }
+
+  .nutrition-search-tabs button {
+    gap: 6px;
+    min-height: 44px;
+    border-bottom-width: 3px;
+    font-size: 0.8rem;
+  }
+
+  .nutrition-sheet-search {
+    grid-template-columns: 28px minmax(0, 1fr);
+    gap: 8px;
     min-height: 48px;
+    padding: 0 14px;
+    border-width: 2px;
+  }
+
+  .nutrition-sheet-search input {
+    font-size: 1rem;
+  }
+
+  .nutrition-pick-item {
+    grid-template-columns: 42px minmax(0, 1fr) 34px;
+    gap: 10px;
+    min-height: 66px;
+    padding: 9px 0;
+  }
+
+  .nutrition-pick-icon {
+    width: 36px;
+    height: 36px;
+  }
+
+  .nutrition-pick-item strong {
+    font-size: 0.9rem;
+  }
+
+  .nutrition-pick-item small {
+    font-size: 0.74rem;
+  }
+
+  .nutrition-detail-panel {
+    gap: 12px;
+  }
+
+  .nutrition-back-button {
+    gap: 8px;
+    min-height: 40px;
+    font-size: 1rem;
   }
 
   .nutrition-detail-macros {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-    gap: 12px;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 6px;
+    padding: 8px 0;
+  }
+
+  .nutrition-detail-macros small {
+    min-width: 0;
+    margin-bottom: 2px;
+    padding: 2px 5px;
+    font-size: 0.58rem;
+  }
+
+  .nutrition-detail-macros strong {
+    font-size: 0.9rem;
+  }
+
+  .nutrition-detail-macros span {
+    font-size: 0.66rem;
+  }
+
+  .nutrition-quantity-box {
+    grid-template-columns: minmax(0, 1fr) 38px;
+    min-height: 52px;
+    padding: 0 12px;
+    border-width: 2px;
+  }
+
+  .nutrition-quantity-box input {
+    font-size: 1.1rem;
+  }
+
+  .nutrition-quantity-box span {
+    font-size: 0.9rem;
+  }
+
+  .nutrition-unit-row {
+    gap: 7px;
+  }
+
+  .nutrition-unit-row button {
+    min-width: 74px;
+    min-height: 40px;
+    padding: 0 10px;
+    font-size: 0.78rem;
+  }
+
+  .nutrition-quick-grid {
+    gap: 8px;
+  }
+
+  .nutrition-detail-field {
+    gap: 5px;
+  }
+
+  .nutrition-detail-field span {
+    font-size: 0.76rem;
+  }
+
+  .nutrition-detail-field input,
+  .nutrition-detail-field textarea {
+    min-height: 40px;
+  }
+
+  .nutrition-detail-field textarea {
+    min-height: 64px;
+  }
+
+  .nutrition-detail-actions {
+    gap: 8px;
+  }
+
+  .nutrition-detail-actions .button {
+    min-height: 44px;
+    font-size: 0.82rem;
   }
 
   .agenda-item {

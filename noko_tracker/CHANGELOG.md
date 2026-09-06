@@ -1,5 +1,10 @@
 # Changelog
 
+## 2.1.14
+
+- Kalorientracker nutzt mobil eine kompaktere Darstellung mit vier nebeneinanderliegenden Restwerten.
+- Such-, Gerichte- und QuickAdd-Bereiche beim Eintragen sind mobil kleiner skaliert.
+
 ## 2.1.13
 
 - Der Button zum Speichern einer Trainingseinheit bleibt unten im Erfassungsbereich sichtbar.
