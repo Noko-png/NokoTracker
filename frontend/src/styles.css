@@ -6811,25 +6811,31 @@ th {
   .training-session-item {
     grid-template-columns: minmax(0, 1fr) auto;
     align-items: start;
+    gap: 10px;
   }
 
   .training-session-groups {
     grid-column: 1 / -1;
+    gap: 10px;
   }
 
   .training-session-exercise-group {
     grid-template-columns: 1fr;
-    gap: 7px;
+    gap: 8px;
     overflow-x: visible;
+    padding: 10px;
   }
 
   .training-session-exercise-head {
     align-content: start;
     gap: 0;
+    padding-bottom: 6px;
+    border-bottom: 1px solid color-mix(in srgb, var(--line) 72%, transparent);
   }
 
   .training-session-exercise-head strong {
     font-size: 1rem;
+    line-height: 1.2;
     white-space: normal;
   }
 
@@ -6840,12 +6846,14 @@ th {
 
   .training-session-set-grid {
     grid-template-columns: 1fr;
+    gap: 5px;
   }
 
   .training-session-set-card {
     grid-template-columns: minmax(58px, auto) minmax(0, 1fr) minmax(0, 1fr);
     align-items: center;
-    min-height: 40px;
+    min-height: 36px;
+    padding: 6px 8px;
   }
 
   .training-session-set-card small {

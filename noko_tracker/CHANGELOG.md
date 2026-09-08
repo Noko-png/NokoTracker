@@ -1,5 +1,9 @@
 # Changelog
 
+## 3.1.2
+
+- Mobile Trainingshistorie zeigt Uebungen als Ueberschriften mit den Saetzen darunter und ohne sichtbare Gesamtanzahlen.
+
 ## 3.1.1
 
 - Mobile Kalorientracker-Aktionen beim Eintragen und Bearbeiten bleiben in einer kompakten Dreierreihe.
