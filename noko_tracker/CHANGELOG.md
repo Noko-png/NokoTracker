@@ -1,5 +1,9 @@
 # Changelog
 
+## 3.1.3
+
+- Mobile Kalorientracker-Aktionen beim Eintragen und Bearbeiten nutzen kompakte Dreier-Buttons in einer Reihe.
+
 ## 3.1.2
 
 - Mobile Trainingshistorie zeigt Uebungen als Ueberschriften mit den Saetzen darunter und ohne sichtbare Gesamtanzahlen.

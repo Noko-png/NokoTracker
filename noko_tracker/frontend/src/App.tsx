@@ -543,7 +543,7 @@ const macroMeta: Array<{
   { key: "carbs", label: "Kohlenhydrate", unit: "g", tone: "red" },
 ];
 
-const appVersion = "3.1.2";
+const appVersion = "3.1.3";
 const updateSourceLabel = "main / github.com/Noko-png/NokoTracker";
 
 const emptyNutrition: NutritionDay = {
@@ -13441,7 +13441,8 @@ function NutritionPage({
                       type="button"
                     >
                       <Trash2 size={16} />
-                      Entfernen
+                      <span className="nutrition-action-label-full">Entfernen</span>
+                      <span className="nutrition-action-label-short">Entf.</span>
                     </button>
                   )}
                   <button
@@ -13449,7 +13450,8 @@ function NutritionPage({
                     onClick={closeAddSheet}
                     type="button"
                   >
-                    Abbrechen
+                    <span className="nutrition-action-label-full">Abbrechen</span>
+                    <span className="nutrition-action-label-short">Abbr.</span>
                   </button>
                   {editingMealLogId === null ? (
                     <>
@@ -13483,7 +13485,8 @@ function NutritionPage({
                     </>
                   ) : (
                     <button className="button primary" type="submit">
-                      Speichern
+                      <span className="nutrition-action-label-full">Speichern</span>
+                      <span className="nutrition-action-label-short">Sichern</span>
                     </button>
                   )}
                 </div>
