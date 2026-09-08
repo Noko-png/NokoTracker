@@ -1,5 +1,11 @@
 # Changelog
 
+## 3.1.0
+
+- Termin-Erstellen-Panel nutzt oben rechts ein X zum Schliessen.
+- Mobile Rezeptkarten stellen Portions-/Naehrwert-Metadaten, Aktionen und ausgeklappte Naehrwerte kompakter dar.
+- Mobile Bestandsuebersicht zeigt Produktnamen horizontal scrollbar und Statuszahlen in einer Reihe.
+
 ## 3.0.0
 
 - Mobile Kalenderansicht nutzt mehr Breite, zeigt Woche/Tag ohne interne Zeitraster-Scrollbar und unterstuetzt Wischen zum Zeitraumwechsel.

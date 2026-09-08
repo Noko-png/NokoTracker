@@ -2763,6 +2763,10 @@ th {
   font-weight: 950;
 }
 
+.inventory-alert-label {
+  display: inline;
+}
+
 .inventory-alert.expired {
   background: #9f1111;
   color: #ef4444;
@@ -3178,6 +3182,16 @@ th {
 
 .recipe-head span {
   color: var(--muted);
+}
+
+.recipe-card-meta {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.recipe-card-meta span + span::before {
+  content: "| ";
 }
 
 .recipe-tags {
@@ -7135,26 +7149,33 @@ th {
     flex: 0 0 auto;
   }
 
-  .recipe-card .nutrition-mini {
-    grid-template-columns: repeat(4, minmax(0, 1fr));
-    gap: 6px;
+  .recipe-card > .nutrition-mini {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr)) !important;
+    gap: 4px;
+    width: 100%;
+    min-width: 0;
   }
 
-  .recipe-card .nutrition-mini .stat {
+  .recipe-card > .nutrition-mini .stat {
     align-content: center;
-    min-height: 62px;
-    padding: 8px 4px;
+    gap: 2px;
+    min-width: 0;
+    min-height: 54px;
+    padding: 7px 2px;
     text-align: center;
   }
 
-  .recipe-card .nutrition-mini .stat strong {
-    font-size: 0.96rem;
+  .recipe-card > .nutrition-mini .stat strong {
+    min-width: 0;
+    font-size: 0.84rem;
     line-height: 1.1;
   }
 
-  .recipe-card .nutrition-mini .stat span {
+  .recipe-card > .nutrition-mini .stat span {
+    min-width: 0;
     overflow-wrap: anywhere;
-    font-size: 0.58rem;
+    font-size: 0.5rem;
     line-height: 1.15;
   }
 
@@ -7320,23 +7341,31 @@ th {
   .inventory-alert-bars {
     grid-template-columns: repeat(4, minmax(0, 1fr));
     gap: 6px;
+    width: 100%;
+    min-width: 0;
   }
 
   .inventory-alert {
     display: grid;
     align-content: center;
     justify-items: center;
-    min-height: 42px;
+    min-width: 0;
+    min-height: 44px;
     padding: 6px 4px;
     border-top-width: 4px;
     border-radius: 7px;
-    font-size: 0;
+    text-align: center;
     line-height: 1;
   }
 
   .inventory-alert strong {
-    font-size: 1.2rem;
+    display: block;
+    font-size: 1.25rem;
     line-height: 1;
+  }
+
+  .inventory-alert-label {
+    display: none;
   }
 
   .inventory-column-menu {
@@ -7404,9 +7433,9 @@ th {
 
   .inventory-mobile-card {
     display: grid;
-    grid-template-columns: 144px minmax(0, 1fr) minmax(72px, auto);
+    grid-template-columns: minmax(0, 1fr) minmax(72px, auto);
     align-items: center;
-    gap: 8px;
+    gap: 7px 8px;
     min-width: 0;
     min-height: 50px;
     padding: 7px 8px;
@@ -7421,14 +7450,20 @@ th {
   }
 
   .inventory-mobile-product {
-    display: flex;
+    display: grid;
+    grid-column: 1 / -1;
+    grid-template-columns: auto minmax(0, 1fr);
     align-items: center;
     gap: 7px;
+    order: 1;
+    width: 100%;
     min-width: 0;
     color: var(--text-strong);
   }
 
   .inventory-mobile-quantity {
+    grid-column: 2;
+    order: 3;
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
@@ -7436,6 +7471,7 @@ th {
 
   .inventory-mobile-product span:last-child {
     display: block;
+    width: 100%;
     min-width: 0;
     max-width: 100%;
     overflow-x: auto;
@@ -7456,8 +7492,10 @@ th {
 
   .inventory-mobile-actions {
     display: grid;
+    grid-column: 1;
     grid-template-columns: repeat(4, 32px);
     gap: 4px;
+    order: 2;
   }
 
   .inventory-mobile-actions .stock-action {
@@ -7752,6 +7790,16 @@ th {
   .recipe-head {
     align-items: stretch;
     flex-direction: column;
+  }
+
+  .recipe-card-meta {
+    display: grid;
+    gap: 1px;
+    margin-top: 2px;
+  }
+
+  .recipe-card-meta span + span::before {
+    content: "";
   }
 
   .prepare-header {

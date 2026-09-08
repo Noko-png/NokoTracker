@@ -543,7 +543,7 @@ const macroMeta: Array<{
   { key: "carbs", label: "Kohlenhydrate", unit: "g", tone: "red" },
 ];
 
-const appVersion = "3.0.0";
+const appVersion = "3.1.0";
 const updateSourceLabel = "main / github.com/Noko-png/NokoTracker";
 
 const emptyNutrition: NutritionDay = {
@@ -6818,6 +6818,18 @@ function CalendarPage({
 
         {createPanel === "event" && (
           <Panel
+            actions={
+              editingEventId === null ? (
+                <button
+                  className="icon-button"
+                  onClick={closeCreatePanel}
+                  title="Schliessen"
+                  type="button"
+                >
+                  <X size={18} />
+                </button>
+              ) : undefined
+            }
             title={
               editingEventId !== null
                 ? "Eintrag bearbeiten"
@@ -6957,14 +6969,16 @@ function CalendarPage({
                   )}
                   {editingEventId !== null ? "Speichern" : "Anlegen"}
                 </button>
-                <button
-                  className="button secondary"
-                  onClick={closeCreatePanel}
-                  type="button"
-                >
-                  <X size={16} />
-                  {editingEventId !== null ? "Abbrechen" : "Schliessen"}
-                </button>
+                {editingEventId !== null && (
+                  <button
+                    className="button secondary"
+                    onClick={closeCreatePanel}
+                    type="button"
+                  >
+                    <X size={16} />
+                    Abbrechen
+                  </button>
+                )}
               </div>
             </form>
           </Panel>
@@ -7939,19 +7953,25 @@ function InventoryPage({
         <div className="inventory-warning-strip">
           <div className="inventory-alert-bars">
             <div className="inventory-alert expired">
-              <strong>{expiredCount}</strong> Produkte sind abgelaufen
+              <strong>{expiredCount}</strong>
+              <span className="inventory-alert-label">Produkte sind abgelaufen</span>
             </div>
             <div className="inventory-alert overdue">
-              <strong>{overdueCount}</strong> Produkte sind überfaellig
+              <strong>{overdueCount}</strong>
+              <span className="inventory-alert-label">Produkte sind überfaellig</span>
             </div>
             <div className="inventory-alert due">
-              <strong>{dueSoonCount}</strong> Produkte sind fällig innerhalb
-              der nächsten 5 Tage
+              <strong>{dueSoonCount}</strong>
+              <span className="inventory-alert-label">
+                Produkte sind fällig innerhalb der nächsten 5 Tage
+              </span>
             </div>
             <div className="inventory-alert low">
-              <strong>{lowStockCount}</strong>{" "}
-              {lowStockCount === 1 ? "Produkt ist" : "Produkte sind"} unter
-              Mindestbestand
+              <strong>{lowStockCount}</strong>
+              <span className="inventory-alert-label">
+                {lowStockCount === 1 ? "Produkt ist" : "Produkte sind"} unter
+                Mindestbestand
+              </span>
             </div>
           </div>
           <div className="inventory-column-menu" ref={columnEditorRef}>
@@ -11692,9 +11712,9 @@ function RecipesPage({
                         </span>
                         <span>{recipe.name}</span>
                       </h3>
-                      <span>
-                        {formatFractionalQuantity(recipe.servings)} Portionen |{" "}
-                        {formatNumber(caloriesPerServing, 0)} kcal / Portion
+                      <span className="recipe-card-meta">
+                        <span>{formatFractionalQuantity(recipe.servings)} Portionen</span>
+                        <span>{formatNumber(caloriesPerServing, 0)} kcal / Portion</span>
                       </span>
                       {(recipe.tags ?? []).length > 0 && (
                         <div className="recipe-tags">
@@ -14307,10 +14327,12 @@ function SettingsPage({
 }
 
 function Panel({
+  actions,
   children,
   className = "",
   title,
 }: {
+  actions?: React.ReactNode;
   children: React.ReactNode;
   className?: string;
   title: string;
@@ -14319,6 +14341,7 @@ function Panel({
     <section className={["panel", className].filter(Boolean).join(" ")}>
       <div className="panel-header">
         <h2>{title}</h2>
+        {actions}
       </div>
       {children}
     </section>
