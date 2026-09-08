@@ -1,5 +1,10 @@
 # Changelog
 
+## 3.0.0
+
+- Mobile Kalenderansicht nutzt mehr Breite, zeigt Woche/Tag ohne interne Zeitraster-Scrollbar und unterstuetzt Wischen zum Zeitraumwechsel.
+- Mobile Rezeptkarten zeigen Bearbeiten, Zubereiten und Naehrwerte in einer Reihe.
+
 ## 2.1.17
 
 - Mobile Home-Assistant-Ingress-Ansicht setzt Fokus und Pointer-Zustand nach Sidebar-/Viewport-Wechseln automatisch zurueck.
