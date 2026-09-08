@@ -543,7 +543,7 @@ const macroMeta: Array<{
   { key: "carbs", label: "Kohlenhydrate", unit: "g", tone: "red" },
 ];
 
-const appVersion = "3.1.0";
+const appVersion = "3.1.1";
 const updateSourceLabel = "main / github.com/Noko-png/NokoTracker";
 
 const emptyNutrition: NutritionDay = {
@@ -13458,7 +13458,10 @@ function NutritionPage({
                         data-action="add"
                         type="submit"
                       >
-                        Hinzufügen
+                        <span className="nutrition-action-label-full">
+                          Hinzufügen
+                        </span>
+                        <span className="nutrition-action-label-short">Hinzu</span>
                       </button>
                       <button
                         className="button primary"
@@ -13472,7 +13475,10 @@ function NutritionPage({
                         type="submit"
                       >
                         <Minus size={16} />
-                        Hinzufügen und vom Bestand abziehen
+                        <span className="nutrition-action-label-full">
+                          Hinzufügen und vom Bestand abziehen
+                        </span>
+                        <span className="nutrition-action-label-short">Abziehen</span>
                       </button>
                     </>
                   ) : (

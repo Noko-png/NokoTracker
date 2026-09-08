@@ -1,5 +1,9 @@
 # Changelog
 
+## 3.1.1
+
+- Mobile Kalorientracker-Aktionen beim Eintragen und Bearbeiten bleiben in einer kompakten Dreierreihe.
+
 ## 3.1.0
 
 - Termin-Erstellen-Panel nutzt oben rechts ein X zum Schliessen.
