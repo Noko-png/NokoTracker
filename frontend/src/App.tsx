@@ -40,6 +40,7 @@ import type {
   FormEvent,
   MouseEvent as ReactMouseEvent,
   PointerEvent as ReactPointerEvent,
+  TouchEvent as ReactTouchEvent,
 } from "react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
@@ -453,6 +454,12 @@ type CalendarDateSelectionPointer = {
   startX: number;
   startY: number;
   active: boolean;
+};
+
+type CalendarSwipeTouch = {
+  startX: number;
+  startY: number;
+  swiping: boolean;
 };
 
 type UserForm = {
@@ -4914,7 +4921,11 @@ function TrainingSessionList({
               <div className="training-session-meta">
                 <strong>{formatDate(getLocalDate(new Date(session.trained_at)))}</strong>
                 <span>
-                  {session.plan.name} - {session.sets.length} Saetze
+                  {session.plan.name}
+                  <span className="training-session-total-count">
+                    {" "}
+                    - {session.sets.length} Saetze
+                  </span>
                 </span>
               </div>
               <div className="training-session-groups">
@@ -4925,7 +4936,9 @@ function TrainingSessionList({
                   >
                     <div className="training-session-exercise-head">
                       <strong>{group.exerciseName}</strong>
-                      <span>{group.sets.length} Saetze</span>
+                      <span className="training-session-set-count">
+                        {group.sets.length} Saetze
+                      </span>
                     </div>
                     <div className="training-session-set-grid">
                       {group.sets.map((set) => (
@@ -5844,9 +5857,12 @@ function CalendarPage({
   const [dateSelection, setDateSelection] =
     useState<CalendarDateSelection | null>(null);
   const suppressMonthDateClickRef = useRef(false);
+  const suppressMonthDateClickTimeoutRef = useRef<number | null>(null);
   const dateSelectionHoldTimerRef = useRef<number | null>(null);
   const dateSelectionPointerRef =
     useRef<CalendarDateSelectionPointer | null>(null);
+  const calendarSwipeTouchRef = useRef<CalendarSwipeTouch | null>(null);
+  const suppressTimeSelectionFinishRef = useRef(false);
   const [createMenuOpen, setCreateMenuOpen] = useState(false);
   const createMenuRef = useCloseOnOutsideClick<HTMLDivElement>(
     createMenuOpen,
@@ -5873,6 +5889,9 @@ function CalendarPage({
     () => () => {
       if (dateSelectionHoldTimerRef.current !== null) {
         window.clearTimeout(dateSelectionHoldTimerRef.current);
+      }
+      if (suppressMonthDateClickTimeoutRef.current !== null) {
+        window.clearTimeout(suppressMonthDateClickTimeoutRef.current);
       }
     },
     [],
@@ -6089,6 +6108,30 @@ function CalendarPage({
     setDateSelection(null);
   }
 
+  function cancelCalendarSwipe() {
+    calendarSwipeTouchRef.current = null;
+  }
+
+  function suppressNextMonthDateClick() {
+    if (suppressMonthDateClickTimeoutRef.current !== null) {
+      window.clearTimeout(suppressMonthDateClickTimeoutRef.current);
+    }
+
+    suppressMonthDateClickRef.current = true;
+    suppressMonthDateClickTimeoutRef.current = window.setTimeout(() => {
+      suppressMonthDateClickRef.current = false;
+      suppressMonthDateClickTimeoutRef.current = null;
+    }, 450);
+  }
+
+  function clearMonthDateClickSuppression() {
+    if (suppressMonthDateClickTimeoutRef.current !== null) {
+      window.clearTimeout(suppressMonthDateClickTimeoutRef.current);
+      suppressMonthDateClickTimeoutRef.current = null;
+    }
+    suppressMonthDateClickRef.current = false;
+  }
+
   function extendDateSelection(dayIndex: number) {
     setDateSelection((current) =>
       current ? { ...current, endIndex: dayIndex } : current,
@@ -6141,7 +6184,6 @@ function CalendarPage({
         return;
       }
       current.active = true;
-      suppressMonthDateClickRef.current = true;
       target.setPointerCapture(event.pointerId);
       startDateSelection(current.startIndex);
     }, 300);
@@ -6185,9 +6227,108 @@ function CalendarPage({
     dateSelectionPointerRef.current = null;
 
     if (shouldFinish) {
+      cancelCalendarSwipe();
+      suppressNextMonthDateClick();
       event.preventDefault();
       finishDateSelection();
     }
+  }
+
+  function handleCalendarSwipeTouchStart(
+    event: ReactTouchEvent<HTMLDivElement>,
+  ) {
+    if (event.touches.length !== 1) {
+      cancelCalendarSwipe();
+      return;
+    }
+
+    suppressTimeSelectionFinishRef.current = false;
+    const touch = event.touches[0];
+    calendarSwipeTouchRef.current = {
+      startX: touch.clientX,
+      startY: touch.clientY,
+      swiping: false,
+    };
+  }
+
+  function handleCalendarSwipeTouchMove(event: ReactTouchEvent<HTMLDivElement>) {
+    const current = calendarSwipeTouchRef.current;
+    if (!current || event.touches.length !== 1) {
+      cancelCalendarSwipe();
+      return;
+    }
+    if (dateSelectionPointerRef.current?.active) {
+      cancelCalendarSwipe();
+      return;
+    }
+
+    const touch = event.touches[0];
+    const deltaX = touch.clientX - current.startX;
+    const deltaY = touch.clientY - current.startY;
+    const distanceX = Math.abs(deltaX);
+    const distanceY = Math.abs(deltaY);
+
+    if (distanceY > 30 && distanceY > distanceX) {
+      cancelCalendarSwipe();
+      return;
+    }
+
+    if (distanceX > 16 && distanceX > distanceY * 1.35) {
+      current.swiping = true;
+      if (view !== "month") {
+        suppressTimeSelectionFinishRef.current = true;
+        setTimeSelection(null);
+      }
+      event.preventDefault();
+      clearDateSelectionHoldTimer();
+      dateSelectionPointerRef.current = null;
+    }
+  }
+
+  function handleCalendarSwipeTouchEnd(event: ReactTouchEvent<HTMLDivElement>) {
+    const current = calendarSwipeTouchRef.current;
+    cancelCalendarSwipe();
+
+    if (
+      !current ||
+      event.changedTouches.length === 0 ||
+      dateSelectionPointerRef.current?.active
+    ) {
+      return;
+    }
+
+    const touch = event.changedTouches[0];
+    const deltaX = touch.clientX - current.startX;
+    const deltaY = touch.clientY - current.startY;
+    const distanceX = Math.abs(deltaX);
+    const distanceY = Math.abs(deltaY);
+
+    if (distanceX < 64 || distanceX < distanceY * 1.35) {
+      return;
+    }
+
+    if (view !== "month") {
+      suppressTimeSelectionFinishRef.current = true;
+    }
+    event.preventDefault();
+    suppressNextMonthDateClick();
+    onDateChange(moveCalendarView(selectedDate, view, deltaX < 0 ? 1 : -1));
+  }
+
+  function handleCalendarTimeGridPointerUp(
+    event: ReactPointerEvent<HTMLDivElement>,
+  ) {
+    if (
+      suppressTimeSelectionFinishRef.current ||
+      calendarSwipeTouchRef.current?.swiping
+    ) {
+      suppressTimeSelectionFinishRef.current = false;
+      setTimeSelection(null);
+      event.preventDefault();
+      return;
+    }
+
+    finishTimeSelection();
   }
 
   function finishDateSelection() {
@@ -6217,7 +6358,6 @@ function CalendarPage({
       start_time: "00:00",
       end_time: "23:59",
     });
-    suppressMonthDateClickRef.current = true;
     setCreatePanel("event");
     setCreateMenuOpen(false);
     setDateSelection(null);
@@ -6327,7 +6467,10 @@ function CalendarPage({
             </div>
             <div
               className={`calendar-grid ${dateSelection ? "selecting" : ""}`}
-              onPointerCancel={cancelDateSelection}
+              onPointerCancel={() => {
+                cancelDateSelection();
+                cancelCalendarSwipe();
+              }}
               onPointerLeave={(event) => {
                 if (event.pointerType === "mouse") {
                   cancelDateSelection();
@@ -6335,6 +6478,10 @@ function CalendarPage({
               }}
               onPointerMove={handleDateSelectionPointerMove}
               onPointerUp={handleDateSelectionPointerUp}
+              onTouchCancel={cancelCalendarSwipe}
+              onTouchEnd={handleCalendarSwipeTouchEnd}
+              onTouchMove={handleCalendarSwipeTouchMove}
+              onTouchStart={handleCalendarSwipeTouchStart}
             >
               {gridDates.map((date, dayIndex) => {
                 const dateValue = getLocalDate(date);
@@ -6356,7 +6503,7 @@ function CalendarPage({
                     key={dateValue}
                     onClick={() => {
                       if (suppressMonthDateClickRef.current) {
-                        suppressMonthDateClickRef.current = false;
+                        clearMonthDateClickSuppression();
                         return;
                       }
                       onDateChange(dateValue);
@@ -6384,8 +6531,12 @@ function CalendarPage({
         ) : (
           <div
             className={`calendar-time-grid ${view}`}
+            onTouchCancel={cancelCalendarSwipe}
+            onTouchEnd={handleCalendarSwipeTouchEnd}
+            onTouchMove={handleCalendarSwipeTouchMove}
+            onTouchStart={handleCalendarSwipeTouchStart}
             onPointerLeave={() => setTimeSelection(null)}
-            onPointerUp={finishTimeSelection}
+            onPointerUp={handleCalendarTimeGridPointerUp}
           >
             <span className="time-grid-corner" />
             {gridDates.map((date) => {
@@ -11555,12 +11706,13 @@ function RecipesPage({
                     </div>
                     <div className="recipe-actions">
                       <button
-                        className="icon-button"
+                        className="button secondary recipe-edit-button"
                         onClick={() => onEditRecipe(recipe)}
                         title="Gericht bearbeiten"
                         type="button"
                       >
                         <Pencil size={16} />
+                        Bearbeiten
                       </button>
                       <button
                         className="button secondary"
@@ -11576,7 +11728,7 @@ function RecipesPage({
                         type="button"
                       >
                         <BarChart3 size={16} />
-                        {recipeNutrition[recipe.id] ? "Einklappen" : "Naehrwerte"}
+                        Nährwerte
                       </button>
                     </div>
                   </div>
@@ -11601,6 +11753,7 @@ function RecipesPage({
       </section>
       {preparingRecipe && (
         <ModalBackdrop
+          className="modal-backdrop prepare-backdrop"
           onClose={() => setPreparingRecipeId(null)}
           role="presentation"
         >
