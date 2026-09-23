@@ -176,6 +176,14 @@ import {
   updateWeightEntry,
   syncRecipeShoppingList,
 } from "./api/client";
+import {
+  type CalendarOccurrence,
+  addDays,
+  dateAtEndOfDay,
+  dateFromLocalValue,
+  getCalendarOccurrences,
+  getLocalDate,
+} from "./calendar";
 
 type BarcodeDetectorResult = {
   rawValue: string;
@@ -428,14 +436,6 @@ const mealPrepSlots: Array<{
   { id: "dinner", label: "Abendessen", time: "18:30" },
 ];
 
-type CalendarOccurrence = {
-  key: string;
-  date: string;
-  event: CalendarEvent;
-  startAt: Date;
-  endAt: Date | null;
-};
-
 type CalendarTimeSelection = {
   dayIndex: number;
   startSlot: number;
@@ -543,7 +543,7 @@ const macroMeta: Array<{
   { key: "carbs", label: "Kohlenhydrate", unit: "g", tone: "red" },
 ];
 
-const appVersion = "3.1.3";
+const appVersion = "3.1.4";
 const updateSourceLabel = "main / github.com/Noko-png/NokoTracker";
 
 const emptyNutrition: NutritionDay = {
@@ -785,11 +785,6 @@ const initialCsvImportForm: CsvImportForm = {
   directory: "u:\\Nico\\Desktop\\db",
   dryRun: false,
 };
-
-function getLocalDate(date = new Date()) {
-  const offset = date.getTimezoneOffset() * 60_000;
-  return new Date(date.getTime() - offset).toISOString().slice(0, 10);
-}
 
 function createInitialWeightForm(): WeightForm {
   return {
@@ -1179,29 +1174,6 @@ function timeValueToSlot(value: string, fallback: number) {
   return Math.min(Math.max(Math.floor((hours * 60 + minutes) / 30), 0), 48);
 }
 
-function dateFromLocalValue(value: string) {
-  return new Date(`${value}T00:00:00`);
-}
-
-function dateAtEndOfDay(value: string) {
-  return new Date(`${value}T23:59:59`);
-}
-
-function datesOverlap(
-  start: Date,
-  end: Date,
-  rangeStart: Date,
-  rangeEnd: Date,
-) {
-  return start <= rangeEnd && end >= rangeStart;
-}
-
-function addDays(date: Date, amount: number) {
-  const next = new Date(date);
-  next.setDate(next.getDate() + amount);
-  return next;
-}
-
 function monthGridDates(selectedDate: string) {
   const firstOfMonth = dateFromLocalValue(selectedDate);
   firstOfMonth.setDate(1);
@@ -1256,152 +1228,6 @@ function formatCalendarViewTitle(view: CalendarView, selectedDate: string) {
   return `${formatDate(getLocalDate(week[0]))} - ${formatDate(
     getLocalDate(week[week.length - 1]),
   )}`;
-}
-
-function addRecurrenceStep(
-  value: Date,
-  frequency: CalendarEvent["recurrence_frequency"],
-  interval: number,
-) {
-  const next = new Date(value);
-  if (frequency === "daily") {
-    next.setDate(next.getDate() + interval);
-  }
-  if (frequency === "weekdays" || frequency === "weekends") {
-    next.setDate(next.getDate() + 1);
-  }
-  if (frequency === "weekly") {
-    next.setDate(next.getDate() + interval * 7);
-  }
-  if (frequency === "monthly") {
-    next.setMonth(next.getMonth() + interval);
-  }
-  if (frequency === "yearly") {
-    next.setFullYear(next.getFullYear() + interval);
-  }
-  return next;
-}
-
-function calendarWeekStart(value: Date) {
-  const weekStart = new Date(value);
-  weekStart.setHours(0, 0, 0, 0);
-  weekStart.setDate(weekStart.getDate() - ((weekStart.getDay() + 6) % 7));
-  return weekStart;
-}
-
-function groupedRecurrenceMatchesDate(
-  baseStart: Date,
-  occurrenceStart: Date,
-  frequency: CalendarEvent["recurrence_frequency"],
-  interval: number,
-) {
-  const day = occurrenceStart.getDay();
-  const matchesDay =
-    frequency === "weekdays"
-      ? day >= 1 && day <= 5
-      : frequency === "weekends"
-        ? day === 0 || day === 6
-        : true;
-
-  if (!matchesDay) {
-    return false;
-  }
-  if (frequency !== "weekdays" && frequency !== "weekends") {
-    return true;
-  }
-
-  const millisecondsPerWeek = 7 * 24 * 60 * 60 * 1000;
-  const weekDistance = Math.floor(
-    (calendarWeekStart(occurrenceStart).getTime() -
-      calendarWeekStart(baseStart).getTime()) /
-      millisecondsPerWeek,
-  );
-  return weekDistance % Math.max(interval, 1) === 0;
-}
-
-function sortCalendarOccurrences(occurrences: CalendarOccurrence[]) {
-  return [...occurrences].sort(
-    (first, second) => first.startAt.getTime() - second.startAt.getTime(),
-  );
-}
-
-function getCalendarOccurrences(
-  events: CalendarEvent[],
-  rangeStart: Date,
-  rangeEnd: Date,
-) {
-  const occurrences: CalendarOccurrence[] = [];
-
-  for (const event of events) {
-    const baseStart = new Date(event.start_at);
-    const baseEnd = event.end_at ? new Date(event.end_at) : null;
-    const duration = baseEnd ? baseEnd.getTime() - baseStart.getTime() : null;
-    const frequency = event.recurrence_frequency ?? "none";
-    const interval = Math.max(event.recurrence_interval || 1, 1);
-    const recurrenceUntil = event.recurrence_until
-      ? new Date(event.recurrence_until)
-      : null;
-    const excludedStarts = new Set(
-      (event.exclusions ?? []).map((exclusion) =>
-        new Date(exclusion.occurrence_start_at).getTime(),
-      ),
-    );
-    let occurrenceStart = new Date(baseStart);
-    let count = 0;
-
-    while (count < 4000 && occurrenceStart <= rangeEnd) {
-      if (recurrenceUntil && occurrenceStart > recurrenceUntil) {
-        break;
-      }
-      const occurrenceEnd =
-        duration === null
-          ? new Date(occurrenceStart)
-          : new Date(occurrenceStart.getTime() + duration);
-
-      if (
-        datesOverlap(occurrenceStart, occurrenceEnd, rangeStart, rangeEnd) &&
-        groupedRecurrenceMatchesDate(
-          baseStart,
-          occurrenceStart,
-          frequency,
-          interval,
-        ) &&
-        !excludedStarts.has(occurrenceStart.getTime())
-      ) {
-        const lastDate = dateFromLocalValue(getLocalDate(occurrenceEnd));
-        let segmentDate = dateFromLocalValue(getLocalDate(occurrenceStart));
-        while (segmentDate <= lastDate) {
-          const date = getLocalDate(segmentDate);
-          if (datesOverlap(segmentDate, dateAtEndOfDay(date), rangeStart, rangeEnd)) {
-            const firstSegment = date === getLocalDate(occurrenceStart);
-            const lastSegment = date === getLocalDate(occurrenceEnd);
-            occurrences.push({
-              key: `${event.id}-${occurrenceStart.toISOString()}-${date}`,
-              date,
-              event,
-              startAt: firstSegment ? new Date(occurrenceStart) : dateFromLocalValue(date),
-              endAt:
-                duration === null
-                  ? null
-                  : lastSegment
-                    ? new Date(occurrenceEnd)
-                    : dateAtEndOfDay(date),
-            });
-          }
-          segmentDate = addDays(segmentDate, 1);
-        }
-      }
-
-      if (frequency === "none") {
-        break;
-      }
-
-      occurrenceStart = addRecurrenceStep(occurrenceStart, frequency, interval);
-      count += 1;
-    }
-  }
-
-  return sortCalendarOccurrences(occurrences);
 }
 
 function formatOccurrenceTime(occurrence: CalendarOccurrence) {
@@ -2377,19 +2203,6 @@ export default function App() {
     ) as string[];
   }, [positiveInventory, productGroups]);
 
-  const dashboardCalendarEvents = useMemo(() => {
-    const hiddenOverviewGroupIds = new Set(
-      calendarGroups
-        .filter((group) => group.hide_from_dashboard_and_month)
-        .map((group) => group.id),
-    );
-    return calendarEvents.filter(
-      (event) =>
-        event.entry_type !== "task" &&
-        (!event.group_id || !hiddenOverviewGroupIds.has(event.group_id)),
-    );
-  }, [calendarEvents, calendarGroups]);
-
   const calendarVisibleEvents = useMemo(
     () => calendarEvents.filter((event) => event.entry_type !== "task"),
     [calendarEvents],
@@ -2397,12 +2210,20 @@ export default function App() {
 
   const todaysEvents = useMemo(() => {
     const today = getLocalDate();
+    const hiddenOverviewGroupIds = new Set(
+      calendarGroups
+        .filter((group) => group.hide_from_dashboard_and_month)
+        .map((group) => group.id),
+    );
     return getCalendarOccurrences(
-      dashboardCalendarEvents,
+      calendarVisibleEvents,
       dateFromLocalValue(today),
       dateAtEndOfDay(today),
+      calendarGroups,
+    ).filter(
+      ({ event }) => !event.group_id || !hiddenOverviewGroupIds.has(event.group_id),
     );
-  }, [dashboardCalendarEvents]);
+  }, [calendarVisibleEvents, calendarGroups]);
 
   const openShoppingList = useMemo(
     () => shoppingList.filter((item) => !item.is_checked),
@@ -3559,8 +3380,8 @@ export default function App() {
     await runAction(() =>
       excludeCalendarOccurrence(
         occurrence.event.id,
-        `${getLocalDate(occurrence.startAt)}T${formatTimeInput(
-          occurrence.startAt,
+        `${getLocalDate(occurrence.occurrenceStartAt)}T${formatTimeInput(
+          occurrence.occurrenceStartAt,
         )}:00`,
       ),
     );
@@ -5905,14 +5726,13 @@ function CalendarPage({
       .filter((group) => group.hide_from_dashboard_and_month)
       .map((group) => group.id),
   );
-  const visibleEvents = events.filter(
-    (event) =>
+  const occurrences = getCalendarOccurrences(events, gridStart, gridEnd, groups).filter(
+    ({ event }) =>
       (!event.group_id || !hiddenGroupIds.includes(event.group_id)) &&
       (view !== "month" ||
         !event.group_id ||
         !overviewHiddenGroupIds.has(event.group_id)),
   );
-  const occurrences = getCalendarOccurrences(visibleEvents, gridStart, gridEnd);
   const occurrencesByDate = new Map<string, CalendarOccurrence[]>();
   for (const occurrence of occurrences) {
     const current = occurrencesByDate.get(occurrence.date) ?? [];

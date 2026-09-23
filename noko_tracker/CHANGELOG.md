@@ -1,5 +1,11 @@
 # Changelog
 
+## 3.1.4
+
+- Kalendergruppen verdraengen nur tatsaechlich ueberlappende Zeiten; Restzeiten und Tage ausserhalb eines Urlaubs bleiben sichtbar.
+- Verdraengung wird pro Wiederholung berechnet und beim Verschieben, Verkuerzen oder Loeschen eines Termins sofort neu ausgewertet.
+- Neue Verdraengungen veraendern die gespeicherte Serie nicht mehr. Bereits durch aeltere Versionen geloeschte Zeiten werden nicht automatisch rekonstruiert.
+
 ## 3.1.3
 
 - Mobile Kalorientracker-Aktionen beim Eintragen und Bearbeiten nutzen kompakte Dreier-Buttons in einer Reihe.

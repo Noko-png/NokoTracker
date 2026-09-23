@@ -26,6 +26,22 @@ Die API-Dokumentation ist danach unter http://127.0.0.1:8000/docs erreichbar.
 - `shopping-list`: Einkaufsliste mit Abhakstatus, Prioritaet und Low-Stock-Generierung
 - `dashboard/summary`: kompakte Uebersicht
 
+## Kalender
+
+Die Kalender-API liefert die gespeicherten Termine, Wiederholungen und manuell
+geloeschten Einzelvorkommen. Gruppen-Verdraengung wird in der Kalenderansicht und
+im Dashboard fuer jedes Vorkommen berechnet: Nur ueberlappende Zeiten entfallen,
+die Serie bleibt gespeichert. Aendern oder Entfernen eines verdraengenden Termins
+gibt die betroffenen Zeiten wieder frei.
+
+Vor Version 3.1.4 erzeugte die Verdraengung dauerhafte Loeschungen, Ausnahmen und
+Einzeltermine. Diese Altdaten haben keine Herkunftskennzeichnung und werden nicht
+automatisch wiederhergestellt. Betroffene Serien muessen gegebenenfalls aus einer
+Sicherung wiederhergestellt oder neu angelegt werden.
+
+Kalender-Pruefungen: im Backend `python -m unittest discover -s tests -v`,
+im Frontend `npm test` (Node.js ab 22.18).
+
 ## Beziehungen
 
 - `Recipe` hat viele `RecipeIngredient`-Eintraege.
