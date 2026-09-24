@@ -87,6 +87,29 @@ class CalendarSuppressionTest(unittest.TestCase):
         calendar.delete_event(holiday.id, self.db)
         self.assert_work_preserved(work)
 
+    def test_creating_one_all_day_holiday_preserves_the_entire_work_series(self):
+        work = self.create_work()
+        original = schemas.CalendarEventRead.model_validate(work).model_dump()
+        holiday = calendar.create_event(
+            schemas.CalendarEventCreate(
+                title="Urlaub",
+                start_at=datetime(2026, 9, 24),
+                end_at=datetime(2026, 9, 24, 23, 59),
+                all_day=True,
+                group_id=self.holiday_group.id,
+            ),
+            self.db,
+        )
+        self.assertNotEqual(holiday.id, work.id)
+        self.db.expire_all()
+        self.assertEqual(
+            schemas.CalendarEventRead.model_validate(
+                calendar.read_event(work.id, self.db)
+            ).model_dump(),
+            original,
+        )
+        self.assertEqual(self.db.query(models.CalendarEvent).count(), 2)
+
     def test_explicitly_deleted_occurrences_are_still_preserved(self):
         work = self.create_work()
         excluded_start = datetime(2026, 9, 23, 6)

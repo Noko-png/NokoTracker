@@ -1,5 +1,12 @@
 # Changelog
 
+## 3.1.5
+
+- Beim Anlegen eines Termins waehlt das Antippen vorhandener Termine nur das Datum, statt unbemerkt zur Serienbearbeitung zu wechseln.
+- Ein einzelner Urlaubstag bleibt beim Aendern des Datums eintaegig; bestehende Serien werden nicht mit dem Urlaub ueberschrieben.
+- Das Terminformular schliesst nach erfolgreichem Speichern und bleibt bei Fehlern mit den Eingaben offen.
+- Browser-Regressionstests pruefen den kompletten Speichervorgang mit einer isolierten In-Memory-Datenbank.
+
 ## 3.1.4
 
 - Kalendergruppen verdraengen nur tatsaechlich ueberlappende Zeiten; Restzeiten und Tage ausserhalb eines Urlaubs bleiben sichtbar.

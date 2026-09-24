@@ -183,6 +183,7 @@ import {
   dateFromLocalValue,
   getCalendarOccurrences,
   getLocalDate,
+  withCalendarDate,
 } from "./calendar";
 
 type BarcodeDetectorResult = {
@@ -543,7 +544,7 @@ const macroMeta: Array<{
   { key: "carbs", label: "Kohlenhydrate", unit: "g", tone: "red" },
 ];
 
-const appVersion = "3.1.4";
+const appVersion = "3.1.5";
 const updateSourceLabel = "main / github.com/Noko-png/NokoTracker";
 
 const emptyNutrition: NutritionDay = {
@@ -3351,18 +3352,18 @@ export default function App() {
       setCalendarForm(createCalendarForm(calendarForm.date));
       setEditingCalendarEventId(null);
       await loadData();
+      return true;
     } catch (error) {
       setApiError(error instanceof Error ? error.message : "API-Fehler");
+      return false;
     }
   }
 
   function selectCalendarDate(value: string) {
     setCalendarDate(value);
-    setCalendarForm((current) => ({
-      ...current,
-      date: value,
-      end_date: current.end_date && current.end_date >= value ? current.end_date : value,
-    }));
+    if (editingCalendarEventId === null) {
+      setCalendarForm((current) => withCalendarDate(current, value));
+    }
   }
 
   function startEditingCalendarEntry(event: CalendarEvent) {
@@ -5666,7 +5667,7 @@ function CalendarPage({
   onFormChange: (value: CalendarForm) => void;
   onGroupFormChange: (value: CalendarGroupForm) => void;
   onGroupSubmit: (event: FormEvent) => void;
-  onSubmit: (event: FormEvent) => void;
+  onSubmit: (event: FormEvent) => Promise<boolean>;
   onToggleGroup: (id: number) => void;
   onToggleTask: (event: CalendarEvent) => void;
   selectedDate: string;
@@ -5800,6 +5801,19 @@ function CalendarPage({
     return occurrence.event.group_id
       ? groupById.get(occurrence.event.group_id)?.color
       : undefined;
+  }
+
+  function selectOccurrence(occurrence: CalendarOccurrence) {
+    onDateChange(occurrence.date);
+    if (createPanel !== "event" || editingEventId !== null) {
+      onEdit(occurrence.event);
+    }
+  }
+
+  async function submitEntryForm(event: FormEvent) {
+    if (await onSubmit(event)) {
+      setCreatePanel(null);
+    }
   }
 
   function renderOccurrenceChip(occurrence: CalendarOccurrence) {
@@ -6396,10 +6410,7 @@ function CalendarPage({
                         occurrence.event.is_completed ? "completed" : ""
                       }`}
                       key={`all-day-entry-${occurrence.key}`}
-                      onClick={() => {
-                        onDateChange(occurrence.date);
-                        onEdit(occurrence.event);
-                      }}
+                      onClick={() => selectOccurrence(occurrence)}
                       style={{ borderLeftColor: occurrenceColor(occurrence) }}
                       title={`${occurrence.event.title} | ${formatOccurrenceTime(
                         occurrence,
@@ -6451,10 +6462,7 @@ function CalendarPage({
                       occurrence.event.is_completed ? "completed" : ""
                     }`}
                     key={`time-${occurrence.key}`}
-                    onClick={() => {
-                      onDateChange(occurrence.date);
-                      onEdit(occurrence.event);
-                    }}
+                    onClick={() => selectOccurrence(occurrence)}
                     style={{
                       borderLeftColor: occurrenceColor(occurrence),
                       gridColumn: dayIndex + 2,
@@ -6656,7 +6664,7 @@ function CalendarPage({
                 : "Termin anlegen"
             }
           >
-            <form className="form-grid calendar-form" onSubmit={onSubmit}>
+            <form className="form-grid calendar-form" onSubmit={submitEntryForm}>
               <TextInput
                 label="Titel"
                 onChange={(title) => onFormChange({ ...form, title })}
@@ -6666,14 +6674,7 @@ function CalendarPage({
               <div className="time-fields">
                 <DateInput
                   label="Datum"
-                  onChange={(date) =>
-                    onFormChange({
-                      ...form,
-                      date,
-                      end_date:
-                        form.end_date && form.end_date >= date ? form.end_date : date,
-                    })
-                  }
+                  onChange={(date) => onFormChange(withCalendarDate(form, date))}
                   value={form.date}
                 />
                 <DateInput
@@ -6958,14 +6959,7 @@ function CalendarPage({
           <div className="time-fields">
             <DateInput
               label="Datum"
-              onChange={(date) =>
-                onFormChange({
-                  ...form,
-                  date,
-                  end_date:
-                    form.end_date && form.end_date >= date ? form.end_date : date,
-                })
-              }
+              onChange={(date) => onFormChange(withCalendarDate(form, date))}
               value={form.date}
             />
             <DateInput

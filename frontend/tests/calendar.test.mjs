@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { getCalendarOccurrences } from "../src/calendar.ts";
+import { getCalendarOccurrences, withCalendarDate } from "../src/calendar.ts";
 
 process.env.TZ = "Europe/Berlin";
 
@@ -52,6 +52,39 @@ test("a morning appointment preserves 10-15 and all other workdays", () => {
   assert.deepEqual(workTimes(events, "2026-09-21", "2026-09-22"), expected);
   assert.deepEqual(workTimes([...events].reverse(), "2026-09-21", "2026-09-22"), expected);
   assert.deepEqual(events, original);
+});
+
+test("a single holiday leaves the whole work series outside that day intact", () => {
+  const work = event(1, { recurrence_until: "2027-10-01T23:59:59" });
+  const holiday = event(2, {
+    start_at: "2026-09-24T00:00:00", end_at: "2026-09-24T23:59:00", all_day: true,
+  });
+  assert.deepEqual(workTimes([work, holiday], "2026-09-21", "2026-09-25"), [
+    ["2026-09-21", "06:00", "15:00"], ["2026-09-22", "06:00", "15:00"],
+    ["2026-09-23", "06:00", "15:00"], ["2026-09-25", "06:00", "15:00"],
+  ]);
+  assert.deepEqual(
+    workTimes([work, holiday], "2027-09-27", "2027-10-01"),
+    workTimes([work], "2027-09-27", "2027-10-01"),
+  );
+});
+
+test("changing a single-day draft date keeps the end on the same day", () => {
+  const draft = { date: "2026-09-24", end_date: "2026-09-24", title: "Urlaub", group_id: "2" };
+  for (const date of ["2026-09-16", "2026-10-14"]) {
+    assert.deepEqual(withCalendarDate(draft, date), { ...draft, date, end_date: date });
+  }
+  assert.equal(draft.date, "2026-09-24");
+});
+
+test("a multi-day draft retains its chosen end date until the start passes it", () => {
+  const draft = { date: "2026-09-21", end_date: "2026-09-25" };
+  assert.deepEqual(withCalendarDate(draft, "2026-09-22"), {
+    date: "2026-09-22", end_date: "2026-09-25",
+  });
+  assert.deepEqual(withCalendarDate(draft, "2026-09-28"), {
+    date: "2026-09-28", end_date: "2026-09-28",
+  });
 });
 
 test("an appointment inside work hours preserves both segments", () => {

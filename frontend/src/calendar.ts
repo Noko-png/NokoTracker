@@ -37,6 +37,20 @@ export function addDays(date: Date, amount: number) {
   return next;
 }
 
+export function withCalendarDate<Form extends { date: string; end_date: string }>(
+  form: Form,
+  date: string,
+): Form {
+  return {
+    ...form,
+    date,
+    end_date:
+      !form.end_date || form.end_date === form.date || form.end_date < date
+        ? date
+        : form.end_date,
+  };
+}
+
 function addRecurrenceStep(
   value: Date,
   frequency: CalendarEvent["recurrence_frequency"],
