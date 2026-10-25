@@ -6120,6 +6120,78 @@ th {
   font-size: 0.78rem;
 }
 
+.calendar-recurrence {
+  display: grid;
+  gap: 12px;
+  min-width: 0;
+  padding-top: 12px;
+  border-top: 1px solid var(--line);
+}
+
+.calendar-recurrence select,
+.calendar-recurrence input {
+  min-width: 0;
+  width: 100%;
+}
+
+.calendar-recurrence-interval {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.calendar-recurrence-interval input {
+  width: 88px;
+  min-height: 44px;
+}
+
+.calendar-recurrence small,
+.calendar-recurrence-preview p {
+  color: var(--muted);
+  font-size: 0.8rem;
+  line-height: 1.5;
+  font-weight: 400;
+}
+
+.calendar-recurrence-preview {
+  display: grid;
+  gap: 8px;
+  padding: 12px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--surface-soft);
+  overflow-wrap: anywhere;
+}
+
+.calendar-recurrence-preview p,
+.calendar-recurrence-preview ol {
+  margin: 0;
+}
+
+.calendar-recurrence-preview-label {
+  font-size: 0.8rem;
+  font-weight: 600;
+}
+
+.calendar-recurrence-preview ol {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(135px, 1fr));
+  gap: 6px;
+  padding: 0;
+  list-style: none;
+  font-size: 0.8rem;
+}
+
+.calendar-recurrence-preview li {
+  padding: 5px 7px;
+  border-radius: 6px;
+  background: var(--surface);
+}
+
+.calendar-recurrence-preview .calendar-recurrence-error {
+  color: var(--red);
+}
+
 .calendar-wide-check {
   width: 100%;
   align-items: flex-start;

@@ -1,6 +1,8 @@
 # Frontend-Pruefungen
 
-`npm test` prueft die Zeitberechnung und Datumswechsel (Node.js ab 22.18).
+`npm test` prueft die Zeitberechnung, Datumswechsel und Wiederholungen
+(Node.js ab 22.18), einschliesslich Wochenabstaenden, Monatsenden,
+Schaltjahren, Serienende und Uebereinstimmung von Vorschau und Kalender.
 
 ## Speichern Im Browser
 
@@ -8,6 +10,9 @@ Der optionale Integrationstest reproduziert das Anlegen von Urlaub ueber
 Erstellen und anschliessendes Antippen eines Arbeitstermins. Er prueft echte
 HTTP-Schreibzugriffe, den Erhalt der Serie, direkte Datumseingabe, Ganztagstermine,
 Fehler beim Speichern und die anschliessende normale Bearbeitung.
+Zusaetzlich werden die Wiederholungsvorschau, ungueltige Abstaende und
+Datumsbereiche, das Speichern und erneute Oeffnen sowie das Abschalten
+einer Serie auf Handy- und Desktopbreite geprueft.
 
 Die Testdatenbank liegt ausschliesslich im Arbeitsspeicher. Der Test setzt sie
 vor jedem Fall zurueck. Die Fixture darf nur als separater Testserver laufen.

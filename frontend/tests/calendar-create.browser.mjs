@@ -180,6 +180,85 @@ try {
     assert.equal(updatedWork.start_at, originalWork.start_at);
     console.log(`PASS ${scenario.name}: new holiday, preserved series, normal editing`);
   }
+  for (const width of [390, 1440]) {
+    const reset = await (await fetch(`${api}/__calendar_test__/reset`, { method: "POST" })).json();
+    assert.equal(reset.fixture, "calendar-create-memory");
+    await send("Emulation.setDeviceMetricsOverride", {
+      width, height: 900, deviceScaleFactor: 1, mobile: width < 760,
+    });
+    await send("Page.navigate", { url: frontend });
+    await waitFor("document.body.innerText.includes('Kalendertest')");
+    await clickText("Kalender");
+    await clickText("Woche");
+    await clickText("Erstellen");
+    await clickText("Termin");
+    await fill("Titel", "Wiederholungstest");
+    await fill("Datum", workDay);
+    await fill("Wiederholung", "weekly");
+    await fill("Wiederholen alle", "2");
+    const previewDates = () => evaluate("Array.from(document.querySelectorAll('.calendar-recurrence-preview time')).map(el => el.dateTime)");
+    assert.deepEqual(await previewDates(), [0, 14, 28, 42, 56, 70].map((day) => getLocalDate(addDays(monday, day))));
+    assert.ok(await evaluate("document.querySelector('.calendar-recurrence-preview').textContent.includes('Alle 2 Wochen am Montag.')"));
+    const requestCount = requests.length;
+    await fill("Wiederholen alle", "0");
+    await submit();
+    assert.equal(await evaluate("document.querySelector('.calendar-recurrence input[type=number]').checkValidity()"), false);
+    assert.equal(requests.length, requestCount);
+    await fill("Wiederholung", "weekdays");
+    assert.equal(await readField("Wiederholen alle"), "1");
+    await fill("Wiederholen alle", "2");
+    await fill("Datum", getLocalDate(addDays(monday, 2)));
+    assert.deepEqual(await previewDates(), [2, 3, 4, 14, 15, 16].map((day) => getLocalDate(addDays(monday, day))));
+    await fill("Datum", workDay);
+    await fill("Wiederholung", "weekends");
+    await fill("Wiederholen alle", "2");
+    assert.deepEqual(await previewDates(), [5, 6, 19, 20, 33, 34].map((day) => getLocalDate(addDays(monday, day))));
+    await fill("Wiederholen bis (optional)", getLocalDate(addDays(monday, 4)));
+    await waitFor("document.querySelector('.calendar-recurrence [role=alert]')?.textContent.includes('kein passender Wochentag')");
+    await submit();
+    assert.equal(requests.length, requestCount);
+    const until = getLocalDate(addDays(monday, 20));
+    await fill("Wiederholen bis (optional)", until);
+    assert.deepEqual(await previewDates(), [5, 6, 19, 20].map((day) => getLocalDate(addDays(monday, day))));
+    assert.equal(await evaluate("document.documentElement.scrollWidth <= window.innerWidth"), true);
+    if (process.env.CALENDAR_TEST_SCREENSHOTS) {
+      await evaluate("document.querySelector('.calendar-recurrence').scrollIntoView({block: 'start'})");
+      await writeFile(
+        `${process.env.CALENDAR_TEST_SCREENSHOTS}/frontend-screenshot-calendar-recurrence-${width}.png`,
+        Buffer.from((await send("Page.captureScreenshot", { format: "png" })).data, "base64"),
+      );
+    }
+    await submit();
+    await waitFor("!document.querySelector('form.calendar-form')");
+    const stored = await (await fetch(`${api}/calendar/events`)).json();
+    assert.equal(stored.length, 1);
+    assert.equal(stored[0].recurrence_frequency, "weekends");
+    assert.equal(stored[0].recurrence_interval, 2);
+    assert.equal(stored[0].recurrence_until, `${until}T23:59:59`);
+    await waitFor("Array.from(document.querySelectorAll('[title]')).filter(el => el.title.startsWith('Wiederholungstest |')).length === 2");
+    await evaluate("Array.from(document.querySelectorAll('[title]')).find(el => el.title.startsWith('Wiederholungstest |')).click()");
+    await waitFor("document.querySelector('form.calendar-form') !== null");
+    assert.equal(await readField("Wiederholen alle"), "2");
+    assert.equal(await readField("Wiederholen bis (optional)"), until);
+    await fill("Wiederholung", "none");
+    assert.equal(await evaluate("document.querySelector('.calendar-recurrence input')"), null);
+    await submit();
+    await waitFor("!document.querySelector('form.calendar-form')");
+    const single = await (await fetch(`${api}/calendar/events/${stored[0].id}`)).json();
+    assert.equal(single.recurrence_interval, 1);
+    assert.equal(single.recurrence_until, null);
+    assert.equal(single.recurrence_frequency, "none");
+    await clickText("Erstellen");
+    await clickText("Termin");
+    await fill("Datum", "2026-01-31");
+    await fill("Wiederholung", "monthly");
+    assert.deepEqual((await previewDates()).slice(0, 3), ["2026-01-31", "2026-02-28", "2026-03-31"]);
+    await fill("Datum", "2024-02-29");
+    await fill("Wiederholung", "yearly");
+    assert.deepEqual((await previewDates()).slice(0, 5), ["2024-02-29", "2025-02-28", "2026-02-28", "2027-02-28", "2028-02-29"]);
+    console.log(`PASS ${width}px recurrence: previews, intervals, validation, save/reopen, disabling and month/leap dates`);
+    await send("Page.navigate", { url: "about:blank" });
+  }
 } finally {
   await send("Page.navigate", { url: "about:blank" });
   await send("Fetch.disable");

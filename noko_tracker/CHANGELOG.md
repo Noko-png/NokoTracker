@@ -1,5 +1,13 @@
 # Changelog
 
+## 3.1.7
+
+- Kalender-Wiederholungen zeigen klare Abstaende mit Einheit, die betroffenen Wochentage und eine sofort aktualisierte Terminvorschau.
+- Mehrwoechige Serien erklaeren Startwoche und Pausen; das optionale Serienende schliesst den gewaehlten Tag ein.
+- Ungueltige Abstaende und Zeitraeume ohne passenden Termin werden im Formular erklaert. Beim Abschalten einer Serie werden alte Wiederholungswerte entfernt.
+- Monatsserien verwenden in kurzen Monaten den letzten Tag und kehren danach zum urspruenglichen Datum zurueck; Jahresserien behandeln den 29. Februar entsprechend.
+- Serien ohne Enddatum werden auch nach mehr als 4000 Tagen angezeigt. Automatische Tests sichern Berechnung und Bedienung auf Handy und Desktop ab.
+
 ## 3.1.6
 
 - Lebensmittel mit zusaetzlichen Einheiten-Umrechnungen lassen sich wieder vollstaendig bearbeiten; Haltbarkeit und weitere Aenderungen werden gespeichert.

@@ -51,31 +51,34 @@ export function withCalendarDate<Form extends { date: string; end_date: string }
   };
 }
 
-function addRecurrenceStep(
-  value: Date,
+function recurrenceDate(
+  base: Date,
   frequency: CalendarEvent["recurrence_frequency"],
   interval: number,
+  index: number,
 ) {
-  const next = new Date(value);
+  const next = new Date(base);
   if (frequency === "daily") {
-    next.setDate(next.getDate() + interval);
+    next.setDate(base.getDate() + interval * index);
   }
   if (frequency === "weekdays" || frequency === "weekends") {
-    next.setDate(next.getDate() + 1);
+    next.setDate(base.getDate() + index);
   }
   if (frequency === "weekly") {
-    next.setDate(next.getDate() + interval * 7);
+    next.setDate(base.getDate() + interval * index * 7);
   }
-  if (frequency === "monthly") {
-    next.setMonth(next.getMonth() + interval);
-  }
-  if (frequency === "yearly") {
-    next.setFullYear(next.getFullYear() + interval);
+  if (frequency === "monthly" || frequency === "yearly") {
+    // Always anchor to the original date, so February cannot shift later months.
+    next.setDate(1);
+    if (frequency === "monthly") next.setMonth(base.getMonth() + interval * index);
+    else next.setFullYear(base.getFullYear() + interval * index);
+    const lastDay = new Date(next.getFullYear(), next.getMonth() + 1, 0).getDate();
+    next.setDate(Math.min(base.getDate(), lastDay));
   }
   return next;
 }
 
-function calendarWeekStart(value: Date) {
+export function calendarWeekStart(value: Date) {
   const weekStart = new Date(value);
   weekStart.setHours(0, 0, 0, 0);
   weekStart.setDate(weekStart.getDate() - ((weekStart.getDay() + 6) % 7));
@@ -112,6 +115,99 @@ function groupedRecurrenceMatchesDate(
   return weekDistance % Math.max(interval, 1) === 0;
 }
 
+export type CalendarRecurrence = Pick<CalendarEvent,
+  "start_at" | "recurrence_frequency" | "recurrence_interval" | "recurrence_until"
+>;
+
+export function* getRecurrenceStarts(
+  rule: CalendarRecurrence,
+  rangeEnd: Date,
+  limit = Infinity,
+): Generator<Date> {
+  const base = new Date(rule.start_at);
+  const frequency = rule.recurrence_frequency ?? "none";
+  const interval = rule.recurrence_interval;
+  const until = rule.recurrence_until ? new Date(rule.recurrence_until) : rangeEnd;
+  if (!Number.isFinite(base.getTime()) || !Number.isFinite(until.getTime()) ||
+      !Number.isInteger(interval) || interval < 1 || limit < 1) return;
+  let emitted = 0;
+  for (let index = 0; ; index += 1) {
+    const start = recurrenceDate(base, frequency, interval, index);
+    if (!Number.isFinite(start.getTime()) || start > rangeEnd || start > until) return;
+    if (groupedRecurrenceMatchesDate(base, start, frequency, interval)) {
+      yield start;
+      if (++emitted >= limit) return;
+    }
+    if (frequency === "none") return;
+  }
+}
+
+export type CalendarRecurrenceForm = {
+  date: string;
+  recurrence_frequency: CalendarEvent["recurrence_frequency"];
+  recurrence_interval: string;
+  recurrence_until: string;
+};
+
+export function recurrenceUnit(frequency: CalendarEvent["recurrence_frequency"]) {
+  if (frequency === "daily") return "Tage";
+  if (frequency === "monthly") return "Monate";
+  if (frequency === "yearly") return "Jahre";
+  return "Wochen";
+}
+
+export function recurrenceFormRule(form: CalendarRecurrenceForm): CalendarRecurrence {
+  return {
+    start_at: `${form.date}T00:00:00`,
+    recurrence_frequency: form.recurrence_frequency,
+    recurrence_interval: Number(form.recurrence_interval),
+    recurrence_until: form.recurrence_until ? `${form.recurrence_until}T23:59:59` : null,
+  };
+}
+
+export function recurrenceFormError(form: CalendarRecurrenceForm): string | null {
+  if (form.recurrence_frequency === "none") return null;
+  const rule = recurrenceFormRule(form);
+  if (!Number.isFinite(new Date(rule.start_at).getTime())) return "Bitte ein Startdatum wählen.";
+  if (!Number.isInteger(rule.recurrence_interval) || rule.recurrence_interval < 1 || rule.recurrence_interval > 365) {
+    return "Bitte einen Abstand von 1 bis 365 in ganzen Zahlen eingeben.";
+  }
+  if (form.recurrence_until) {
+    if (form.recurrence_until < form.date) return "Das Serienende darf nicht vor dem Startdatum liegen.";
+    if (![...getRecurrenceStarts(rule, dateAtEndOfDay(form.recurrence_until), 1)].length) {
+      return "Bis zum Serienende liegt kein passender Wochentag. Bitte das Datum oder die Wiederholung ändern.";
+    }
+  }
+  return null;
+}
+
+export function recurrencePayload(form: CalendarRecurrenceForm) {
+  const error = recurrenceFormError(form);
+  if (error) throw new Error(error);
+  return {
+    recurrence_frequency: form.recurrence_frequency,
+    recurrence_interval: form.recurrence_frequency === "none" ? 1 : Number(form.recurrence_interval),
+    recurrence_until: form.recurrence_frequency !== "none" && form.recurrence_until
+      ? `${form.recurrence_until}T23:59:59` : null,
+  };
+}
+
+export function recurrenceDescription(form: CalendarRecurrenceForm) {
+  const date = dateFromLocalValue(form.date);
+  if (!Number.isFinite(date.getTime())) return "";
+  const interval = Number(form.recurrence_interval);
+  const every = `Alle ${interval} ${recurrenceUnit(form.recurrence_frequency)}`;
+  const weekday = date.toLocaleDateString("de-DE", { weekday: "long" });
+  switch (form.recurrence_frequency) {
+    case "daily": return interval === 1 ? "Jeden Tag." : `${every}.`;
+    case "weekly": return interval === 1 ? `Jede Woche am ${weekday}.` : `${every} am ${weekday}.`;
+    case "weekdays": return `${interval === 1 ? "Jede Woche" : every} von Montag bis Freitag.`;
+    case "weekends": return `${interval === 1 ? "Jede Woche" : every} am Samstag und Sonntag.`;
+    case "monthly": return `${interval === 1 ? "Jeden Monat" : every} am ${date.getDate()}.`;
+    case "yearly": return `${interval === 1 ? "Jedes Jahr" : every} am ${date.toLocaleDateString("de-DE", { day: "numeric", month: "long" })}.`;
+    default: return "Einmaliger Termin.";
+  }
+}
 
 function startOfDay(value: Date) {
   return dateFromLocalValue(getLocalDate(value));
@@ -147,25 +243,13 @@ function expandEvents(events: CalendarEvent[], rangeStart: Date, rangeEnd: Date)
     if (event.entry_type === "task") {
       continue;
     }
-    const baseStart = new Date(event.start_at);
-    const frequency = event.recurrence_frequency ?? "none";
-    const interval = Math.max(event.recurrence_interval || 1, 1);
-    const recurrenceUntil = event.recurrence_until
-      ? new Date(event.recurrence_until)
-      : null;
     const excludedStarts = new Set(
       (event.exclusions ?? []).map((item) => new Date(item.occurrence_start_at).getTime()),
     );
-    let start = new Date(baseStart);
-
-    for (let count = 0; count < 4000 && start <= rangeEnd; count += 1) {
-      if (recurrenceUntil && start > recurrenceUntil) {
-        break;
-      }
+    for (const start of getRecurrenceStarts(event, rangeEnd)) {
       const end = occurrenceEnd(event, start);
       if (
         end > rangeStart &&
-        groupedRecurrenceMatchesDate(baseStart, start, frequency, interval) &&
         !excludedStarts.has(start.getTime())
       ) {
         intervals.push({
@@ -175,10 +259,6 @@ function expandEvents(events: CalendarEvent[], rangeStart: Date, rangeEnd: Date)
           endAt: end,
         });
       }
-      if (frequency === "none") {
-        break;
-      }
-      start = addRecurrenceStep(start, frequency, interval);
     }
   }
   return intervals;

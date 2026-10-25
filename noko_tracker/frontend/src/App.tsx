@@ -183,8 +183,10 @@ import {
   dateFromLocalValue,
   getCalendarOccurrences,
   getLocalDate,
+  recurrencePayload,
   withCalendarDate,
 } from "./calendar";
+import { CalendarRecurrenceFields } from "./CalendarRecurrenceFields";
 
 type BarcodeDetectorResult = {
   rawValue: string;
@@ -544,7 +546,7 @@ const macroMeta: Array<{
   { key: "carbs", label: "Kohlenhydrate", unit: "g", tone: "red" },
 ];
 
-const appVersion = "3.1.6";
+const appVersion = "3.1.7";
 const updateSourceLabel = "main / github.com/Noko-png/NokoTracker";
 
 const emptyNutrition: NutritionDay = {
@@ -3344,11 +3346,7 @@ export default function App() {
         entry_type: calendarForm.entry_type,
         all_day: calendarForm.all_day,
         is_completed: false,
-        recurrence_frequency: calendarForm.recurrence_frequency,
-        recurrence_interval: toNumber(calendarForm.recurrence_interval, 1),
-        recurrence_until: calendarForm.recurrence_until
-          ? `${calendarForm.recurrence_until}T23:59:59`
-          : null,
+        ...recurrencePayload(calendarForm),
         user_id: userId,
         group_id: optionalNumber(calendarForm.group_id),
       } satisfies CalendarEventCreate;
@@ -6743,45 +6741,10 @@ function CalendarPage({
                   ))}
                 </select>
               </label>
-              <label>
-                <span>Wiederholung</span>
-                <select
-                  onChange={(event) =>
-                    onFormChange({
-                      ...form,
-                      recurrence_frequency:
-                        event.target.value as CalendarForm["recurrence_frequency"],
-                    })
-                  }
-                  value={form.recurrence_frequency}
-                >
-                  <option value="none">Keine</option>
-                  <option value="daily">TÃ¤glich</option>
-                  <option value="weekly">WÃ¶chentlich</option>
-                  <option value="weekdays">Unter der Woche (Mo-Fr)</option>
-                  <option value="weekends">Am Wochenende (Sa & So)</option>
-                  <option value="monthly">Monatlich</option>
-                  <option value="yearly">JÃ¤hrlich</option>
-                </select>
-              </label>
-              {form.recurrence_frequency !== "none" && (
-                <div className="time-fields">
-                  <NumberInput
-                    label="Intervall"
-                    onChange={(recurrence_interval) =>
-                      onFormChange({ ...form, recurrence_interval })
-                    }
-                    value={form.recurrence_interval}
-                  />
-                  <DateInput
-                    label="Serienende"
-                    onChange={(recurrence_until) =>
-                      onFormChange({ ...form, recurrence_until })
-                    }
-                    value={form.recurrence_until}
-                  />
-                </div>
-              )}
+              <CalendarRecurrenceFields
+                form={form}
+                onChange={(change) => onFormChange({ ...form, ...change })}
+              />
               <label>
                 <span>Notizen</span>
                 <textarea
@@ -6951,144 +6914,6 @@ function CalendarPage({
           </Panel>
         </div>
 
-        {false && (
-        <Panel
-          title={
-            editingEventId !== null
-              ? "Eintrag bearbeiten"
-              : "Termin anlegen"
-          }
-        >
-          <form className="form-grid calendar-form" onSubmit={onSubmit}>
-          <TextInput
-            label="Titel"
-            onChange={(title) => onFormChange({ ...form, title })}
-            required
-            value={form.title}
-          />
-          <div className="time-fields">
-            <DateInput
-              label="Datum"
-              onChange={(date) => onFormChange(withCalendarDate(form, date))}
-              value={form.date}
-            />
-            <DateInput
-              label="Bis"
-              onChange={(end_date) => onFormChange({ ...form, end_date })}
-              value={form.end_date}
-            />
-          </div>
-          <label className="check-field">
-            <input
-              checked={form.all_day}
-              onChange={(event) =>
-                onFormChange({ ...form, all_day: event.target.checked })
-              }
-              type="checkbox"
-            />
-            <span>Ganztagig</span>
-          </label>
-          {!form.all_day && (
-            <div className="time-fields">
-              <TextInput
-                label="Anfang"
-                onChange={(start_time) => onFormChange({ ...form, start_time })}
-                required
-                type="time"
-                value={form.start_time}
-              />
-              <TextInput
-                label="Ende"
-                onChange={(end_time) => onFormChange({ ...form, end_time })}
-                type="time"
-                value={form.end_time}
-              />
-            </div>
-          )}
-          <TextInput
-            label="Ort"
-            onChange={(location) => onFormChange({ ...form, location })}
-            value={form.location}
-          />
-          <label>
-            <span>Gruppe</span>
-            <select
-              onChange={(event) =>
-                onFormChange({ ...form, group_id: event.target.value })
-              }
-              value={form.group_id}
-            >
-              <option value="">Ohne Gruppe</option>
-              {groups.map((group) => (
-                <option key={group.id} value={group.id}>
-                  {group.name}
-                </option>
-              ))}
-            </select>
-          </label>
-          <label>
-            <span>Wiederholung</span>
-            <select
-              onChange={(event) =>
-                onFormChange({
-                  ...form,
-                  recurrence_frequency:
-                    event.target.value as CalendarForm["recurrence_frequency"],
-                })
-              }
-              value={form.recurrence_frequency}
-            >
-              <option value="none">Keine</option>
-              <option value="daily">Täglich</option>
-              <option value="weekly">Wöchentlich</option>
-              <option value="weekdays">Unter der Woche (Mo-Fr)</option>
-              <option value="weekends">Am Wochenende (Sa & So)</option>
-              <option value="monthly">Monatlich</option>
-              <option value="yearly">Jährlich</option>
-            </select>
-          </label>
-          {form.recurrence_frequency !== "none" && (
-            <div className="time-fields">
-              <NumberInput
-                label="Intervall"
-                onChange={(recurrence_interval) =>
-                  onFormChange({ ...form, recurrence_interval })
-                }
-                value={form.recurrence_interval}
-              />
-              <DateInput
-                label="Serienende"
-                onChange={(recurrence_until) =>
-                  onFormChange({ ...form, recurrence_until })
-                }
-                value={form.recurrence_until}
-              />
-            </div>
-          )}
-          <label>
-            <span>Notizen</span>
-            <textarea
-              onChange={(event) =>
-                onFormChange({ ...form, description: event.target.value })
-              }
-              value={form.description}
-            />
-          </label>
-          <div className="form-actions">
-            <button className="button primary" type="submit">
-              {editingEventId !== null ? <Pencil size={16} /> : <Plus size={16} />}
-              {editingEventId !== null ? "Speichern" : "Anlegen"}
-            </button>
-            {editingEventId !== null && (
-              <button className="button secondary" onClick={onCancelEdit} type="button">
-                <X size={16} />
-                Abbrechen
-              </button>
-            )}
-          </div>
-        </form>
-      </Panel>
-        )}
       </div>
     </div>
   );
