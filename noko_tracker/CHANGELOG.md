@@ -1,5 +1,12 @@
 # Changelog
 
+## 3.1.6
+
+- Lebensmittel mit zusaetzlichen Einheiten-Umrechnungen lassen sich wieder vollstaendig bearbeiten; Haltbarkeit und weitere Aenderungen werden gespeichert.
+- Fehler beim Speichern bleiben direkt im Lebensmittel- und Bestandsformular sichtbar; Eingaben bleiben fuer einen erneuten Versuch erhalten.
+- Beim Einlagern aus der Einkaufsliste hat die individuelle Haltbarkeit Vorrang vor dem Gruppenstandard, auch bei null Tagen.
+- Regressionstests pruefen Lebensmittel- und Bestandsaenderungen einschliesslich Ablaufdatum, wiederholtem Speichern und Fehlerfaellen.
+
 ## 3.1.5
 
 - Beim Anlegen eines Termins waehlt das Antippen vorhandener Termine nur das Datum, statt unbemerkt zur Serienbearbeitung zu wechseln.

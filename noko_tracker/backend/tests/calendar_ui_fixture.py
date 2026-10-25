@@ -1,6 +1,7 @@
 import os
 import sys
 from pathlib import Path
+from threading import Lock
 
 os.environ["DATABASE_URL"] = "sqlite://"
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
@@ -16,10 +17,12 @@ from app.main import app
 test_engine = create_engine(
     "sqlite://", connect_args={"check_same_thread": False}, poolclass=StaticPool
 )
+test_db_lock = Lock()
 
 
 def test_db():
-    with Session(test_engine) as db:
+    # StaticPool shares one SQLite connection across concurrent browser requests.
+    with test_db_lock, Session(test_engine) as db:
         yield db
 
 

@@ -544,7 +544,7 @@ const macroMeta: Array<{
   { key: "carbs", label: "Kohlenhydrate", unit: "g", tone: "red" },
 ];
 
-const appVersion = "3.1.5";
+const appVersion = "3.1.6";
 const updateSourceLabel = "main / github.com/Noko-png/NokoTracker";
 
 const emptyNutrition: NutritionDay = {
@@ -2284,6 +2284,7 @@ export default function App() {
   }
 
   function startEditingInventoryItem(item: InventoryItem) {
+    setApiError(null);
     setInventoryForm(createInventoryFormFromItem(item));
     setEditingInventoryItemId(item.id);
     setInventoryCreateOpen(false);
@@ -2291,6 +2292,7 @@ export default function App() {
   }
 
   function startStoringFood(food: Food) {
+    setApiError(null);
     setInventoryForm(
       createInventoryFormFromFood(food, productGroups, productUnits),
     );
@@ -2300,6 +2302,7 @@ export default function App() {
   }
 
   function startCreatingInventoryItem() {
+    setApiError(null);
     setInventoryForm(createInitialInventoryForm());
     setEditingInventoryItemId(null);
     setInventoryCreateOpen(true);
@@ -2307,6 +2310,7 @@ export default function App() {
   }
 
   function cancelEditingInventoryItem() {
+    setApiError(null);
     setInventoryForm(createInitialInventoryForm());
     setEditingInventoryItemId(null);
     setInventoryCreateOpen(false);
@@ -2387,17 +2391,21 @@ export default function App() {
       setFoodForm(createInitialFoodForm());
       setEditingFoodId(null);
       await loadData();
+      return true;
     } catch (error) {
       setApiError(error instanceof Error ? error.message : "API-Fehler");
+      return false;
     }
   }
 
   function startEditingFood(food: Food) {
+    setApiError(null);
     setFoodForm(createFoodFormFromFood(food));
     setEditingFoodId(food.id);
   }
 
   function cancelEditingFood() {
+    setApiError(null);
     setFoodForm(createInitialFoodForm());
     setEditingFoodId(null);
   }
@@ -4120,6 +4128,7 @@ export default function App() {
             inventory={filteredInventory}
             inventoryCategory={inventoryCategory}
             inventoryCreateOpen={inventoryCreateOpen}
+            inventoryError={apiError}
             inventorySearch={inventorySearch}
             inventoryStatus={inventoryStatus}
             masterProductGroupForm={masterProductGroupForm}
@@ -4195,6 +4204,7 @@ export default function App() {
             ) : (
               <MasterDataPanel
                 activeTab={activeMasterDataTab}
+                foodError={apiError}
                 editingFoodId={editingFoodId}
                 editingProductGroupId={editingProductGroupId}
                 editingProductUnitId={editingProductUnitId}
@@ -7270,6 +7280,7 @@ function InventoryPage({
   inventory,
   inventoryCategory,
   inventoryCreateOpen,
+  inventoryError,
   inventorySearch,
   inventoryStatus,
   masterProductGroupForm,
@@ -7333,6 +7344,7 @@ function InventoryPage({
   inventory: InventoryItem[];
   inventoryCategory: string;
   inventoryCreateOpen: boolean;
+  inventoryError?: string | null;
   inventorySearch: string;
   inventoryStatus: string;
   masterProductGroupForm: ProductGroupForm;
@@ -7376,7 +7388,7 @@ function InventoryPage({
   onStorageLocationFormChange: (value: StorageLocationForm) => void;
   onStorageLocationSubmit: (event: FormEvent) => Promise<void> | void;
   onStatusChange: (value: string) => void;
-  onFoodSubmit: (event: FormEvent) => Promise<void> | void;
+  onFoodSubmit: (event: FormEvent) => Promise<boolean>;
   onSubmit: (event: FormEvent) => void;
   onUnitDelete: (id: number) => void;
   onUnitFormChange: (value: ProductUnitForm) => void;
@@ -8329,6 +8341,12 @@ function InventoryPage({
               }
             >
           <form className="form-grid" onSubmit={onSubmit}>
+            {inventoryError && (
+              <div className="notice error" role="alert">
+                <AlertTriangle size={18} />
+                <span>{inventoryError}</span>
+              </div>
+            )}
             <label>
               <span>Lebensmittel</span>
               <input
@@ -8727,6 +8745,7 @@ const masterDataTabs: Array<{ id: MasterDataTab; label: string }> = [
 ];
 
 function MasterDataPanel({
+  foodError,
   activeTab,
   editingFoodId,
   editingProductGroupId,
@@ -8769,6 +8788,7 @@ function MasterDataPanel({
   editingProductGroupId: number | null;
   editingProductUnitId: number | null;
   editingStorageLocationId: number | null;
+  foodError?: string | null;
   foodForm: FoodForm;
   foods: Food[];
   onCancelEditingFood: () => void;
@@ -8784,7 +8804,7 @@ function MasterDataPanel({
   onEditProductUnit: (unit: ProductUnit) => void;
   onEditStorageLocation: (location: StorageLocation) => void;
   onFoodFormChange: (value: FoodForm) => void;
-  onFoodSubmit: (event: FormEvent) => Promise<void> | void;
+  onFoodSubmit: (event: FormEvent) => Promise<boolean>;
   onProductGroupFormChange: (value: ProductGroupForm) => void;
   onProductGroupSubmit: (event: FormEvent) => Promise<void> | void;
   onProductUnitFormChange: (value: ProductUnitForm) => void;
@@ -9322,11 +9342,19 @@ function MasterDataPanel({
                 <form
                   className="master-data-form"
                   onSubmit={(event) => {
-                    void Promise.resolve(onFoodSubmit(event)).then(() =>
-                      closeFoodEditor(),
-                    );
+                    void onFoodSubmit(event).then((saved) => {
+                      if (saved) {
+                        closeFoodEditor();
+                      }
+                    });
                   }}
                 >
+                  {foodError && (
+                    <div className="notice error" role="alert">
+                      <AlertTriangle size={18} />
+                      <span>{foodError}</span>
+                    </div>
+                  )}
                   <div className="food-barcode-tools">
                     <button
                       className={`button secondary ${

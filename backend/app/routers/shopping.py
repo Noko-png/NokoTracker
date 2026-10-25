@@ -194,7 +194,9 @@ def apply_default_inventory_values(
             food.storage_location
             or (product_group.default_storage_location if product_group is not None else None)
         )
-    if product_group is not None and product_group.default_expiry_days is not None:
+    if food.expiry_days is not None:
+        inventory_item.expiry_days = food.expiry_days
+    elif product_group is not None and product_group.default_expiry_days is not None:
         inventory_item.expiry_days = product_group.default_expiry_days
 
 

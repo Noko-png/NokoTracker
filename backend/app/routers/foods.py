@@ -60,6 +60,7 @@ def normalized_conversion_payload(
 
 
 def replace_food_conversions(
+    db: Session,
     food: models.Food,
     conversions: list[schemas.FoodConversionCreate] | None,
 ) -> None:
@@ -67,6 +68,9 @@ def replace_food_conversions(
         return
 
     food.conversions.clear()
+    if food.id is not None:
+        # Delete old rows before inserting the same unique food/unit combination.
+        db.flush()
     for conversion in normalized_conversion_payload(conversions):
         food.conversions.append(models.FoodConversion(**conversion))
 
@@ -383,7 +387,7 @@ def create_food(food_in: schemas.FoodCreate, db: Session = Depends(get_db)):
     try:
         data = food_in.model_dump(exclude={"conversions"})
         food = models.Food(**data)
-        replace_food_conversions(food, food_in.conversions)
+        replace_food_conversions(db, food, food_in.conversions)
         db.add(food)
         db.commit()
         db.refresh(food)
@@ -528,17 +532,16 @@ def read_food(food_id: int, db: Session = Depends(get_db)):
 @router.patch("/{food_id}", response_model=schemas.FoodRead)
 def update_food(food_id: int, food_in: schemas.FoodUpdate, db: Session = Depends(get_db)):
     food = get_food_or_404(db, food_id)
-    patch = food_in.model_dump(exclude_unset=True)
+    patch = food_in.model_dump(exclude_unset=True, exclude={"conversions"})
     validate_food_references(
         db,
         patch.get("product_group_id"),
         patch.get("product_unit_id"),
     )
     try:
-        conversions = patch.pop("conversions", None)
         for field, value in patch.items():
             setattr(food, field, value)
-        replace_food_conversions(food, conversions)
+        replace_food_conversions(db, food, food_in.conversions)
         db.add(food)
         db.commit()
         db.refresh(food)

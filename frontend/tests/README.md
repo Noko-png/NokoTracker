@@ -1,4 +1,4 @@
-# Kalenderpruefungen
+# Frontend-Pruefungen
 
 `npm test` prueft die Zeitberechnung und Datumswechsel (Node.js ab 22.18).
 
@@ -42,3 +42,15 @@ Abweichende lokale Ports lassen sich mit `CALENDAR_TEST_API_URL`,
 `CALENDAR_TEST_FRONTEND_URL` und `CALENDAR_TEST_CDP_URL` setzen.
 `CALENDAR_TEST_SCREENSHOTS` kann auf ein vorhandenes Ausgabeverzeichnis zeigen.
 Die Testserver und die separate Chrome-Instanz anschliessend beenden.
+
+## Lebensmittel und Bestand bearbeiten
+
+`npm run test:food-ui` verwendet dieselben drei Testserver wie oben. Der Test
+prueft auf Handy- und Desktopbreite die Bearbeitung von Lebensmitteln mit
+Umrechnungen und Bestandspositionen: Datum und Haltbarkeit, null Tage,
+erneutes Oeffnen, Speicherkonflikte und Wiederholen nach einem Fehler.
+Die gespeicherten Werte und das berechnete Ablaufdatum werden ueber die API
+der isolierten Datenbank kontrolliert.
+
+Abweichende Ports lassen sich mit `FOOD_TEST_API_URL`,
+`FOOD_TEST_FRONTEND_URL` und `FOOD_TEST_CDP_URL` setzen.
