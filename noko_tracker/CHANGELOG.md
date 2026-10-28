@@ -1,5 +1,14 @@
 # Changelog
 
+## 3.1.8
+
+- Datenbankimporte pruefen alle benoetigten Tabellen, Spalten und Datenverknuepfungen, bevor die aktuelle Datenbank ersetzt wird. Unvollstaendige oder inkompatible Sicherungen werden abgewiesen.
+- Grocy-Bestandsimporte erkennen vorhandene Positionen anhand von Lebensmittel, Lagerort, Einheit und Ablaufdatum wieder; erneutes Importieren am Folgetag erzeugt keine zusaetzlichen Positionen.
+- Auch vergangene Grocy-Ablaufdaten bleiben erhalten. Fehlt ein passendes Einlagerungsdatum, wird das Ablaufdatum als Ersatz verwendet und ein Hinweis ausgegeben.
+- Fehlende, leere oder nicht vollstaendig zuordenbare Grocy-Zutatenlisten lassen bestehende Rezeptzutaten unveraendert.
+- Kassenzettelimporte verwenden vorrangig die Haltbarkeit des Lebensmittels, einschliesslich null Tagen, und erst danach den Gruppenstandard.
+- Regressionstests pruefen alle Importkorrekturen sowie vollstaendige Datenbanksicherungen und deren Wiederherstellung.
+
 ## 3.1.7
 
 - Kalender-Wiederholungen zeigen klare Abstaende mit Einheit, die betroffenen Wochentage und eine sofort aktualisierte Terminvorschau.

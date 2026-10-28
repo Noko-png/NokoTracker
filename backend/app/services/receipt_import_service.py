@@ -369,7 +369,9 @@ def book_receipt_import(
                 unit=product_unit.name,
                 minimum_quantity=0.0,
                 storage_location=storage_location,
-                expiry_days=product_group.default_expiry_days if product_group is not None else None,
+                expiry_days=food.expiry_days if food.expiry_days is not None else (
+                    product_group.default_expiry_days if product_group is not None else None
+                ),
                 purchase_date=request.purchase_date,
                 price=price_per_unit(item),
                 barcode=None,

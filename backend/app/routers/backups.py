@@ -11,33 +11,13 @@ from fastapi.responses import FileResponse
 from sqlalchemy.engine import make_url
 from starlette.background import BackgroundTask
 
-from .. import schemas
+from .. import models, schemas
 from ..database import DATABASE_URL, engine
 
 
 router = APIRouter(prefix="/database", tags=["database"])
 
-EXPECTED_TABLES = {
-    "calendar_event_exclusions",
-    "calendar_events",
-    "calendar_groups",
-    "foods",
-    "food_conversions",
-    "inventory_items",
-    "meal_logs",
-    "product_groups",
-    "product_units",
-    "recipes",
-    "recipe_ingredients",
-    "shopping_list_items",
-    "storage_locations",
-    "training_exercises",
-    "training_plans",
-    "training_session_sets",
-    "training_sessions",
-    "users",
-    "weight_entries",
-}
+EXPECTED_TABLES = set(models.Base.metadata.tables)
 
 TRAINING_TABLES = {
     "training_exercises",
@@ -92,7 +72,7 @@ def count_database_tables(
 
 def validate_sqlite_database(path: Path) -> tuple[dict[str, int], list[str]]:
     try:
-        connection = sqlite3.connect(str(path))
+        connection = sqlite3.connect(f"{path.resolve().as_uri()}?mode=ro", uri=True)
         try:
             integrity = connection.execute("PRAGMA integrity_check").fetchone()
             if not integrity or integrity[0] != "ok":
@@ -104,24 +84,51 @@ def validate_sqlite_database(path: Path) -> tuple[dict[str, int], list[str]]:
                     "SELECT name FROM sqlite_master WHERE type = 'table'"
                 )
             }
+            missing_tables = sorted(EXPECTED_TABLES - table_names)
+            if missing_tables:
+                raise ValueError(
+                    "Die Datenbank ist unvollstaendig oder nicht kompatibel. Fehlende Tabellen: "
+                    + ", ".join(missing_tables)
+                )
+
+            for table in models.Base.metadata.sorted_tables:
+                columns = {
+                    row[1] for row in connection.execute(f'PRAGMA table_info("{table.name}")')
+                }
+                missing_columns = sorted(set(table.columns.keys()) - columns)
+                if missing_columns:
+                    raise ValueError(
+                        f"Die Datenbank ist nicht kompatibel. Fehlende Spalten in {table.name}: "
+                        + ", ".join(missing_columns)
+                    )
+
+            if connection.execute("PRAGMA foreign_key_check").fetchone():
+                raise ValueError("Die Datenbank enthaelt ungueltige Datenverknuepfungen.")
+
+            # Check the application's relationships even if the uploaded schema
+            # omitted its FOREIGN KEY constraints. Identifiers come from our models.
+            for table in models.Base.metadata.sorted_tables:
+                for foreign_key in table.foreign_keys:
+                    parent = foreign_key.column
+                    child = foreign_key.parent
+                    invalid_reference = connection.execute(
+                        f'SELECT 1 FROM "{table.name}" AS child '
+                        f'LEFT JOIN "{parent.table.name}" AS parent '
+                        f'ON child."{child.name}" = parent."{parent.name}" '
+                        f'WHERE child."{child.name}" IS NOT NULL '
+                        f'AND parent."{parent.name}" IS NULL LIMIT 1'
+                    ).fetchone()
+                    if invalid_reference:
+                        raise ValueError(
+                            f"Ungueltige Datenverknuepfung: {table.name}.{child.name}."
+                        )
             table_counts = count_database_tables(connection, table_names)
         finally:
             connection.close()
     except sqlite3.DatabaseError as exc:
         raise ValueError("Die hochgeladene Datei ist keine gueltige SQLite-Datenbank.") from exc
 
-    if not EXPECTED_TABLES.intersection(table_names):
-        raise ValueError("Die Datenbank sieht nicht wie eine NokoTracker-Datenbank aus.")
-
-    warnings: list[str] = []
-    missing_training_tables = sorted(TRAINING_TABLES.difference(table_names))
-    if missing_training_tables:
-        warnings.append(
-            "Trainingstabellen fehlen in der Importdatei: "
-            + ", ".join(missing_training_tables)
-        )
-
-    return table_counts, warnings
+    return table_counts, []
 
 
 def remove_sqlite_sidecars(path: Path) -> None:

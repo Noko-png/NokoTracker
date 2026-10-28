@@ -289,24 +289,37 @@ def import_grocy_csv_directory(
         )
         group = group_by_grocy_id.get(_int(product_row.get("product_group_id")) or -1)
         best_before = _date(row.get("best_before_date"))
-        expiry_days = None
-        if best_before is not None:
-            expiry_days = max((best_before - today).days, 0)
         storage_name = location.name if location is not None else food.storage_location
+        unit_name = unit.name if unit is not None else food.serving_unit
         total_value = _float(row.get("value"))
         price = total_value / amount if amount > 0 and total_value > 0 else None
 
         query = db.query(models.InventoryItem).filter(
-            models.InventoryItem.name == food.name,
+            models.InventoryItem.food_id == food.id,
             models.InventoryItem.storage_location == storage_name,
+            models.InventoryItem.unit == unit_name,
         )
-        if food.id is not None:
-            query = query.filter(models.InventoryItem.food_id == food.id)
-        if expiry_days is None:
-            query = query.filter(models.InventoryItem.expiry_days.is_(None))
-        else:
-            query = query.filter(models.InventoryItem.expiry_days == expiry_days)
-        item = query.first()
+        # Relative shelf-life changes with the import day; the expiry date does not.
+        item = next(
+            (candidate for candidate in query.order_by(models.InventoryItem.id).all()
+             if candidate.expiry_date == best_before),
+            None,
+        )
+        purchase_date = (
+            _date(row.get("purchased_date"))
+            or _date(row.get("purchase_date"))
+            or (item.purchase_date if item is not None else None)
+            or today
+        )
+        if best_before is not None and purchase_date > best_before:
+            # The inventory model requires a non-negative duration. When no earlier
+            # purchase date is known, use the expiry date and explain this fallback.
+            purchase_date = best_before
+            warnings.append(
+                f"{food.name}: Einlagerungsdatum auf {best_before.isoformat()} gesetzt, "
+                "damit das urspruengliche Ablaufdatum erhalten bleibt."
+            )
+        expiry_days = (best_before - purchase_date).days if best_before is not None else None
         if item is None:
             item = models.InventoryItem(name=food.name)
             db.add(item)
@@ -319,11 +332,11 @@ def import_grocy_csv_directory(
         item.brand = food.brand
         item.category = food.category
         item.quantity = amount
-        item.unit = unit.name if unit is not None else food.serving_unit
+        item.unit = unit_name
         item.minimum_quantity = _quantity(product_row.get("min_stock_amount"))
         item.storage_location = storage_name
         item.expiry_days = expiry_days
-        item.purchase_date = today
+        item.purchase_date = purchase_date
         item.price = price
         item.barcode = barcode_by_product.get(grocy_product_id or -1)
         item.notes = _text(product_row.get("description"))
@@ -365,7 +378,6 @@ def import_grocy_csv_directory(
             db.add(recipe)
             counters["recipes"]["created"] += 1
         else:
-            recipe.ingredients.clear()
             counters["recipes"]["updated"] += 1
 
         recipe.description = _clean_html(row.get("description"))
@@ -375,23 +387,40 @@ def import_grocy_csv_directory(
         db.flush()
         recipe_by_grocy_id[grocy_id] = recipe
 
+    ingredient_rows_by_recipe: dict[int, list[dict[str, str]]] = {}
     for row in _rows(csv_directory, "recipes_pos.csv", warnings):
-        recipe = recipe_by_grocy_id.get(_int(row.get("recipe_id")) or -1)
-        food = food_by_grocy_id.get(_int(row.get("product_id")) or -1)
-        if recipe is None or food is None:
+        recipe_id = _int(row.get("recipe_id")) or -1
+        if recipe_id not in recipe_by_grocy_id:
             counters["recipe_ingredients"]["skipped"] += 1
             continue
+        ingredient_rows_by_recipe.setdefault(recipe_id, []).append(row)
 
-        unit = unit_by_grocy_id.get(_int(row.get("qu_id")) or -1)
-        recipe.ingredients.append(
-            models.RecipeIngredient(
-                food_id=food.id,
-                quantity=max(_quantity(row.get("amount")), 0.0001),
-                unit=unit.name if unit is not None else food.serving_unit,
-                notes=_text(row.get("note")),
+    for recipe_id, recipe in recipe_by_grocy_id.items():
+        rows = ingredient_rows_by_recipe.get(recipe_id, [])
+        ingredients = []
+        for row in rows:
+            food = food_by_grocy_id.get(_int(row.get("product_id")) or -1)
+            quantity = _quantity(row.get("amount"))
+            if food is None or quantity <= 0:
+                break
+            unit = unit_by_grocy_id.get(_int(row.get("qu_id")) or -1)
+            ingredients.append(
+                models.RecipeIngredient(
+                    food_id=food.id,
+                    quantity=quantity,
+                    unit=unit.name if unit is not None else food.serving_unit,
+                    notes=_text(row.get("note")),
+                )
             )
-        )
-        counters["recipe_ingredients"]["created"] += 1
+        if not rows or len(ingredients) != len(rows):
+            counters["recipe_ingredients"]["skipped"] += len(rows)
+            warnings.append(
+                f"{recipe.name}: Keine vollstaendigen gueltigen Zutaten vorhanden; "
+                "bestehende Zutaten wurden beibehalten."
+            )
+            continue
+        recipe.ingredients[:] = ingredients
+        counters["recipe_ingredients"]["created"] += len(ingredients)
 
     for row in _rows(csv_directory, "shopping_list.csv", warnings):
         if _bool(row.get("done")):
