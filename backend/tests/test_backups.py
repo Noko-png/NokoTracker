@@ -14,7 +14,7 @@ from sqlalchemy.orm import Session
 
 from app import models
 from app.database import Base
-from app.routers import backups
+from app.routers import backups, meals
 
 
 class BackupTest(unittest.TestCase):
@@ -107,6 +107,32 @@ class BackupTest(unittest.TestCase):
                                         inventory_item_id=1, quantity=3),
             ])
             db.commit()
+            meals.deduct_meal_log_from_inventory(1, db)
+            db.add(models.ReceiptBooking(receipt_id="b" * 64))
+            db.commit()
+
+    def test_older_backup_without_booking_tables_still_imports(self):
+        source = self.root / "legacy.db"
+        source_engine = self.create_database(source)
+        self.seed_all_tables(source_engine)
+        self.execute(source, "DROP TABLE meal_inventory_bookings; DROP TABLE receipt_bookings;")
+        result = self.upload(source.read_bytes())
+        self.assertTrue(any("Buchungsnachweise" in warning for warning in result.warnings))
+        with Session(self.engine) as db:
+            self.assertEqual(db.query(models.MealInventoryBooking).count(), 0)
+            self.assertEqual(db.query(models.ReceiptBooking).count(), 0)
+            self.assertIsNotNone(db.get(models.MealLog, 1).inventory_deducted_at)
+
+    def test_restored_booking_can_refund_its_original_stock(self):
+        source = self.root / "bookings.db"
+        self.seed_all_tables(self.create_database(source))
+        self.upload(source.read_bytes())
+        with Session(self.engine) as db:
+            self.assertEqual(db.get(models.InventoryItem, 1).quantity, 1)
+            meals.delete_meal_log(1, db)
+            self.assertEqual(db.get(models.InventoryItem, 1).quantity, 2)
+            self.assertEqual(db.query(models.MealInventoryBooking).count(), 0)
+            self.assertEqual(db.query(models.ReceiptBooking).one().receipt_id, "b" * 64)
 
     def test_export_import_preserves_all_tables_and_backs_up_previous_database(self):
         source = self.root / "source.db"

@@ -24,6 +24,8 @@ from ..upload_limits import MAX_DATABASE_BYTES, copy_upload
 router = APIRouter(prefix="/database", tags=["database"])
 
 EXPECTED_TABLES = set(models.Base.metadata.tables)
+# Added in 3.1.10; older backups have no reversible booking history.
+BOOKING_TABLES = {"meal_inventory_bookings", "receipt_bookings"}
 MAX_SQLITE_VALUE_BYTES = 12 * 1024 * 1024
 
 TRAINING_TABLES = {
@@ -98,7 +100,7 @@ def validate_sqlite_database(path: Path) -> tuple[dict[str, int], list[str]]:
                     "SELECT name FROM sqlite_master WHERE type = 'table'"
                 )
             }
-            missing_tables = sorted(EXPECTED_TABLES - table_names)
+            missing_tables = sorted(EXPECTED_TABLES - table_names - BOOKING_TABLES)
             if missing_tables:
                 raise ValueError(
                     "Die Datenbank ist unvollstaendig oder nicht kompatibel. Fehlende Tabellen: "
@@ -106,6 +108,8 @@ def validate_sqlite_database(path: Path) -> tuple[dict[str, int], list[str]]:
                 )
 
             for table in models.Base.metadata.sorted_tables:
+                if table.name not in table_names:
+                    continue
                 columns = {
                     row[1] for row in connection.execute(f'PRAGMA table_info("{table.name}")')
                 }
@@ -123,6 +127,8 @@ def validate_sqlite_database(path: Path) -> tuple[dict[str, int], list[str]]:
             # Check the application's relationships even if the uploaded schema
             # omitted its FOREIGN KEY constraints. Identifiers come from our models.
             for table in models.Base.metadata.sorted_tables:
+                if table.name not in table_names:
+                    continue
                 for foreign_key in table.foreign_keys:
                     parent = foreign_key.column
                     child = foreign_key.parent
@@ -147,6 +153,8 @@ def validate_sqlite_database(path: Path) -> tuple[dict[str, int], list[str]]:
 
     extra_tables = sorted(table_names - EXPECTED_TABLES - {"sqlite_sequence", "sqlite_stat1", "sqlite_stat4"})
     warnings = ["Unbekannte Tabellen werden nicht uebernommen: " + ", ".join(extra_tables)] if extra_tables else []
+    if BOOKING_TABLES - table_names:
+        warnings.append("Diese aeltere Sicherung enthaelt keine vollstaendigen Buchungsnachweise. Alte Abbuchungen koennen nicht automatisch rueckgaengig gemacht werden.")
     return table_counts, warnings
 
 
@@ -240,6 +248,8 @@ def restore_database(upload_path: Path, db_path: Path, filename: str):
                 source.execute("PRAGMA trusted_schema=OFF")
                 target.execute("PRAGMA foreign_keys=ON")
                 for table in models.Base.metadata.sorted_tables:
+                    if table.name not in table_counts:
+                        continue
                     columns = [column.name for column in table.columns if column.name != "home_assistant_user_id"]
                     names = ", ".join(f'"{name}"' for name in columns)
                     placeholders = ", ".join("?" for name in columns)

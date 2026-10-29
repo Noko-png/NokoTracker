@@ -1,5 +1,9 @@
 from __future__ import annotations
 
+import hashlib
+import json
+from fastapi import HTTPException
+
 import base64
 import subprocess
 import sys
@@ -284,6 +288,7 @@ def preview_receipt_import(
         )
 
     return schemas.ReceiptImportPreview(
+        receipt_id=hashlib.sha256("\n".join(lines).encode()).hexdigest(),
         filename=request.filename,
         receipt_date=parse_receipt_date(text),
         store_name=parse_store_name(lines),
@@ -345,6 +350,13 @@ def book_receipt_import(
     inventory_items: list[models.InventoryItem] = []
     warnings: list[str] = []
     skipped_count = 0
+    # The preview identifies the source receipt independently of edited rows.
+    # Older API clients still receive protection against identical requests.
+    receipt_id = request.receipt_id or hashlib.sha256(
+        json.dumps(request.model_dump(mode="json", exclude={"receipt_id"}), sort_keys=True).encode()
+    ).hexdigest()
+    if db.query(models.ReceiptBooking).filter_by(receipt_id=receipt_id).first() is not None:
+        raise HTTPException(409, "Dieser Kassenzettel wurde bereits gebucht")
 
     try:
         for item in request.items:
@@ -398,10 +410,12 @@ def book_receipt_import(
         if not inventory_items:
             warnings.append("Es wurden keine Kassenzettelzeilen zum Buchen ausgewaehlt")
 
+        if inventory_items:
+            db.add(models.ReceiptBooking(receipt_id=receipt_id))
         db.commit()
         for inventory_item in inventory_items:
             db.refresh(inventory_item)
-    except (IntegrityError, ValueError):
+    except Exception:
         db.rollback()
         raise
 

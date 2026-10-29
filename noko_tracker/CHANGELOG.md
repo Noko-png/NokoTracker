@@ -1,5 +1,17 @@
 # Changelog
 
+## 3.1.10
+
+- Dezimalmengen bleiben bei Eingabe, Anzeige und Buchung erhalten. Kleine Mengen wie 5 g aus einem kg werden nicht mehr auf null oder auf benachbarte Brueche gerundet.
+- Kalorientracker speichert Mahlzeit und Bestandsabzug gemeinsam in einer Transaktion. Wiederholte Anfragen derselben Buchung ziehen keine weiteren Mengen ab.
+- Neue Mahlzeitenbuchungen speichern die tatsaechlich verwendeten Chargen. Mengen- und Lebensmittelkorrekturen buchen diese zurueck und die neue Auswahl gemeinsam ab; Loeschen stellt die urspruenglichen Mengen wieder her. Fehlgeschlagene Korrekturen lassen die vorherige Buchung bestehen.
+- Mealprep-Aenderungen setzen den Buchungsstatus nicht mehr zurueck. Alte Buchungen ohne Chargennachweis werden nicht automatisch korrigiert, um keine Bestaende zu erfinden.
+- Rezeptzutaten desselben Lebensmittels werden unabhaengig von ihrer Einheit zusammen geprueft. Unvollstaendige Zubereitungen werden abgewiesen.
+- Einkaufsliste und Zubereitungen erzeugen eigene Bestandschargen. Unterschiedliche Einheiten werden nicht mehr addiert; Kauf- und Ablaufdaten vorhandener Ware bleiben erhalten.
+- Veraltete Bestandsformulare werden mit einer Aufforderung zum Neuladen abgewiesen, statt zwischenzeitliche Buchungen anderer Nutzer zu ueberschreiben.
+- Kassenzettel erhalten eine dauerhafte Buchungskennung; derselbe Beleg kann nicht nochmals eingelagert werden.
+- Sicherungen enthalten auch Buchungsnachweise und Belegkennungen. Aeltere Sicherungen bleiben mit einem entsprechenden Hinweis importierbar. Regressionstests decken Buchungen, Korrekturen, Nutzerrechte und Wiederherstellungen ab.
+
 ## 3.1.9
 
 - HA-Ingress prueft die echte Supervisor-Verbindung und eine vorhandene HA-Benutzer-ID. Direkter Netzwerkzugriff und beliebige Proxy-Header werden nicht mehr akzeptiert.

@@ -8,7 +8,7 @@ from sqlalchemy.orm import Session
 
 from .. import crud, models, schemas
 from ..database import get_db
-from ..services import nutrition_service
+from ..services import nutrition_service, stock_booking_service as stock
 
 
 router = APIRouter(prefix="/recipes", tags=["recipes"])
@@ -163,21 +163,10 @@ def fill_recipe_shopping_item_references(
 
 
 def recipe_ingredient_requirements(recipe: models.Recipe) -> list[dict]:
-    requirements: dict[tuple[int, str], dict] = {}
-    for ingredient in recipe.ingredients:
-        unit_key = normalized_unit(ingredient.unit)
-        key = (ingredient.food_id, unit_key)
-        if key not in requirements:
-            requirements[key] = {
-                "food": ingredient.food,
-                "quantity": 0.0,
-                "unit": ingredient.unit,
-            }
-        requirements[key]["quantity"] = normalized_quantity(
-            requirements[key]["quantity"] + normalized_quantity(ingredient.quantity)
-        )
-
-    return list(requirements.values())
+    return stock.aggregate_requirements([
+        {"food": ingredient.food, "quantity": ingredient.quantity, "unit": ingredient.unit}
+        for ingredient in recipe.ingredients
+    ])
 
 
 def recipe_ingredient_amount(food: models.Food, quantity: float, unit: str) -> float:
@@ -247,25 +236,6 @@ def recipe_prepared_food(
     db.add(recipe)
     db.flush()
     return food
-
-
-def prepared_inventory_item(
-    db: Session,
-    food: models.Food,
-    product_unit: models.ProductUnit,
-) -> models.InventoryItem | None:
-    return (
-        db.query(models.InventoryItem)
-        .filter(models.InventoryItem.food_id == food.id)
-        .filter(
-            or_(
-                models.InventoryItem.product_unit_id == product_unit.id,
-                func.lower(models.InventoryItem.unit) == product_unit.name.lower(),
-            )
-        )
-        .order_by(models.InventoryItem.id)
-        .first()
-    )
 
 
 def apply_prepared_inventory_values(
@@ -496,78 +466,14 @@ def prepare_recipe_from_inventory(
             detail="Gericht kann ohne Zutaten nicht zubereitet werden",
         )
 
-    requirement_rows: list[dict] = []
-    shortages: list[str] = []
-    for requirement in requirements:
-        food = requirement["food"]
-        required_quantity = normalized_quantity(requirement["quantity"])
-        unit = requirement["unit"]
-        required_grams = amount_in_grams(food, required_quantity, unit)
-        inventory_items = inventory_items_by_expiry(
-            matching_inventory_items(db, food.id)
-        )
-        available_grams = normalized_quantity(
-            sum(
-                amount_in_grams(item, item.quantity, item.unit)
-                for item in inventory_items
-            )
-        )
-        missing_grams = normalized_quantity(required_grams - available_grams)
-        if missing_grams > 0.000001:
-            missing_quantity = quantity_in_unit(food, missing_grams, unit)
-            shortages.append(
-                f"{food.name}: {format_quantity(missing_quantity)} {unit}"
-            )
-
-        requirement_rows.append(
-            {
-                "food": food,
-                "required_quantity": required_quantity,
-                "required_grams": required_grams,
-                "unit": unit,
-                "inventory_items": inventory_items,
-            }
-        )
-
-    if shortages:
-        raise HTTPException(
-            status_code=422,
-            detail="Nicht genug Bestand: " + "; ".join(shortages),
-        )
-
-    consumed: list[dict] = []
     try:
-        for row in requirement_rows:
-            remaining_grams = normalized_quantity(row["required_grams"])
-            for item in row["inventory_items"]:
-                if remaining_grams <= 0.000001:
-                    break
-                item_quantity = normalized_quantity(item.quantity)
-                item_grams = amount_in_grams(item, item_quantity, item.unit)
-                consumed_grams = min(item_grams, remaining_grams)
-                consumed_quantity = quantity_in_unit(item, consumed_grams, item.unit)
-                item.quantity = normalized_quantity(item_quantity - consumed_quantity)
-                remaining_grams = normalized_quantity(remaining_grams - consumed_grams)
-                db.add(item)
-
-            consumed.append(
-                {
-                    "food_id": row["food"].id,
-                    "name": row["food"].name,
-                    "quantity": row["required_quantity"],
-                    "unit": row["unit"],
-                }
-            )
+        consumed, _deductions = stock.deduct_inventory(db, requirements)
 
         product_unit = crud.get_or_create_product_unit(db, "Portion")
         food = recipe_prepared_food(db, recipe, product_unit)
         prepared_quantity = normalized_quantity(recipe.servings)
-        inventory_item = prepared_inventory_item(db, food, product_unit)
-        if inventory_item is None:
-            inventory_item = models.InventoryItem(
-                quantity=0.0,
-                purchase_date=request.purchase_date,
-            )
+        # Each preparation is a separate lot with its own preparation date.
+        inventory_item = models.InventoryItem(quantity=0.0, purchase_date=request.purchase_date)
 
         inventory_item.quantity = normalized_quantity(
             normalized_quantity(inventory_item.quantity) + prepared_quantity
@@ -588,6 +494,9 @@ def prepare_recipe_from_inventory(
             status_code=409,
             detail="Gericht konnte nicht zubereitet gebucht werden",
         ) from exc
+    except Exception:
+        db.rollback()
+        raise
 
     return {
         "recipe_id": recipe.id,

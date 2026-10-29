@@ -104,6 +104,31 @@ class SecurityTest(unittest.TestCase):
             self.assertEqual(status, 403)
         self.assertEqual(self.call("GET", "/users", identity=None)[0], 401)
 
+    def test_stock_booking_retries_and_refunds_respect_profile_ownership(self):
+        with Session(self.engine) as db:
+            food = models.Food(name="Shared stock")
+            item = models.InventoryItem(name=food.name, food=food, quantity=500, unit="g")
+            db.add(item)
+            db.commit()
+            food_id, item_id = food.id, item.id
+        payload = {
+            "food_id": food_id, "quantity": 100, "unit": "g", "user_id": 1,
+            "eaten_at": "2026-10-29T12:00:00", "deduct_inventory": True,
+            "booking_key": "secure-booking-001",
+        }
+        status, entry = self.call("POST", "/meals/logs", payload)
+        self.assertEqual(status, 201, entry)
+        self.assertIsNotNone(entry["inventory_deducted_at"])
+        self.assertEqual(self.call("POST", "/meals/logs", payload)[1]["id"], entry["id"])
+        self.assertEqual(self.call("POST", "/meals/logs", payload, identity="b")[0], 404)
+        self.assertEqual(self.call("PATCH", f"/meals/logs/{entry['id']}", {"quantity": 200}, identity="b")[0], 404)
+        self.assertEqual(self.call("DELETE", f"/meals/logs/{entry['id']}", identity="b")[0], 404)
+        with Session(self.engine) as db:
+            self.assertEqual(db.get(models.InventoryItem, item_id).quantity, 400)
+        self.assertEqual(self.call("DELETE", f"/meals/logs/{entry['id']}")[0], 204)
+        with Session(self.engine) as db:
+            self.assertEqual(db.get(models.InventoryItem, item_id).quantity, 500)
+
     def test_session_and_passwordless_user_response(self):
         status, session = self.call("GET", "/session")
         self.assertEqual(status, 200)

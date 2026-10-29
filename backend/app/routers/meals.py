@@ -1,3 +1,5 @@
+import hashlib
+import json
 from datetime import datetime
 from fractions import Fraction
 
@@ -7,7 +9,7 @@ from sqlalchemy.orm import Session
 
 from .. import crud, models, schemas
 from ..database import get_db
-from ..services import nutrition_service
+from ..services import nutrition_service, stock_booking_service as stock
 
 
 router = APIRouter(prefix="/meals/logs", tags=["meals"])
@@ -201,73 +203,16 @@ def meal_log_inventory_requirements(
             ]
 
         multiplier = recipe_multiplier_for_meal_log(meal_log)
-        requirements: dict[tuple[int, str], dict] = {}
-        for ingredient in meal_log.recipe.ingredients:
-            unit_key = normalized_unit(ingredient.unit)
-            key = (ingredient.food_id, unit_key)
-            if key not in requirements:
-                requirements[key] = {
-                    "food": ingredient.food,
-                    "quantity": 0.0,
-                    "unit": ingredient.unit,
-                }
-            requirements[key]["quantity"] = normalized_quantity(
-                requirements[key]["quantity"]
-                + normalized_quantity(ingredient.quantity) * multiplier
-            )
-
+        requirements = [
+            {"food": ingredient.food, "quantity": ingredient.quantity * multiplier, "unit": ingredient.unit}
+            for ingredient in meal_log.recipe.ingredients
+        ]
         if not requirements:
-            raise HTTPException(
-                status_code=422,
-                detail="Gericht kann ohne Zutaten nicht aus dem Bestand gebucht werden",
-            )
-        return list(requirements.values())
+            raise HTTPException(422, "Gericht kann ohne Zutaten nicht aus dem Bestand gebucht werden")
+        return stock.aggregate_requirements(requirements)
 
     raise HTTPException(status_code=422, detail="Meal log has no inventory source")
 
-
-def inventory_deduction_rows(db: Session, requirements: list[dict]) -> list[dict]:
-    rows: list[dict] = []
-    shortages: list[str] = []
-
-    for requirement in requirements:
-        food = requirement["food"]
-        required_quantity = normalized_quantity(requirement["quantity"])
-        unit = requirement["unit"]
-        required_grams = amount_in_grams(food, required_quantity, unit)
-        inventory_items = inventory_items_by_expiry(
-            matching_inventory_items(db, food.id)
-        )
-        available_grams = normalized_quantity(
-            sum(
-                amount_in_grams(item, item.quantity, item.unit)
-                for item in inventory_items
-            )
-        )
-        missing_grams = normalized_quantity(required_grams - available_grams)
-        if missing_grams > 0.000001:
-            missing_quantity = quantity_in_unit(food, missing_grams, unit)
-            shortages.append(
-                f"{food.name}: {format_quantity(missing_quantity)} {unit}"
-            )
-
-        rows.append(
-            {
-                "food": food,
-                "required_quantity": required_quantity,
-                "required_grams": required_grams,
-                "unit": unit,
-                "inventory_items": inventory_items,
-            }
-        )
-
-    if shortages:
-        raise HTTPException(
-            status_code=422,
-            detail="Nicht genug Bestand: " + "; ".join(shortages),
-        )
-
-    return rows
 
 
 def normalize_meal_log_source_payload(patch: dict) -> dict:
@@ -300,7 +245,15 @@ def normalize_meal_log_source_payload(patch: dict) -> dict:
 
 @router.post("", response_model=schemas.MealLogRead, status_code=status.HTTP_201_CREATED)
 def create_meal_log(meal_log_in: schemas.MealLogCreate, db: Session = Depends(get_db)):
-    payload = normalize_meal_log_source_payload(meal_log_in.model_dump())
+    payload = normalize_meal_log_source_payload(meal_log_in.model_dump(exclude={"deduct_inventory", "booking_key"}))
+    request_hash = hashlib.sha256(json.dumps(payload, sort_keys=True, default=str).encode()).hexdigest()
+    if meal_log_in.deduct_inventory:
+        existing = db.query(models.MealInventoryBooking).filter_by(booking_key=meal_log_in.booking_key).first()
+        if existing is not None:
+            previous = get_meal_log_or_404(db, existing.meal_log_id)
+            if existing.request_hash != request_hash:
+                raise HTTPException(409, "Die Buchungskennung wurde bereits fuer andere Daten verwendet")
+            return previous
     quick_calories, quick_protein, quick_fat, quick_carbs = quick_values_from_patch(payload)
     validate_meal_log_references(
         db,
@@ -319,12 +272,18 @@ def create_meal_log(meal_log_in: schemas.MealLogCreate, db: Session = Depends(ge
     try:
         db_obj = models.MealLog(**payload)
         db.add(db_obj)
+        if meal_log_in.deduct_inventory:
+            db.flush()
+            book_meal_inventory(db, db_obj, meal_log_in.booking_key, request_hash)
         db.commit()
         db.refresh(db_obj)
         return db_obj
     except IntegrityError as exc:
         db.rollback()
         raise HTTPException(status_code=409, detail="Meal log could not be created") from exc
+    except Exception:
+        db.rollback()
+        raise
 
 
 @router.get("", response_model=list[schemas.MealLogRead])
@@ -353,49 +312,34 @@ def deduct_meal_log_from_inventory(meal_log_id: int, db: Session = Depends(get_d
             detail="Bestand wurde fuer diesen Eintrag bereits gebucht",
         )
 
-    requirements = meal_log_inventory_requirements(db, meal_log)
-    rows = inventory_deduction_rows(db, requirements)
-    consumed: list[dict] = []
-
     try:
-        for row in rows:
-            remaining_grams = normalized_quantity(row["required_grams"])
-            for item in row["inventory_items"]:
-                if remaining_grams <= 0.000001:
-                    break
-                item_quantity = normalized_quantity(item.quantity)
-                item_grams = amount_in_grams(item, item_quantity, item.unit)
-                if item_grams <= 0.000001:
-                    continue
-                consumed_grams = min(item_grams, remaining_grams)
-                consumed_quantity = quantity_in_unit(item, consumed_grams, item.unit)
-                item.quantity = normalized_quantity(
-                    max(0.0, item_quantity - consumed_quantity)
-                )
-                remaining_grams = normalized_quantity(remaining_grams - consumed_grams)
-                db.add(item)
-
-            consumed.append(
-                {
-                    "food_id": row["food"].id,
-                    "name": row["food"].name,
-                    "quantity": row["required_quantity"],
-                    "unit": row["unit"],
-                }
-            )
-
-        meal_log.planned_inventory_deduction = True
-        meal_log.inventory_deducted_at = datetime.utcnow()
-        db.add(meal_log)
+        consumed = book_meal_inventory(db, meal_log)
         db.commit()
         db.refresh(meal_log)
         return {"meal_log": meal_log, "consumed": consumed}
     except IntegrityError as exc:
         db.rollback()
-        raise HTTPException(
-            status_code=409,
-            detail="Bestand konnte fuer den Kalorientracker-Eintrag nicht gebucht werden",
-        ) from exc
+        raise HTTPException(409, "Bestand konnte nicht gebucht werden") from exc
+    except Exception:
+        db.rollback()
+        raise
+
+
+def book_meal_inventory(
+    db: Session, meal_log: models.MealLog,
+    booking_key: str | None = None, request_hash: str | None = None,
+) -> list[dict]:
+    consumed, deductions = stock.deduct_inventory(db, meal_log_inventory_requirements(db, meal_log))
+    booking = meal_log.inventory_booking
+    if booking is None:
+        booking = models.MealInventoryBooking(
+            meal_log=meal_log, booking_key=booking_key, request_hash=request_hash,
+        )
+        db.add(booking)
+    booking.deductions = deductions
+    meal_log.planned_inventory_deduction = True
+    meal_log.inventory_deducted_at = datetime.utcnow()
+    return consumed
 
 
 @router.patch("/{meal_log_id}", response_model=schemas.MealLogRead)
@@ -406,6 +350,13 @@ def update_meal_log(
 ):
     meal_log = get_meal_log_or_404(db, meal_log_id)
     patch = normalize_meal_log_source_payload(meal_log_in.model_dump(exclude_unset=True))
+    if patch.get("inventory_deducted_at") is not None:
+        raise HTTPException(422, "Der Buchungsstatus wird vom Server gesetzt")
+    patch.pop("inventory_deducted_at", None)
+    stock_fields = {"quantity", "unit", "food_id", "recipe_id", "quick_add_name", "meal_source"}
+    rebook = meal_log.inventory_deducted_at is not None and any(
+        field in patch and patch[field] != getattr(meal_log, field) for field in stock_fields
+    )
     next_user_id = patch.get("user_id", meal_log.user_id)
     next_food_id = patch.get("food_id", meal_log.food_id)
     next_recipe_id = patch.get("recipe_id", meal_log.recipe_id)
@@ -428,19 +379,40 @@ def update_meal_log(
         quick_carbs,
     )
     try:
+        if rebook:
+            stock.restore_meal_inventory(db, meal_log)
         for field, value in patch.items():
             setattr(meal_log, field, value)
         db.add(meal_log)
+        if rebook:
+            db.flush()
+            db.expire(meal_log, ["food", "recipe"])
+            if meal_log.quick_add_name is not None:
+                meal_log.inventory_booking.deductions = []
+                meal_log.inventory_deducted_at = None
+                meal_log.planned_inventory_deduction = False
+            else:
+                book_meal_inventory(db, meal_log)
         db.commit()
         db.refresh(meal_log)
         return meal_log
     except IntegrityError as exc:
         db.rollback()
         raise HTTPException(status_code=409, detail="Meal log could not be updated") from exc
+    except Exception:
+        db.rollback()
+        raise
 
 
 @router.delete("/{meal_log_id}", status_code=status.HTTP_204_NO_CONTENT)
 def delete_meal_log(meal_log_id: int, db: Session = Depends(get_db)):
     meal_log = get_meal_log_or_404(db, meal_log_id)
-    crud.delete(db, meal_log)
+    try:
+        if meal_log.inventory_deducted_at is not None or meal_log.inventory_booking is not None:
+            stock.restore_meal_inventory(db, meal_log)
+        db.delete(meal_log)
+        db.commit()
+    except Exception:
+        db.rollback()
+        raise
     return Response(status_code=status.HTTP_204_NO_CONTENT)

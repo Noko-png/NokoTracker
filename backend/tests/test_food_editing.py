@@ -114,7 +114,8 @@ class FoodEditingTest(unittest.TestCase):
         )
         inventory.replace_inventory_item(
             item.id,
-            schemas.InventoryItemCreate(
+            schemas.InventoryItemReplace(
+                expected_updated_at=item.updated_at,
                 name=self.food.name, food_id=self.food.id, quantity=2,
                 purchase_date=date(2026, 10, 25), expiry_days=14,
             ),

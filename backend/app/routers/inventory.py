@@ -1,4 +1,4 @@
-from datetime import date, timedelta
+from datetime import date, timedelta, timezone
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Response, status
 from sqlalchemy.exc import IntegrityError
@@ -59,7 +59,7 @@ def inventory_payload_with_food(
     item_in: schemas.InventoryItemCreate,
 ) -> dict:
     product_unit = resolve_product_unit(db, item_in)
-    payload = item_in.model_dump()
+    payload = item_in.model_dump(exclude={"expected_updated_at"})
     brand = normalized_text(item_in.brand)
     category = normalized_text(item_in.category)
 
@@ -211,10 +211,15 @@ def create_inventory_item(item_in: schemas.InventoryItemCreate, db: Session = De
 @router.put("/{item_id}", response_model=schemas.InventoryItemRead)
 def replace_inventory_item(
     item_id: int,
-    item_in: schemas.InventoryItemCreate,
+    item_in: schemas.InventoryItemReplace,
     db: Session = Depends(get_db),
 ):
     item = get_item_or_404(db, item_id)
+    def utc_naive(value):
+        return value.astimezone(timezone.utc).replace(tzinfo=None) if value.tzinfo else value
+    if utc_naive(item.updated_at) != utc_naive(item_in.expected_updated_at):
+        raise HTTPException(409, "Der Bestand wurde inzwischen geaendert. Bitte neu laden und den Eintrag erneut bearbeiten.")
+
     ensure_product_group_exists(db, item_in.product_group_id)
     ensure_product_unit_exists(db, item_in.product_unit_id)
     try:

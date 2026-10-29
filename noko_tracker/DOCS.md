@@ -20,6 +20,14 @@ Gewicht, Training, Mahlzeiten, Mealprep und ToDos sind persoenlich. Bestand, Leb
 
 Das Add-on akzeptiert ausschliesslich Verbindungen des HA-Ingress-Supervisors. Direkter Portzugriff ist entfernt. Die HA-Anmeldung ersetzt die bisher wirkungslosen NokoTracker-Passwoerter; vorhandene Passwortwerte werden beim Start entfernt. Das Add-on benoetigt keine zusaetzlichen Supervisor- oder Core-API-Rechte.
 
+## Bestandsbuchungen ab 3.1.10
+
+Beim Aktualisieren werden die neuen Buchungstabellen automatisch angelegt; vorhandene Bestaende bleiben erhalten. Mahlzeit und Bestandsabzug werden gemeinsam gespeichert. Wird eine neu gebuchte Mahlzeit korrigiert oder geloescht, werden die dokumentierten Abbuchungen entsprechend angepasst oder zurueckgenommen. Bei fehlendem Bestand bleibt die bisherige Buchung erhalten.
+
+Einkaeufe und Zubereitungen erhalten jeweils eine eigene Charge. Dadurch bleiben Einheiten und Ablaufdaten vorhandener Ware erhalten. Ein bereits gebuchter Kassenzettel wird bei erneutem Einlesen oder Senden abgewiesen. Wurde ein Bestand zwischen Oeffnen und Speichern eines Formulars geaendert, muss der Eintrag neu geladen und erneut bearbeitet werden.
+
+Alte Abbuchungen vor 3.1.10 besitzen keinen verlaesslichen Chargennachweis. Bereits markierte Altbuchungen lassen deshalb keine automatische Mengenkorrektur oder Rueckbuchung beim Loeschen zu; Notizen und Datum bleiben bearbeitbar. Bereits vorhandene Fehlbestaende muessen anhand des tatsaechlichen Vorrats manuell berichtigt werden. Aeltere Sicherungen sind weiterhin importierbar, enthalten aber keine Nachweise oder Belegkennungen aus der Zeit vor diesem Update.
+
 ## Persistenz
 
 Die Datenbank liegt im Add-on-Datenverzeichnis:

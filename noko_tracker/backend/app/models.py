@@ -423,6 +423,10 @@ class MealLog(TimestampMixin, Base):
     user = relationship("User", back_populates="meal_logs")
     food = relationship("Food", back_populates="meal_logs")
     recipe = relationship("Recipe", back_populates="meal_logs")
+    inventory_booking = relationship(
+        "MealInventoryBooking", back_populates="meal_log", uselist=False,
+        cascade="all, delete-orphan",
+    )
 
     __table_args__ = (
         CheckConstraint(
@@ -600,3 +604,21 @@ class ShoppingListItem(TimestampMixin, Base):
         CheckConstraint("quantity > 0", name="ck_shopping_quantity_positive"),
         CheckConstraint("priority >= 0", name="ck_shopping_priority_non_negative"),
     )
+
+
+class MealInventoryBooking(TimestampMixin, Base):
+    __tablename__ = "meal_inventory_bookings"
+
+    id = Column(Integer, primary_key=True)
+    meal_log_id = Column(Integer, ForeignKey("meal_logs.id", ondelete="CASCADE"), nullable=False, unique=True)
+    booking_key = Column(String(64), unique=True, nullable=True)
+    request_hash = Column(String(64), nullable=True)
+    deductions = Column(JSON, nullable=False)
+    meal_log = relationship("MealLog", back_populates="inventory_booking")
+
+
+class ReceiptBooking(TimestampMixin, Base):
+    __tablename__ = "receipt_bookings"
+
+    id = Column(Integer, primary_key=True)
+    receipt_id = Column(String(64), unique=True, nullable=False)

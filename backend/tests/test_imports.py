@@ -177,12 +177,13 @@ class ImportTest(unittest.TestCase):
         food = models.Food(name="Bon-Lebensmittel", product_group=group)
         self.db.add(food)
         self.db.commit()
-        for days, group_days, expected in [(14, 7, 14), (0, 7, 0), (None, 7, 7), (None, None, None)]:
+        for index, (days, group_days, expected) in enumerate([(14, 7, 14), (0, 7, 0), (None, 7, 7), (None, None, None)]):
             with self.subTest(days=days, group_days=group_days):
                 food.expiry_days = days
                 group.default_expiry_days = group_days
                 self.db.commit()
                 result = receipt.book_receipt_import(self.db, schemas.ReceiptImportBookRequest(
+                    receipt_id=f"{index:064x}",
                     purchase_date=date(2026, 10, 28),
                     items=[schemas.ReceiptImportBookItem(
                         source_index=1, raw_name=food.name, name=food.name,

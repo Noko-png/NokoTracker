@@ -450,6 +450,8 @@ export type CalendarGroupCreate = Omit<
 export type CalendarGroupUpdate = Partial<CalendarGroupCreate>;
 
 export type MealLogCreate = {
+  deduct_inventory?: boolean;
+  booking_key?: string;
   eaten_at: string;
   meal_type?: string | null;
   quantity: number;
@@ -665,6 +667,7 @@ export type ReceiptImportPreviewItem = {
 };
 
 export type ReceiptImportPreview = {
+  receipt_id: string;
   filename: string;
   receipt_date?: string | null;
   store_name?: string | null;
@@ -690,6 +693,7 @@ export type ReceiptImportBookItem = {
 };
 
 export type ReceiptImportBookRequest = {
+  receipt_id?: string;
   purchase_date: string;
   default_storage_location?: string | null;
   items: ReceiptImportBookItem[];
@@ -785,7 +789,7 @@ export function createInventoryItem(item: Omit<Partial<InventoryItem>, "id">) {
 
 export function updateInventoryItem(
   id: number,
-  item: Omit<Partial<InventoryItem>, "id">,
+  item: Omit<Partial<InventoryItem>, "id"> & { expected_updated_at: string },
 ) {
   return request<InventoryItem>(`/inventory/${id}`, {
     method: "PUT",

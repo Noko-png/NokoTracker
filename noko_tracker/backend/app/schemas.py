@@ -12,9 +12,6 @@ SIMPLE_FRACTION_RE = re.compile(
 MIXED_FRACTION_RE = re.compile(
     r"^([+-]?\d+(?:[,.]\d+)?)\s+(\d+(?:[,.]\d+)?)\s*/\s*(\d+(?:[,.]\d+)?)$"
 )
-FRACTIONAL_QUANTITY_DENOMINATORS = (2, 3, 4, 6, 8, 12)
-FRACTIONAL_QUANTITY_TOLERANCE = 0.01
-QUANTITY_PRECISION = 1_000_000
 DEFAULT_FOOD_EMOJI = "🍽️"
 DEFAULT_INVENTORY_EMOJI = "📦"
 DEFAULT_RECIPE_EMOJI = "🍲"
@@ -30,35 +27,10 @@ def normalize_fractional_number(value):
         return value
 
     if not math.isfinite(numeric_value):
-        return value
+        raise ValueError("Mengen muessen endlich sein")
 
-    sign = -1 if numeric_value < 0 else 1
-    absolute_value = abs(numeric_value)
-    whole = math.trunc(absolute_value)
-    fraction = absolute_value - whole
-
-    if fraction < FRACTIONAL_QUANTITY_TOLERANCE:
-        return float(sign * whole)
-
-    best_fraction = None
-    for denominator in FRACTIONAL_QUANTITY_DENOMINATORS:
-        numerator = round(fraction * denominator)
-        difference = abs(fraction - numerator / denominator)
-        if best_fraction is None or difference < best_fraction["difference"]:
-            best_fraction = {
-                "denominator": denominator,
-                "difference": difference,
-                "numerator": numerator,
-            }
-
-    if best_fraction and best_fraction["difference"] < FRACTIONAL_QUANTITY_TOLERANCE:
-        if best_fraction["numerator"] == best_fraction["denominator"]:
-            whole += 1
-            return float(sign * whole)
-        normalized = whole + best_fraction["numerator"] / best_fraction["denominator"]
-        return round(sign * normalized, 6)
-
-    return round(numeric_value, 6)
+    # Formatting fractions must never change amounts during booking.
+    return round(numeric_value, 12)
 
 
 def parse_fractional_number(value):
@@ -88,9 +60,10 @@ def parse_fractional_number(value):
         return normalize_fractional_number(numerator / denominator)
 
     try:
-        return normalize_fractional_number(float(value.replace(",", ".")))
+        numeric_value = float(value.replace(",", "."))
     except ValueError:
         return value.replace(",", ".")
+    return normalize_fractional_number(numeric_value)
 
 
 def normalize_emoji(value, default: str):
@@ -592,6 +565,16 @@ class InventoryItemCreate(InventoryItemBase):
     pass
 
 
+class InventoryItemReplace(InventoryItemCreate):
+    expected_updated_at: datetime
+
+
+class StoredInventoryDeduction(BaseModel):
+    inventory_item_id: int
+    quantity: float = Field(..., gt=0, allow_inf_nan=False)
+    snapshot: InventoryItemCreate
+
+
 class InventoryItemUpdate(BaseModel):
     food_id: Optional[int] = None
     name: Optional[str] = Field(None, min_length=1, max_length=200)
@@ -867,7 +850,16 @@ class MealLogBase(BaseModel):
 
 
 class MealLogCreate(MealLogBase):
-    pass
+    deduct_inventory: bool = False
+    booking_key: Optional[str] = Field(None, min_length=16, max_length=64)
+
+    @model_validator(mode="after")
+    def require_booking_key(self):
+        if self.deduct_inventory and not self.booking_key:
+            raise ValueError("Eine Buchungskennung ist erforderlich")
+        if self.inventory_deducted_at is not None:
+            raise ValueError("Der Buchungsstatus wird vom Server gesetzt")
+        return self
 
 
 class MealLogUpdate(BaseModel):
@@ -1282,6 +1274,7 @@ class ReceiptImportPreviewItem(BaseModel):
 
 
 class ReceiptImportPreview(BaseModel):
+    receipt_id: str
     filename: str
     receipt_date: Optional[date] = None
     store_name: Optional[str] = None
@@ -1312,6 +1305,7 @@ class ReceiptImportBookItem(BaseModel):
 
 
 class ReceiptImportBookRequest(BaseModel):
+    receipt_id: Optional[str] = Field(None, pattern=r"^[a-f0-9]{64}$")
     purchase_date: date = Field(default_factory=date.today)
     default_storage_location: Optional[str] = Field(None, max_length=120)
     items: list[ReceiptImportBookItem]

@@ -54,7 +54,6 @@ def normalize_shopping_item_for_food(
     return item_in.model_copy(
         update={
             "name": food.name,
-            "unit": shopping_unit_for_food(food),
         }
     )
 
@@ -198,20 +197,6 @@ def apply_default_inventory_values(
         inventory_item.expiry_days = food.expiry_days
     elif product_group is not None and product_group.default_expiry_days is not None:
         inventory_item.expiry_days = product_group.default_expiry_days
-
-
-def matching_inventory_item_for_food(
-    db: Session,
-    food: models.Food,
-    unit: str,
-) -> models.InventoryItem | None:
-    return (
-        db.query(models.InventoryItem)
-        .filter(models.InventoryItem.food_id == food.id)
-        .filter(func.lower(models.InventoryItem.unit) == unit.lower())
-        .order_by(models.InventoryItem.id)
-        .first()
-    )
 
 
 def create_inventory_item_from_food(
@@ -393,64 +378,21 @@ def import_shopping_list_to_inventory(
 
     try:
         for shopping_item in open_items:
-            inventory_item = shopping_item.inventory_item
+            linked_item = shopping_item.inventory_item
             food = food_for_shopping_item(db, shopping_item)
+            if food is None and linked_item is not None:
+                food = linked_item.food
 
-            if inventory_item is not None:
-                inventory_item.quantity = normalized_quantity(
-                    normalized_quantity(inventory_item.quantity)
-                    + normalized_quantity(shopping_item.quantity)
-                )
-                apply_default_inventory_values(
-                    inventory_item,
-                    food or inventory_item.food,
-                    request.purchase_date,
-                )
-                db.add(inventory_item)
-                updated_inventory_items.append(inventory_item)
-                deleted_shopping_item_ids.append(shopping_item.id)
-                db.delete(shopping_item)
-                continue
-
-            if food is not None:
-                inventory_item = matching_inventory_item_for_food(
-                    db,
-                    food,
-                    shopping_item.unit,
-                )
-                if inventory_item is None:
-                    inventory_item = create_inventory_item_from_food(
-                        db,
-                        food,
-                        shopping_item,
-                        request.purchase_date,
-                    )
-                    created_inventory_items.append(inventory_item)
-                else:
-                    inventory_item.quantity = normalized_quantity(
-                        normalized_quantity(inventory_item.quantity)
-                        + normalized_quantity(shopping_item.quantity)
-                    )
-                    apply_default_inventory_values(
-                        inventory_item,
-                        food,
-                        request.purchase_date,
-                    )
-                    db.add(inventory_item)
-                    updated_inventory_items.append(inventory_item)
-
-                deleted_shopping_item_ids.append(shopping_item.id)
-                db.delete(shopping_item)
-                continue
-
-            if request.unknown_item_action == "create":
+            if food is None and request.unknown_item_action == "create":
                 food = create_food_for_unknown_shopping_item(db, shopping_item)
+            if food is not None:
+                # Keep the purchased quantity in its own unit and lot. Adding it
+                # to a linked row would mix units and renew the old lot's expiry.
                 inventory_item = create_inventory_item_from_food(
-                    db,
-                    food,
-                    shopping_item,
-                    request.purchase_date,
+                    db, food, shopping_item, request.purchase_date,
                 )
+                if linked_item is not None:
+                    inventory_item.storage_location = linked_item.storage_location or inventory_item.storage_location
                 created_inventory_items.append(inventory_item)
                 deleted_shopping_item_ids.append(shopping_item.id)
                 db.delete(shopping_item)

@@ -1,4 +1,9 @@
 import {
+  formatFractionalQuantity,
+  normalizeFractionalQuantityValue,
+  newBookingKey,
+} from "./quantity";
+import {
   AlertTriangle,
   Apple,
   BarChart3,
@@ -246,6 +251,7 @@ type InventoryColumnDefinition = {
 };
 
 type InventoryForm = {
+  expected_updated_at: string;
   food_id: string;
   food_query: string;
   name: string;
@@ -548,7 +554,7 @@ const macroMeta: Array<{
   { key: "carbs", label: "Kohlenhydrate", unit: "g", tone: "red" },
 ];
 
-const appVersion = "3.1.9";
+const appVersion = "3.1.10";
 const updateSourceLabel = "main / github.com/Noko-png/NokoTracker";
 
 const emptyNutrition: NutritionDay = {
@@ -582,6 +588,7 @@ function isRecipeStockShortageError(error: unknown) {
 
 function createInitialInventoryForm(): InventoryForm {
   return {
+    expected_updated_at: "",
     food_id: "",
     food_query: "",
     name: "",
@@ -847,53 +854,6 @@ function parseNumberInput(value: string) {
   return parseDecimalNumber(trimmed);
 }
 
-const fractionalQuantityDenominators = [2, 3, 4, 6, 8, 12];
-const fractionalQuantityTolerance = 0.01;
-const quantityPrecision = 1_000_000;
-
-function roundQuantity(value: number) {
-  return Math.round(value * quantityPrecision) / quantityPrecision;
-}
-
-function normalizeFractionalQuantityValue(value: number) {
-  if (!Number.isFinite(value)) {
-    return value;
-  }
-
-  const sign = value < 0 ? -1 : 1;
-  const absoluteValue = Math.abs(value);
-  let whole = Math.trunc(absoluteValue);
-  const fraction = absoluteValue - whole;
-
-  if (fraction < fractionalQuantityTolerance) {
-    return sign * whole;
-  }
-
-  let bestFraction: {
-    denominator: number;
-    difference: number;
-    numerator: number;
-  } | null = null;
-
-  for (const denominator of fractionalQuantityDenominators) {
-    const numerator = Math.round(fraction * denominator);
-    const difference = Math.abs(fraction - numerator / denominator);
-    if (!bestFraction || difference < bestFraction.difference) {
-      bestFraction = { denominator, difference, numerator };
-    }
-  }
-
-  if (bestFraction && bestFraction.difference < fractionalQuantityTolerance) {
-    if (bestFraction.numerator === bestFraction.denominator) {
-      whole += 1;
-      return sign * whole;
-    }
-    return sign * roundQuantity(whole + bestFraction.numerator / bestFraction.denominator);
-  }
-
-  return roundQuantity(value);
-}
-
 function parseQuantityInput(value: string) {
   const parsed = parseNumberInput(value);
   return Number.isFinite(parsed)
@@ -1011,60 +971,6 @@ function formatSignedWeight(value: number) {
     return "0,0 kg";
   }
   return `${value > 0 ? "+" : ""}${formatNumber(value, 1)} kg`;
-}
-
-function greatestCommonDivisor(left: number, right: number): number {
-  return right === 0 ? left : greatestCommonDivisor(right, left % right);
-}
-
-function formatFractionalQuantity(value: number) {
-  if (!Number.isFinite(value)) {
-    return "";
-  }
-
-  const normalizedValue = normalizeFractionalQuantityValue(value);
-  const sign = normalizedValue < 0 ? "-" : "";
-  const absoluteValue = Math.abs(normalizedValue);
-  let whole = Math.trunc(absoluteValue);
-  const fraction = absoluteValue - whole;
-  if (fraction < 0.0005) {
-    return `${sign}${whole}`;
-  }
-
-  let bestFraction: {
-    denominator: number;
-    difference: number;
-    numerator: number;
-  } | null = null;
-  for (const denominator of fractionalQuantityDenominators) {
-    const numerator = Math.round(fraction * denominator);
-    if (numerator === 0) {
-      continue;
-    }
-    const difference = Math.abs(fraction - numerator / denominator);
-    if (!bestFraction || difference < bestFraction.difference) {
-      bestFraction = { denominator, difference, numerator };
-    }
-  }
-
-  if (bestFraction && bestFraction.difference < 0.0005) {
-    if (bestFraction.numerator === bestFraction.denominator) {
-      whole += 1;
-      return `${sign}${whole}`;
-    }
-
-    const divisor = greatestCommonDivisor(
-      bestFraction.numerator,
-      bestFraction.denominator,
-    );
-    const numerator = bestFraction.numerator / divisor;
-    const denominator = bestFraction.denominator / divisor;
-    return whole === 0
-      ? `${sign}${numerator}/${denominator}`
-      : `${sign}${whole} ${numerator}/${denominator}`;
-  }
-
-  return formatNumber(normalizedValue, 3);
 }
 
 function formatRecipeShoppingAction(
@@ -1534,6 +1440,7 @@ function getInitialInventoryVisibleColumns(): InventoryColumnKey[] {
 
 function createInventoryFormFromItem(item: InventoryItem): InventoryForm {
   return {
+    expected_updated_at: item.updated_at,
     food_id: toFormValue(item.food_id ?? item.food?.id),
     food_query: item.food ? formatFoodSuggestionLabel(item.food) : item.name,
     name: item.name,
@@ -1578,6 +1485,7 @@ function createInventoryFormFromFood(
     "";
 
   return {
+    expected_updated_at: "",
     food_id: toFormValue(food.id),
     food_query: formatFoodSuggestionLabel(food),
     name: food.name,
@@ -2319,7 +2227,7 @@ export default function App() {
       if (editingInventoryItemId === null) {
         await createInventoryItem(payload);
       } else {
-        await updateInventoryItem(editingInventoryItemId, payload);
+        await updateInventoryItem(editingInventoryItemId, { ...payload, expected_updated_at: inventoryForm.expected_updated_at });
       }
       setInventoryForm(createInitialInventoryForm());
       setEditingInventoryItemId(null);
@@ -2950,7 +2858,7 @@ export default function App() {
     }
   }
 
-  async function submitMeal(event?: FormEvent) {
+  async function submitMeal(event?: FormEvent, booking?: { deductInventory: boolean; bookingKey: string }) {
     event?.preventDefault();
     try {
       setApiError(null);
@@ -3017,13 +2925,17 @@ export default function App() {
         };
       }
       if (editingMealLogId === null) {
-        await createMealLog(payload);
+        await createMealLog({
+          ...payload,
+          deduct_inventory: booking?.deductInventory ?? false,
+          booking_key: booking?.bookingKey,
+        });
       } else {
         await updateMealLog(editingMealLogId, payload);
       }
+      await loadData();
       setMealForm(initialMealForm);
       setEditingMealLogId(null);
-      await loadData();
       return true;
     } catch (error) {
       setApiError(error instanceof Error ? error.message : "API-Fehler");
@@ -3166,7 +3078,6 @@ export default function App() {
         user_id: userId,
         meal_source: mealPrepSource,
         planned_inventory_deduction: true,
-        inventory_deducted_at: null,
       };
 
       if (selection.kind === "food") {
@@ -3269,7 +3180,6 @@ export default function App() {
           quick_carbs: null,
           meal_source: mealPrepSource,
           planned_inventory_deduction: true,
-          inventory_deducted_at: null,
         };
 
         if (existingMealLog) {
@@ -4354,9 +4264,6 @@ export default function App() {
             onDeductMealLogInventory={(mealLogId) =>
               runAction(() => deductMealLogInventory(mealLogId))
             }
-            onInventoryDecrease={(id, amount) =>
-              runAction(() => decreaseInventoryItem(id, amount))
-            }
             onMealPrepChange={updateMealPrepSlot}
             onMove={moveMealLog}
             onSubmit={submitMeal}
@@ -4893,7 +4800,7 @@ function latestResultsForExercise(
           notes: set.notes,
           reps: set.reps,
           setIndex: set.set_index,
-          volume: roundQuantity(set.weight_kg * set.reps),
+          volume: normalizeFractionalQuantityValue(set.weight_kg * set.reps),
           weightKg: set.weight_kg,
         })),
     )
@@ -7368,6 +7275,7 @@ function InventoryPage({
     if (!food) {
       onFormChange({
         ...createInitialInventoryForm(),
+        expected_updated_at: form.expected_updated_at,
         food_query: "",
         quantity: form.quantity,
         minimum_quantity: form.minimum_quantity,
@@ -7390,6 +7298,7 @@ function InventoryPage({
       form.food_id === "" && form.storage_location && !form.food_query.trim();
     onFormChange({
       ...nextForm,
+      expected_updated_at: form.expected_updated_at,
       food_query: foodQuery ?? formatFoodSuggestionLabel(food),
       quantity: form.quantity || nextForm.quantity,
       minimum_quantity: preserveExistingDetails
@@ -7591,6 +7500,7 @@ function InventoryPage({
     try {
       setReceiptImportBusy(true);
       const result = await onReceiptBook({
+        receipt_id: receiptPreview?.receipt_id,
         purchase_date: receiptPurchaseDate,
         default_storage_location: receiptStorageLocation || null,
         items: receiptRows,
@@ -11713,7 +11623,6 @@ function NutritionPage({
   onEdit,
   onEditWeightEntry,
   onFormChange,
-  onInventoryDecrease,
   onMealPrepChange,
   onMove,
   onSubmit,
@@ -11742,14 +11651,13 @@ function NutritionPage({
   onEdit: (mealLog: MealLog) => void;
   onEditWeightEntry: (entry: WeightEntry) => void;
   onFormChange: (value: MealForm) => void;
-  onInventoryDecrease: (id: number, amount: number) => Promise<boolean> | boolean;
   onMealPrepChange: (
     date: string,
     slotId: MealPrepSlotKey,
     value: string,
   ) => Promise<void> | void;
   onMove: (mealLog: MealLog, date: string, time: string) => void;
-  onSubmit: (event?: FormEvent) => Promise<boolean> | boolean;
+  onSubmit: (event?: FormEvent, booking?: { deductInventory: boolean; bookingKey: string }) => Promise<boolean> | boolean;
   onWeightFormChange: (value: WeightForm) => void;
   onWeightSubmit: (event: FormEvent) => void;
   productUnits: ProductUnit[];
@@ -11761,6 +11669,9 @@ function NutritionPage({
 }) {
   const [draggedMealLogId, setDraggedMealLogId] = useState<number | null>(null);
   const [addSheetOpen, setAddSheetOpen] = useState(false);
+  const mealSavePending = useRef(false);
+  const mealBookingAttempt = useRef<{ signature: string; key: string } | null>(null);
+  const [mealSaving, setMealSaving] = useState(false);
   const [toolMenuOpen, setToolMenuOpen] = useState(false);
   const [activeTool, setActiveTool] = useState<"mealprep" | "weight" | null>(
     null,
@@ -12250,19 +12161,6 @@ function NutritionPage({
     return remainingGrams <= 0.000001 ? deductions : [];
   }
 
-  async function deductInventoryPlan(plan: InventoryDeduction[]) {
-    for (const deduction of plan) {
-      const deducted = await onInventoryDecrease(
-        deduction.inventoryItem.id,
-        deduction.amount,
-      );
-      if (deducted === false) {
-        return false;
-      }
-    }
-    return true;
-  }
-
   useEffect(() => {
     if (editingMealLogId !== null) {
       setAddSheetOpen(true);
@@ -12345,6 +12243,7 @@ function NutritionPage({
   }
 
   function closeAddSheet() {
+    if (mealSavePending.current) return;
     stopBarcodeScanner();
     setAddSheetOpen(false);
     setSheetMode("search");
@@ -12357,31 +12256,29 @@ function NutritionPage({
 
   async function submitFromSheet(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    const submitter = (event.nativeEvent as SubmitEvent).submitter as
-      | HTMLButtonElement
-      | null;
-    const shouldDeductInventory =
-      submitter?.dataset.action === "add-and-deduct";
-    const deductionPlan = shouldDeductInventory ? inventoryDeductionPlan : [];
-
-    if (shouldDeductInventory && deductionPlan.length === 0) {
-      return;
+    if (mealSavePending.current) return;
+    const submitter = (event.nativeEvent as SubmitEvent).submitter as HTMLButtonElement | null;
+    const deductInventory = submitter?.dataset.action === "add-and-deduct";
+    if (deductInventory && !canAddAndDeduct) return;
+    const signature = JSON.stringify({ form, selectedDate, userId, editingMealLogId, deductInventory });
+    if (mealBookingAttempt.current?.signature !== signature) {
+      mealBookingAttempt.current = { signature, key: newBookingKey() };
     }
-
-    const saved = await onSubmit();
-    if (!saved) {
-      return;
+    mealSavePending.current = true;
+    setMealSaving(true);
+    try {
+      const saved = await onSubmit(undefined, { deductInventory, bookingKey: mealBookingAttempt.current.key });
+      if (!saved) return;
+      mealBookingAttempt.current = null;
+      stopBarcodeScanner();
+      setAddSheetOpen(false);
+      setSheetMode("search");
+      setNutritionSearch("");
+      setBarcodePanelOpen(false);
+    } finally {
+      mealSavePending.current = false;
+      setMealSaving(false);
     }
-
-    if (shouldDeductInventory) {
-      await deductInventoryPlan(deductionPlan);
-    }
-
-    stopBarcodeScanner();
-    setAddSheetOpen(false);
-    setSheetMode("search");
-    setNutritionSearch("");
-    setBarcodePanelOpen(false);
   }
 
   return (
@@ -13184,6 +13081,7 @@ function NutritionPage({
                       <button
                         className="button primary"
                         data-action="add"
+                        disabled={mealSaving}
                         type="submit"
                       >
                         <span className="nutrition-action-label-full">
@@ -13194,7 +13092,7 @@ function NutritionPage({
                       <button
                         className="button primary"
                         data-action="add-and-deduct"
-                        disabled={!canAddAndDeduct}
+                        disabled={mealSaving || !canAddAndDeduct}
                         title={
                           canAddAndDeduct
                             ? `Bucht ${inventoryDeductionSummary} aus dem Bestand ab`
