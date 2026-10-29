@@ -126,7 +126,7 @@ def validate_macro_percent_total(
 
 class UserBase(BaseModel):
     username: str = Field(..., min_length=1, max_length=120)
-    password: str = Field(..., min_length=1, max_length=255)
+    home_assistant_user_id: Optional[str] = Field(None, min_length=1, max_length=128)
     theme: ThemeName = "light"
     daily_calories: float = Field(2500.0, gt=0)
     protein_percent: float = Field(25.0, ge=0, le=100)
@@ -149,7 +149,7 @@ class UserCreate(UserBase):
 
 class UserUpdate(BaseModel):
     username: Optional[str] = Field(None, min_length=1, max_length=120)
-    password: Optional[str] = Field(None, min_length=1, max_length=255)
+    home_assistant_user_id: Optional[str] = Field(None, min_length=1, max_length=128)
     theme: Optional[ThemeName] = None
     daily_calories: Optional[float] = Field(None, gt=0)
     protein_percent: Optional[float] = Field(None, ge=0, le=100)
@@ -1257,7 +1257,7 @@ ReceiptImportStatus = Literal["ready", "needs_review", "ignored"]
 
 class ReceiptImportPreviewRequest(BaseModel):
     filename: str = Field("Kassenzettel.pdf", min_length=1, max_length=255)
-    content_base64: str = Field(..., min_length=1)
+    content_base64: str = Field(..., min_length=1, max_length=11_200_000)
 
 
 class ReceiptFoodSuggestion(BaseModel):

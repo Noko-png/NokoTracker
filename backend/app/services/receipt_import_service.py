@@ -1,13 +1,14 @@
 from __future__ import annotations
 
 import base64
+import subprocess
+import sys
+from pathlib import Path
 import re
 from dataclasses import dataclass
 from datetime import date, datetime
 from difflib import SequenceMatcher
-from io import BytesIO
 
-from pypdf import PdfReader
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
@@ -83,6 +84,8 @@ def normalized_match_text(value: str) -> str:
 
 
 def decode_pdf_text(content_base64: str) -> str:
+    if len(content_base64) > 11_200_000:
+        raise ValueError("Das PDF darf maximal 8 MB gross sein.")
     payload = content_base64.split(",", 1)[-1]
     try:
         data = base64.b64decode(payload, validate=True)
@@ -90,14 +93,16 @@ def decode_pdf_text(content_base64: str) -> str:
         raise ValueError("PDF konnte nicht als Base64 gelesen werden") from exc
 
     try:
-        reader = PdfReader(BytesIO(data))
-    except Exception as exc:  # pragma: no cover - pypdf raises a few concrete types
-        raise ValueError("PDF konnte nicht gelesen werden") from exc
-
-    text_parts: list[str] = []
-    for page in reader.pages:
-        text_parts.append(page.extract_text() or "")
-    text = "\n".join(text_parts).strip()
+        if len(data) > 8 * 1024 * 1024:
+            raise ValueError("Das PDF darf maximal 8 MB gross sein.")
+        result = subprocess.run(
+            [sys.executable, "-I", str(Path(__file__).with_name("pdf_worker.py"))],
+            input=data, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL,
+            timeout=12, check=True,
+        )
+        text = result.stdout.decode("utf-8").strip()
+    except (subprocess.SubprocessError, OSError, UnicodeError) as exc:
+        raise ValueError("PDF ungueltig oder Verarbeitungslimit erreicht (8 MB, 30 Seiten, 12 Sekunden).") from exc
     if not text:
         raise ValueError("Im PDF wurde kein lesbarer Text gefunden")
     return text

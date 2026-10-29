@@ -1,5 +1,15 @@
 # Changelog
 
+## 3.1.9
+
+- HA-Ingress prueft die echte Supervisor-Verbindung und eine vorhandene HA-Benutzer-ID. Direkter Netzwerkzugriff und beliebige Proxy-Header werden nicht mehr akzeptiert.
+- Neue Add-on-Option `admin_username`: Administrator anhand des exakten HA-Anmeldenamens bestimmen; bestehende Profile in den Einstellungen per HA-Benutzer-ID zuordnen. Ohne Konfiguration oder Zuordnung werden keine Administratorrechte bzw. fremden Profildaten vergeben.
+- Mahlzeiten, Mealprep, Gewicht, Training und ToDos sind serverseitig pro Profil geschuetzt. Haushaltsdaten und Kalender bleiben gemeinsam. Datenbank- und Grocy-Import/Export sowie Profilverwaltung sind dem Administrator vorbehalten.
+- NokoTracker-Passwortfelder entfallen; alte Klartextwerte werden entfernt. Browserentwuerfe sind nach HA-Nutzer und Profil getrennt; Nutzerwechsel setzt offene persoenliche Formulare zurueck.
+- Datenbankimporte uebernehmen ausschliesslich Datensaetze in ein neu erzeugtes Schema, lehnen Trigger/Views ab und tauschen die Datenbank unter Zugriffssperre atomar aus. HA-Zuordnungen werden nicht aus fremden Sicherungen uebernommen.
+- Begrenzte Datenbank-, CSV-, ZIP- und PDF-Importe; PDF-Verarbeitung mit Zeit- und Speichergrenzen in einem separaten Prozess.
+- Python-Abhaengigkeiten auf gepruefte Versionen aktualisiert; Regressionstests fuer Zugriffsrechte, Profiltrennung, Passwortentfernung und sichere Importe ergaenzt.
+
 ## 3.1.8
 
 - Datenbankimporte pruefen alle benoetigten Tabellen, Spalten und Datenverknuepfungen, bevor die aktuelle Datenbank ersetzt wird. Unvollstaendige oder inkompatible Sicherungen werden abgewiesen.

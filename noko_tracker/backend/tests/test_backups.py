@@ -26,7 +26,7 @@ class BackupTest(unittest.TestCase):
         self.target = self.root / "current.db"
         self.engine = self.create_database(self.target)
         with Session(self.engine) as db:
-            db.add(models.User(id=999, username="Original", password="test-only"))
+            db.add(models.User(id=999, username="Original", password="!"))
             db.commit()
         named_temporary_file = tempfile.NamedTemporaryFile
         for mocked in (
@@ -65,7 +65,7 @@ class BackupTest(unittest.TestCase):
     def seed_all_tables(self, engine):
         with Session(engine) as db:
             db.add_all([
-                models.User(id=1, username="Test", password="test-only"),
+                models.User(id=1, username="Test", password="!"),
                 models.ProductGroup(id=1, name="Gruppe"),
                 models.ProductUnit(id=1, name="g"),
                 models.StorageLocation(id=1, name="Vorrat"),
@@ -112,7 +112,6 @@ class BackupTest(unittest.TestCase):
         source = self.root / "source.db"
         source_engine = self.create_database(source)
         self.seed_all_tables(source_engine)
-        self.execute(source, "CREATE TABLE extra_data (value TEXT); INSERT INTO extra_data VALUES ('extra');")
         expected = self.snapshot(source)
         previous = self.snapshot(self.target)
         with patch.object(backups, "sqlite_database_path", return_value=source):
@@ -130,6 +129,68 @@ class BackupTest(unittest.TestCase):
         self.assertEqual(self.snapshot(self.target), expected)
         self.assertEqual(self.snapshot(Path(result.backup_path)), previous)
         self.assertFalse(exported.exists())
+
+    def test_trigger_and_view_are_rejected_without_touching_current_database(self):
+        for statement in [
+            "CREATE TRIGGER attack AFTER INSERT ON weight_entries BEGIN UPDATE users SET daily_calories=1; END",
+            "CREATE VIEW attack AS SELECT * FROM users",
+        ]:
+            with self.subTest(statement=statement):
+                source = self.root / "untrusted.db"
+                if source.exists():
+                    source.unlink()
+                self.create_database(source).dispose()
+                self.execute(source, statement)
+                before = self.target.read_bytes()
+                with self.assertRaises(HTTPException) as caught:
+                    self.upload(source.read_bytes())
+                self.assertEqual(caught.exception.status_code, 422)
+                self.assertEqual(self.target.read_bytes(), before)
+
+    def test_legacy_backup_is_restored_without_passwords_or_foreign_identity_bindings(self):
+        source = self.root / "legacy.db"
+        source_engine = self.create_database(source)
+        with Session(source_engine) as db:
+            db.add(models.User(id=7, username="Original", password="legacy-secret", home_assistant_user_id="attacker"))
+            db.commit()
+        self.execute(self.target, "UPDATE users SET home_assistant_user_id='trusted-ha-id'")
+        self.upload(source.read_bytes())
+        with closing(sqlite3.connect(self.target)) as connection:
+            self.assertEqual(connection.execute("SELECT username,password,home_assistant_user_id FROM users").fetchall(), [("Original", "!", "trusted-ha-id")])
+        # Backups made before the HA binding column was introduced remain usable.
+        source_engine.dispose()
+        self.execute(source, "CREATE TABLE legacy_users AS SELECT id,username,password,theme,daily_calories,protein_percent,fat_percent,carbs_percent FROM users; DROP TABLE users; ALTER TABLE legacy_users RENAME TO users; CREATE UNIQUE INDEX legacy_user_id ON users(id)")
+        self.upload(source.read_bytes())
+        with closing(sqlite3.connect(self.target)) as connection:
+            self.assertEqual(connection.execute("SELECT home_assistant_user_id FROM users").fetchone()[0], "trusted-ha-id")
+
+    def test_unrecognized_tables_are_not_installed(self):
+        source = self.root / "extra.db"
+        self.create_database(source).dispose()
+        self.execute(source, "CREATE TABLE extra_data (value TEXT); INSERT INTO extra_data VALUES ('extra')")
+        result = self.upload(source.read_bytes())
+        self.assertTrue(result.warnings)
+        with closing(sqlite3.connect(self.target)) as connection:
+            self.assertIsNone(connection.execute("SELECT name FROM sqlite_master WHERE name='extra_data'").fetchone())
+
+    def test_export_redacts_credentials_and_access_bindings(self):
+        self.execute(self.target, "UPDATE users SET password='legacy-secret',home_assistant_user_id='private-binding'")
+        response = backups.export_database()
+        try:
+            with closing(sqlite3.connect(response.path)) as connection:
+                self.assertEqual(connection.execute("SELECT password,home_assistant_user_id FROM users").fetchone(), ("!", None))
+            self.assertNotIn(b"legacy-secret", Path(response.path).read_bytes())
+        finally:
+            asyncio.run(response.background())
+
+    def test_database_upload_size_limit_keeps_original_and_cleans_tempfile(self):
+        before = self.target.read_bytes()
+        with patch.object(backups, "MAX_DATABASE_BYTES", 4):
+            with self.assertRaises(HTTPException) as caught:
+                self.upload(b"more than four bytes")
+        self.assertEqual(caught.exception.status_code, 413)
+        self.assertEqual(self.target.read_bytes(), before)
+        self.assertEqual([path.name for path in self.root.iterdir()], ["current.db"])
 
     def test_missing_tables_are_rejected_before_replacing_current_database(self):
         incomplete = self.root / "incomplete.db"

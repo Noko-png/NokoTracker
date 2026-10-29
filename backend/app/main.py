@@ -5,6 +5,7 @@ from sqlalchemy.exc import OperationalError
 
 from . import crud, models
 from .database import DATABASE_URL, SessionLocal, engine
+from .security import install_security, migrate_security_schema
 from .routers import (
     backups,
     calendar,
@@ -26,6 +27,7 @@ from .routers import (
 
 
 models.Base.metadata.create_all(bind=engine)
+migrate_security_schema(engine)
 
 
 def migrate_sqlite_user_schema() -> None:
@@ -884,18 +886,19 @@ def ensure_default_user() -> None:
         db.add(
             models.User(
                 username="default",
-                password="change-me",
+                password="!",
             )
         )
         db.commit()
 
 
+migrate_security_schema(engine)
 ensure_default_user()
 
 app = FastAPI(
     title="Heim-ERP Backend",
     description="Backend API fuer ein privates Heim-ERP mit Kalender, Vorrat, Rezepten, Mahlzeiten und Einkaufsliste.",
-    version="3.1.8",
+    version="3.1.9",
 )
 
 app.add_middleware(
@@ -940,3 +943,4 @@ app.include_router(weight.router)
 app.include_router(training.plans_router)
 app.include_router(training.exercises_router)
 app.include_router(training.sessions_router)
+install_security(app)

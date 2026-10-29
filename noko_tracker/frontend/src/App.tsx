@@ -46,6 +46,8 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import {
   API_BASE_URL,
+  getSession,
+  type SessionInfo,
   type CalendarEvent,
   type CalendarEventCreate,
   type CalendarGroup,
@@ -467,7 +469,7 @@ type CalendarSwipeTouch = {
 
 type UserForm = {
   username: string;
-  password: string;
+  home_assistant_user_id: string;
   theme: ThemeName;
   daily_calories: string;
   protein_percent: string;
@@ -546,7 +548,7 @@ const macroMeta: Array<{
   { key: "carbs", label: "Kohlenhydrate", unit: "g", tone: "red" },
 ];
 
-const appVersion = "3.1.8";
+const appVersion = "3.1.9";
 const updateSourceLabel = "main / github.com/Noko-png/NokoTracker";
 
 const emptyNutrition: NutritionDay = {
@@ -768,7 +770,7 @@ const initialCalendarGroupForm: CalendarGroupForm = {
 
 const initialUserForm: UserForm = {
   username: "",
-  password: "",
+  home_assistant_user_id: "",
   theme: "light",
   daily_calories: "2500",
   protein_percent: "25",
@@ -946,7 +948,7 @@ function userPreferencesFromUser(user?: User | null): UserSettingsForm {
 function userFormFromUser(user: User): UserForm {
   return {
     username: user.username,
-    password: user.password,
+    home_assistant_user_id: user.home_assistant_user_id ?? "",
     ...userPreferencesFromUser(user),
   };
 }
@@ -954,7 +956,7 @@ function userFormFromUser(user: User): UserForm {
 function userPayloadFromForm(form: UserForm): UserCreate {
   return {
     username: form.username,
-    password: form.password,
+    home_assistant_user_id: optionalText(form.home_assistant_user_id),
     ...userSettingsPayloadFromForm(form),
   };
 }
@@ -1365,8 +1367,8 @@ function isStoredTrainingSessionForm(value: unknown): value is TrainingSessionFo
   );
 }
 
-function readStoredTrainingSessionDraft() {
-  const stored = readStoredValue(trainingSessionDraftStorageKey);
+function readStoredTrainingSessionDraft(key: string) {
+  const stored = readStoredValue(key);
   if (!stored) {
     return null;
   }
@@ -1884,6 +1886,8 @@ export default function App() {
   const [calendarView, setCalendarView] = useState<CalendarView>("month");
   const [hiddenCalendarGroupIds, setHiddenCalendarGroupIds] = useState<number[]>([]);
   const [userId, setUserId] = useState(getStoredUserId);
+  const [session, setSession] = useState<SessionInfo | null>(null);
+  const loadGeneration = useRef(0);
   const [loading, setLoading] = useState(false);
   const [apiError, setApiError] = useState<string | null>(null);
 
@@ -1950,9 +1954,13 @@ export default function App() {
     useState<TrainingExerciseForm>(initialTrainingExerciseForm);
   const [trainingSessionForm, setTrainingSessionForm] =
     useState<TrainingSessionForm>(
-      () => readStoredTrainingSessionDraft() ?? initialTrainingSessionForm,
+      initialTrainingSessionForm,
     );
   const trainingSessionFormRef = useRef(trainingSessionForm);
+  const trainingDraftKey = session
+    ? `${trainingSessionDraftStorageKey}:${session.ha_user_id ?? "local"}:${userId}`
+    : null;
+  const activeDraftKey = useRef<string | null>(null);
   const [shoppingForm, setShoppingForm] =
     useState<ShoppingForm>(initialShoppingForm);
   const [calendarForm, setCalendarForm] = useState<CalendarForm>(
@@ -1985,12 +1993,32 @@ export default function App() {
   const [editingUserId, setEditingUserId] = useState<number | null>(null);
 
   const loadData = useCallback(async () => {
+    const generation = ++loadGeneration.current;
     setLoading(true);
     const errors: string[] = [];
+    let access: SessionInfo;
+    try {
+      access = await getSession();
+      if (generation !== loadGeneration.current) return;
+      setSession(access);
+    } catch (error) {
+      if (generation !== loadGeneration.current) return;
+      setSession(null);
+      setApiError(error instanceof Error ? error.message : "Anmeldung fehlgeschlagen");
+      setLoading(false);
+      return;
+    }
+    if (!access.is_admin && access.user_id === null) {
+      setLoading(false);
+      return;
+    }
+    const effectiveUserId = access.is_admin ? userId : access.user_id!;
+    if (effectiveUserId !== userId) setUserId(effectiveUserId);
 
     async function load<T>(promise: Promise<T>, apply: (value: T) => void) {
       try {
-        apply(await promise);
+        const value = await promise;
+        if (generation === loadGeneration.current) apply(value);
       } catch (error) {
         errors.push(error instanceof Error ? error.message : "API-Fehler");
       }
@@ -2006,16 +2034,17 @@ export default function App() {
       load(getStorageLocations(), setStorageLocations),
       load(getRecipes(), setRecipes),
       load(getMealLogs(), setMealLogs),
-      load(getWeightEntries(500, userId), setWeightEntries),
-      load(getTrainingPlans(500, userId), setTrainingPlans),
-      load(getTrainingSessions(500, userId), setTrainingSessions),
+      load(getWeightEntries(500, effectiveUserId), setWeightEntries),
+      load(getTrainingPlans(500, effectiveUserId), setTrainingPlans),
+      load(getTrainingSessions(500, effectiveUserId), setTrainingSessions),
       load(getShoppingList(), setShoppingList),
       load(getCalendarEvents(), setCalendarEvents),
       load(getCalendarGroups(), setCalendarGroups),
       load(getInventoryWarnings(7), setWarnings),
-      load(getNutritionDay(userId, selectedDate), setNutrition),
+      load(getNutritionDay(effectiveUserId, selectedDate), setNutrition),
     ]);
 
+    if (generation !== loadGeneration.current) return;
     setApiError(errors.length > 0 ? errors[0] : null);
     setLoading(false);
   }, [selectedDate, userId]);
@@ -2098,6 +2127,18 @@ export default function App() {
 
   useEffect(() => {
     writeStoredValue(userIdStorageKey, String(userId));
+    setMealForm(initialMealForm);
+    setEditingMealLogId(null);
+    setWeightForm(createInitialWeightForm());
+    setEditingWeightEntryId(null);
+    setTodoForm(initialTodoForm);
+    setEditingTodoId(null);
+    setTrainingPlanForm(initialTrainingPlanForm);
+    setEditingTrainingPlanId(null);
+    setTrainingExerciseForm(initialTrainingExerciseForm);
+    setWeightEntries([]);
+    setTrainingPlans([]);
+    setTrainingSessions([]);
   }, [userId]);
 
   useEffect(() => {
@@ -2133,19 +2174,23 @@ export default function App() {
   ]);
 
   useEffect(() => {
+    if (activeDraftKey.current !== trainingDraftKey) {
+      if (activeDraftKey.current) {
+        writeStoredValue(activeDraftKey.current, JSON.stringify(trainingSessionFormRef.current));
+      }
+      activeDraftKey.current = trainingDraftKey;
+      const restored = (trainingDraftKey && readStoredTrainingSessionDraft(trainingDraftKey)) || initialTrainingSessionForm;
+      trainingSessionFormRef.current = restored;
+      setTrainingSessionForm(restored);
+      return;
+    }
     trainingSessionFormRef.current = trainingSessionForm;
-    writeStoredValue(
-      trainingSessionDraftStorageKey,
-      JSON.stringify(trainingSessionForm),
-    );
-  }, [trainingSessionForm]);
+    if (trainingDraftKey) writeStoredValue(trainingDraftKey, JSON.stringify(trainingSessionForm));
+  }, [trainingSessionForm, trainingDraftKey]);
 
   useEffect(() => {
     function persistTrainingDraft() {
-      writeStoredValue(
-        trainingSessionDraftStorageKey,
-        JSON.stringify(trainingSessionFormRef.current),
-      );
+      if (activeDraftKey.current) writeStoredValue(activeDraftKey.current, JSON.stringify(trainingSessionFormRef.current));
     }
 
     function persistTrainingDraftOnHide() {
@@ -3880,6 +3925,19 @@ export default function App() {
 
   const SettingsIcon = settingsNavigationItem.icon;
 
+  if (!session || (!session.is_admin && session.user_id === null)) {
+    return <main className="section" style={{ margin: "2rem auto", maxWidth: 640 }}>
+      <h1>NokoTracker</h1>
+      {!session ? <p>{apiError ?? "Anmeldung wird geprueft …"}</p> : <>
+        <p>Dein Home-Assistant-Konto ist noch keinem NokoTracker-Profil zugeordnet.</p>
+        {!session.admin_configured && <p>Trage zuerst in der HA-Add-on-Konfiguration unter „admin_username“ den HA-Anmeldenamen des Administrators ein und starte das Add-on neu.</p>}
+        <p>Der Administrator kann dein vorhandenes Profil in den Einstellungen mit dieser HA-Benutzer-ID verbinden:</p>
+        <code style={{ overflowWrap: "anywhere" }}>{session.ha_user_id}</code>
+      </>}
+      <button className="button primary" type="button" onClick={() => void loadData()}>Erneut pruefen</button>
+    </main>;
+  }
+
   return (
     <div
       className="app-shell"
@@ -4348,6 +4406,7 @@ export default function App() {
 
         {activePage === "settings" && (
           <SettingsPage
+            session={session}
             activeUser={activeUser}
             apiBaseUrl={API_BASE_URL}
             csvImportForm={csvImportForm}
@@ -13571,6 +13630,7 @@ function ShoppingPage({
 }
 
 function SettingsPage({
+  session,
   activeUser,
   apiBaseUrl,
   csvImportForm,
@@ -13602,6 +13662,7 @@ function SettingsPage({
   users,
   onUserIdChange,
 }: {
+  session: SessionInfo;
   activeUser: User | null;
   apiBaseUrl: string;
   csvImportForm: CsvImportForm;
@@ -13651,6 +13712,7 @@ function SettingsPage({
           <span>Version</span>
           <strong>{appVersion}</strong>
         </div>
+        {session.ha_user_id && <div className="settings-row"><span>Deine HA-Benutzer-ID</span><code style={{ overflowWrap: "anywhere" }}>{session.ha_user_id}</code></div>}
         <div className="settings-row">
           <span>Update-Quelle</span>
           <strong>{updateSourceLabel}</strong>
@@ -13682,7 +13744,7 @@ function SettingsPage({
                 <strong>{user.username}</strong>
                 <span>@{user.username}</span>
               </div>
-              <div className="user-actions">
+              {session.is_admin && <div className="user-actions">
                 <button
                   className="icon-button"
                   onClick={() => onEdit(user)}
@@ -13704,7 +13766,7 @@ function SettingsPage({
                 >
                   <Trash2 size={16} />
                 </button>
-              </div>
+              </div>}
             </article>
           ))}
         </div>
@@ -13818,6 +13880,7 @@ function SettingsPage({
           </form>
         </Panel>
 
+        {session.is_admin && <>
         <Panel title={editingUserId === null ? "User anlegen" : "User bearbeiten"}>
           <form className="form-grid" onSubmit={onSubmit}>
             <TextInput
@@ -13827,11 +13890,9 @@ function SettingsPage({
               value={form.username}
             />
             <TextInput
-              label="Passwort"
-              onChange={(password) => onFormChange({ ...form, password })}
-              required
-              type="password"
-              value={form.password}
+              label="HA-Benutzer-ID (optional)"
+              onChange={(home_assistant_user_id) => onFormChange({ ...form, home_assistant_user_id })}
+              value={form.home_assistant_user_id}
             />
             <div className="form-actions">
               <button className="button primary" type="submit">
@@ -13997,6 +14058,7 @@ function SettingsPage({
             </div>
           )}
         </Panel>
+        </>}
       </div>
     </div>
   );

@@ -31,7 +31,7 @@ export type ThemeName = "light" | "dark" | "purple" | "google";
 export type User = {
   id: number;
   username: string;
-  password: string;
+  home_assistant_user_id?: string | null;
   theme: ThemeName;
   daily_calories: number;
   protein_percent: number;
@@ -41,6 +41,18 @@ export type User = {
 
 export type UserCreate = Omit<User, "id">;
 export type UserUpdate = Partial<UserCreate>;
+
+export type SessionInfo = {
+  user_id: number | null;
+  is_admin: boolean;
+  ha_user_id: string | null;
+  ha_username: string | null;
+  admin_configured: boolean;
+};
+
+export function getSession() {
+  return request<SessionInfo>("/session");
+}
 
 export type Food = {
   id: number;

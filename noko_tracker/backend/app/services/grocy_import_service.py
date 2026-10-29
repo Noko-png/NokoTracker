@@ -10,6 +10,7 @@ from sqlalchemy import func
 from sqlalchemy.orm import Session
 
 from .. import crud, models, schemas
+from ..upload_limits import MAX_CSV_BYTES, MAX_EXPANDED_BYTES, MAX_IMPORT_FILES
 
 
 DEFAULT_GROCY_CSV_DIRECTORY = r"u:\Nico\Desktop\db"
@@ -140,6 +141,11 @@ def import_grocy_csv_directory(
     csv_directory = Path(directory)
     if not csv_directory.exists() or not csv_directory.is_dir():
         raise FileNotFoundError(f"CSV-Verzeichnis nicht gefunden: {csv_directory}")
+    csv_files = list(csv_directory.glob("*.csv"))
+    if len(csv_files) > MAX_IMPORT_FILES or any(path.is_symlink() or path.stat().st_size > MAX_CSV_BYTES for path in csv_files):
+        raise ValueError("CSV-Import enthaelt zu viele, zu grosse oder verlinkte Dateien.")
+    if sum(path.stat().st_size for path in csv_files) > MAX_EXPANDED_BYTES:
+        raise ValueError("CSV-Import darf maximal 64 MB umfassen.")
 
     counters = {
         "users": _counter(),
@@ -168,7 +174,7 @@ def import_grocy_csv_directory(
         if user is None:
             user = models.User(
                 username=username,
-                password=_text(row.get("password")) or "imported-user",
+                password="!",
             )
             db.add(user)
             db.flush()

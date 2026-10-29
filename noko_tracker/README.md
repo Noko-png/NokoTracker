@@ -12,6 +12,8 @@ https://github.com/Noko-png/NokoTracker
 
 Installiere danach das Add-on **NokoTracker** und starte es. Die App ist ueber den Eintrag **NokoTracker** in der Home-Assistant-Seitenleiste erreichbar.
 
+Ab Version 3.1.9 in der Add-on-Konfiguration unter `admin_username` den exakten HA-Anmeldenamen des Administrators eintragen und das Add-on neu starten. Anschliessend bestehende Profile in den NokoTracker-Einstellungen mit der jeweiligen HA-Benutzer-ID verbinden. Die vollstaendige Anleitung steht im Reiter Dokumentation. Bestehende Daten bleiben erhalten.
+
 ## Daten
 
 Die SQLite-Datenbank wird persistent unter `/data/noko_tracker.db` im Add-on gespeichert und ist damit in Home-Assistant-Backups enthalten.

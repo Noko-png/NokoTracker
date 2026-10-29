@@ -11,7 +11,7 @@ RUN VITE_API_BASE_URL=./ npm run build
 FROM ghcr.io/home-assistant/base:latest
 
 ARG BUILD_ARCH=amd64
-ARG BUILD_VERSION=3.1.8
+ARG BUILD_VERSION=3.1.9
 
 LABEL \
     io.hass.version="${BUILD_VERSION}" \
@@ -41,7 +41,7 @@ RUN \
         openssl-dev \
         python3-dev \
     && python3 -m venv /opt/noko-tracker \
-    && /opt/noko-tracker/bin/pip install --no-cache-dir --upgrade pip \
+    && /opt/noko-tracker/bin/pip install --no-cache-dir --upgrade pip==26.2.2 \
     && /opt/noko-tracker/bin/pip install --no-cache-dir -r /tmp/requirements.txt \
     && apk del .build-deps \
     && rm -f /tmp/requirements.txt

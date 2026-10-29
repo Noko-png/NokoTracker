@@ -7,6 +7,18 @@ Dieses Add-on startet ein FastAPI-Backend auf Port `8000` und liefert das gebaut
 | Option | Beschreibung |
 | --- | --- |
 | `log_level` | Log-Level fuer den Startprozess. |
+| `admin_username` | Exakter Home-Assistant-Anmeldename des NokoTracker-Administrators, nicht der Anzeigename. Ohne Eintrag gibt es keinen Administrator. |
+
+## Einrichtung nach dem Update auf 3.1.9
+
+1. In der Add-on-Konfiguration `admin_username` auf den eigenen HA-Anmeldenamen setzen, speichern und das Add-on neu starten.
+2. NokoTracker ueber Home Assistant oeffnen. Der konfigurierte Administrator sieht weiterhin alle bestehenden Profile.
+3. In NokoTracker unter Einstellungen das passende Profil bearbeiten und die HA-Benutzer-ID eintragen. Die eigene ID steht in den Einstellungen; noch nicht zugeordnete Nutzer sehen ihre ID auf der Startseite.
+4. Fuer weitere HA-Nutzer deren ID im passenden bestehenden oder neu angelegten Profil hinterlegen. Eine HA-ID kann nur einem Profil zugeordnet werden. Ohne Zuordnung sehen normale Nutzer keine Daten.
+
+Gewicht, Training, Mahlzeiten, Mealprep und ToDos sind persoenlich. Bestand, Lebensmittel, Rezepte, Einkaufsliste und Kalendertermine bleiben gemeinsam. Der konfigurierte Administrator verwaltet Profile, Datenbanksicherungen und Grocy-Importe. Kassenzettel koennen weiterhin fuer den gemeinsamen Bestand gebucht werden.
+
+Das Add-on akzeptiert ausschliesslich Verbindungen des HA-Ingress-Supervisors. Direkter Portzugriff ist entfernt. Die HA-Anmeldung ersetzt die bisher wirkungslosen NokoTracker-Passwoerter; vorhandene Passwortwerte werden beim Start entfernt. Das Add-on benoetigt keine zusaetzlichen Supervisor- oder Core-API-Rechte.
 
 ## Persistenz
 
@@ -17,6 +29,10 @@ Die Datenbank liegt im Add-on-Datenverzeichnis:
 ```
 
 Die Einstellungen bieten einen Browser-Export und -Import der SQLite-Datenbank. Ein Import ersetzt die aktive Datenbank und legt vorher ein Backup der bisherigen Datei im Datenverzeichnis an.
+
+Sicherungen enthalten keine Passwoerter oder HA-Profilzuordnungen. Beim Wiederherstellen bleiben die lokalen Zuordnungen fuer identische Profilnamen erhalten. Auf einer neuen Installation muessen sie neu vergeben werden. Alte NokoTracker-Sicherungen bleiben importierbar. Unbekannte Tabellen werden mit Hinweis ausgelassen; Trigger, Views und virtuelle Tabellen werden abgewiesen. Die Anwendung erstellt das Datenbankschema selbst und uebernimmt nur die Daten. Wiederherstellungen sperren andere Datenbankzugriffe bis zum atomaren Austausch.
+
+Importgrenzen: Datenbank 64 MB / 200000 Datensaetze; CSV/ZIP zusammen 32 MB Upload, 64 MB entpackt, 16 MB je CSV und maximal 64 Dateien. ZIP-Dateien mit mehr als 100-facher Kompression werden abgewiesen. Serverordner-Importe sind im Add-on auf `/data/imports` beschraenkt. PDF-Kassenzettel: 8 MB, maximal 30 Seiten, 12 Sekunden Verarbeitung in einem getrennten Prozess; unter Linux maximal 256 MB virtueller Arbeitsspeicher und 8 CPU-Sekunden.
 
 Grocy-CSV-Dateien koennen direkt im Browser als einzelne CSV-Dateien oder ZIP-Archiv hochgeladen werden.
 

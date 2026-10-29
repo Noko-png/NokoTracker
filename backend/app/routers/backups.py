@@ -1,8 +1,11 @@
 from __future__ import annotations
 
-import shutil
+import os
 import sqlite3
 import tempfile
+import time
+import uuid
+from contextlib import closing
 from datetime import datetime
 from pathlib import Path
 
@@ -10,14 +13,18 @@ from fastapi import APIRouter, File, HTTPException, UploadFile
 from fastapi.responses import FileResponse
 from sqlalchemy.engine import make_url
 from starlette.background import BackgroundTask
+from starlette.concurrency import run_in_threadpool
+from sqlalchemy import create_engine
 
 from .. import models, schemas
-from ..database import DATABASE_URL, engine
+from ..database import DATABASE_URL, DATABASE_LOCK, engine
+from ..upload_limits import MAX_DATABASE_BYTES, copy_upload
 
 
 router = APIRouter(prefix="/database", tags=["database"])
 
 EXPECTED_TABLES = set(models.Base.metadata.tables)
+MAX_SQLITE_VALUE_BYTES = 12 * 1024 * 1024
 
 TRAINING_TABLES = {
     "training_exercises",
@@ -74,6 +81,13 @@ def validate_sqlite_database(path: Path) -> tuple[dict[str, int], list[str]]:
     try:
         connection = sqlite3.connect(f"{path.resolve().as_uri()}?mode=ro", uri=True)
         try:
+            connection.setlimit(sqlite3.SQLITE_LIMIT_LENGTH, MAX_SQLITE_VALUE_BYTES)
+            connection.execute("PRAGMA trusted_schema=OFF")
+            deadline = time.monotonic() + 10
+            connection.set_progress_handler(lambda: int(time.monotonic() > deadline), 1000)
+            objects = connection.execute("SELECT type, name, sql FROM sqlite_master").fetchall()
+            if any(kind in {"trigger", "view"} or (sql and "CREATE VIRTUAL TABLE" in sql.upper()) for kind, name, sql in objects):
+                raise ValueError("Sicherungen mit Triggern, Views oder virtuellen Tabellen sind nicht erlaubt.")
             integrity = connection.execute("PRAGMA integrity_check").fetchone()
             if not integrity or integrity[0] != "ok":
                 raise ValueError("SQLite integrity_check fehlgeschlagen.")
@@ -95,7 +109,8 @@ def validate_sqlite_database(path: Path) -> tuple[dict[str, int], list[str]]:
                 columns = {
                     row[1] for row in connection.execute(f'PRAGMA table_info("{table.name}")')
                 }
-                missing_columns = sorted(set(table.columns.keys()) - columns)
+                optional_columns = {"home_assistant_user_id"} if table.name == "users" else set()
+                missing_columns = sorted(set(table.columns.keys()) - columns - optional_columns)
                 if missing_columns:
                     raise ValueError(
                         f"Die Datenbank ist nicht kompatibel. Fehlende Spalten in {table.name}: "
@@ -123,12 +138,16 @@ def validate_sqlite_database(path: Path) -> tuple[dict[str, int], list[str]]:
                             f"Ungueltige Datenverknuepfung: {table.name}.{child.name}."
                         )
             table_counts = count_database_tables(connection, table_names)
+            if sum(table_counts.values()) > 200_000:
+                raise ValueError("Die Sicherung enthaelt zu viele Datensaetze (maximal 200000).")
         finally:
             connection.close()
     except sqlite3.DatabaseError as exc:
         raise ValueError("Die hochgeladene Datei ist keine gueltige SQLite-Datenbank.") from exc
 
-    return table_counts, []
+    extra_tables = sorted(table_names - EXPECTED_TABLES - {"sqlite_sequence", "sqlite_stat1", "sqlite_stat4"})
+    warnings = ["Unbekannte Tabellen werden nicht uebernommen: " + ", ".join(extra_tables)] if extra_tables else []
+    return table_counts, warnings
 
 
 def remove_sqlite_sidecars(path: Path) -> None:
@@ -154,7 +173,14 @@ def export_database():
     temp_file.close()
 
     try:
-        backup_sqlite_database(db_path, temp_path)
+        with DATABASE_LOCK:
+            backup_sqlite_database(db_path, temp_path)
+        # Legacy credentials and HA access mappings never leave this installation.
+        with closing(sqlite3.connect(temp_path)) as sanitized:
+            sanitized.execute("PRAGMA secure_delete=ON")
+            sanitized.execute("UPDATE users SET password='!', home_assistant_user_id=NULL")
+            sanitized.commit()
+            sanitized.execute("VACUUM")
     except sqlite3.DatabaseError as exc:
         temp_path.unlink(missing_ok=True)
         raise HTTPException(status_code=500, detail="Datenbank konnte nicht exportiert werden.") from exc
@@ -177,32 +203,71 @@ async def import_database(file: UploadFile = File(...)):
             detail="Bitte eine SQLite-Datenbank mit .db, .sqlite oder .sqlite3 hochladen.",
         )
 
-    with tempfile.NamedTemporaryFile(delete=False, suffix=Path(filename).suffix) as handle:
-        upload_path = Path(handle.name)
-        while chunk := await file.read(1024 * 1024):
-            handle.write(chunk)
+    upload_path = None
+    try:
+        with tempfile.NamedTemporaryFile(delete=False, suffix=Path(filename).suffix) as handle:
+            upload_path = Path(handle.name)
+            await copy_upload(file, handle, MAX_DATABASE_BYTES)
+        return await run_in_threadpool(restore_database, upload_path, db_path, filename)
+    finally:
+        if upload_path:
+            upload_path.unlink(missing_ok=True)
 
+
+def restore_database(upload_path: Path, db_path: Path, filename: str):
     try:
         table_counts, warnings = validate_sqlite_database(upload_path)
     except ValueError as exc:
-        upload_path.unlink(missing_ok=True)
         raise HTTPException(status_code=422, detail=str(exc)) from exc
-
-    timestamp = datetime.now().strftime("%Y%m%d-%H%M%S")
+    timestamp = datetime.now().strftime("%Y%m%d-%H%M%S-%f")
     backup_path = db_path.with_name(f"{db_path.name}.backup-{timestamp}")
+    clean_path = db_path.with_name(f".noko-restore-{uuid.uuid4().hex}.db")
+    clean_engine = None
     try:
-        engine.dispose()
-        if db_path.exists():
-            backup_sqlite_database(db_path, backup_path)
         db_path.parent.mkdir(parents=True, exist_ok=True)
-        remove_sqlite_sidecars(db_path)
-        shutil.copy2(upload_path, db_path)
-        remove_sqlite_sidecars(db_path)
-        engine.dispose()
+        clean_engine = create_engine("sqlite:///" + clean_path.as_posix())
+        models.Base.metadata.create_all(clean_engine)
+        clean_engine.dispose()
+        with DATABASE_LOCK:
+            bindings = {}
+            if db_path.exists():
+                with closing(sqlite3.connect(db_path)) as current:
+                    bindings = dict(current.execute("SELECT username, home_assistant_user_id FROM users WHERE home_assistant_user_id IS NOT NULL"))
+            source = sqlite3.connect(f"{upload_path.resolve().as_uri()}?mode=ro", uri=True)
+            target = sqlite3.connect(clean_path)
+            try:
+                source.setlimit(sqlite3.SQLITE_LIMIT_LENGTH, MAX_SQLITE_VALUE_BYTES)
+                source.execute("PRAGMA trusted_schema=OFF")
+                target.execute("PRAGMA foreign_keys=ON")
+                for table in models.Base.metadata.sorted_tables:
+                    columns = [column.name for column in table.columns if column.name != "home_assistant_user_id"]
+                    names = ", ".join(f'"{name}"' for name in columns)
+                    placeholders = ", ".join("?" for name in columns)
+                    for row in source.execute(f'SELECT {names} FROM "{table.name}"'):
+                        values = list(row)
+                        if table.name == "users":
+                            values[columns.index("password")] = "!"
+                        target.execute(f'INSERT INTO "{table.name}" ({names}) VALUES ({placeholders})', values)
+                for username, ha_id in bindings.items():
+                    target.execute("UPDATE users SET home_assistant_user_id=? WHERE username=?", (ha_id, username))
+                target.commit()
+            finally:
+                source.close()
+                target.close()
+            engine.dispose()
+            if db_path.exists():
+                backup_sqlite_database(db_path, backup_path)
+            remove_sqlite_sidecars(db_path)
+            os.replace(clean_path, db_path)
+            engine.dispose()
+    except sqlite3.IntegrityError as exc:
+        raise HTTPException(422, "Die Sicherung verletzt Datenregeln. Die bisherige Datenbank bleibt erhalten.") from exc
     except (OSError, sqlite3.DatabaseError) as exc:
         raise HTTPException(status_code=500, detail="Datenbank konnte nicht importiert werden.") from exc
     finally:
-        upload_path.unlink(missing_ok=True)
+        if clean_engine:
+            clean_engine.dispose()
+        clean_path.unlink(missing_ok=True)
 
     return schemas.DatabaseImportResult(
         filename=filename,

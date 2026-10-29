@@ -34,7 +34,9 @@ class User(Base):
 
     id = Column(Integer, primary_key=True, index=True)
     username = Column(String(120), unique=True, nullable=False, index=True)
-    password = Column(String(255), nullable=False)
+    # Retained only to read old backups; never used as a credential.
+    password = Column(String(255), nullable=False, default="!")
+    home_assistant_user_id = Column(String(128), nullable=True, unique=True)
     theme = Column(String(32), default="light", nullable=False)
     daily_calories = Column(Float, default=2500.0, nullable=False)
     protein_percent = Column(Float, default=25.0, nullable=False)

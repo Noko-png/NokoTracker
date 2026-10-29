@@ -12,6 +12,10 @@ uvicorn app.main:app --reload
 
 Die API-Dokumentation ist danach unter http://127.0.0.1:8000/docs erreichbar.
 
+Der lokale Entwicklungsmodus akzeptiert nur Loopback-Verbindungen und lokale Browser-Origins. Er ist ausschliesslich fuer den eigenen Entwicklungsrechner gedacht. Das HA-Add-on aktiviert stattdessen `NOKO_AUTH_MODE=ingress`, deaktiviert Uvicorn-Proxy-Header und prueft die reale Supervisor-Adresse vor Auswertung der HA-Identitaet. Einrichtung und Profilzuordnung stehen in `noko_tracker/DOCS.md`.
+
+Persoenliche Daten werden in `app/security.py` fuer alle ORM-Abfragen, verschachtelte Beziehungen und Schreibvorgaenge eingeschraenkt. Neue private Tabellen oder direkte SQL-Zugriffe muessen diese Regeln ebenfalls beruecksichtigen. Ein `user_id` aus einer Anfrage ist keine Zugriffsberechtigung.
+
 ## Bereiche
 
 - `users`: Benutzerverwaltung
