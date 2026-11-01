@@ -554,7 +554,7 @@ const macroMeta: Array<{
   { key: "carbs", label: "Kohlenhydrate", unit: "g", tone: "red" },
 ];
 
-const appVersion = "3.1.11";
+const appVersion = "3.1.12";
 const updateSourceLabel = "main / github.com/Noko-png/NokoTracker";
 
 const emptyNutrition: NutritionDay = {
@@ -8709,9 +8709,7 @@ function MasterDataPanel({
         foodForm.storage_location ||
         productGroup?.default_storage_location ||
         "",
-      expiry_days:
-        foodForm.expiry_days ||
-        toFormValue(productGroup?.default_expiry_days),
+      expiry_days: toFormValue(productGroup?.default_expiry_days),
     });
   }
 

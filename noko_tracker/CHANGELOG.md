@@ -1,5 +1,10 @@
 # Changelog
 
+## 3.1.12
+
+- In der Stammdatenverwaltung wird beim Wechsel der Produktgruppe die Standardhaltbarkeit der neuen Gruppe sofort ins Lebensmittel-Formular uebernommen, auch wenn zuvor bereits eine Haltbarkeit eingetragen war.
+- Null Tage werden korrekt uebernommen. Bei Gruppen ohne Standardhaltbarkeit oder Auswahl von "Keine" wird das Feld geleert; eine anschliessende manuelle Eingabe bleibt moeglich.
+
 ## 3.1.11
 
 - Home-Assistant-Start repariert: Die Sitzungs-API wird vor der allgemeinen Frontend-Route registriert. Anfragen an /session erhalten JSON statt der HTML-Startseite; der Fehler "Unexpected token '<'" beim Oeffnen entfaellt.
