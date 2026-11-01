@@ -77,6 +77,35 @@ class ImportTest(unittest.TestCase):
         ])
         return recipe
 
+    def test_grocy_preserves_all_eans_and_reimport_does_not_duplicate_them(self):
+        self.write_csv("product_barcodes.csv", ["product_id", "barcode"], [
+            {"product_id": 1, "barcode": "0012345678905"},
+            {"product_id": 1, "barcode": "4012345678901"},
+            {"product_id": 1, "barcode": "0012345678905"},
+        ])
+        self.stock()
+        for _ in range(2):
+            self.run_import()
+            food = self.db.query(models.Food).filter_by(name="Testprodukt").one()
+            self.assertEqual(food.barcodes, ["0012345678905", "4012345678901"])
+            self.assertEqual(self.db.query(models.InventoryItem).one().food_id, food.id)
+            self.assertEqual(self.db.query(models.FoodBarcode).count(), 2)
+
+    def test_grocy_warns_on_invalid_or_conflicting_eans_without_reassigning_stock(self):
+        self.write_csv("product_barcodes.csv", ["product_id", "barcode"], [
+            {"product_id": 1, "barcode": "0012345678905"},
+            {"product_id": 1, "barcode": "invalid"},
+            {"product_id": 2, "barcode": "0012345678905"},
+            {"product_id": 2, "barcode": "4012345678901"},
+        ])
+        result = self.run_import()
+        first = self.db.query(models.Food).filter_by(name="Testprodukt").one()
+        second = self.db.query(models.Food).filter_by(name="Andere Zutat").one()
+        self.assertEqual(first.barcodes, ["0012345678905"])
+        self.assertEqual(second.barcodes, ["4012345678901"])
+        self.assertTrue(any("bereits einem anderen Produkt" in warning for warning in result["warnings"]))
+        self.assertTrue(any("Ziffern" in warning for warning in result["warnings"]))
+
     def test_repeated_stock_import_preserves_dates_and_updates_instead_of_adding(self):
         self.stock()
         self.run_import()

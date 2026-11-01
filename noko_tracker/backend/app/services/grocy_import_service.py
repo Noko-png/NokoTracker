@@ -6,10 +6,12 @@ from datetime import date, datetime
 from pathlib import Path
 from typing import Any
 
+from fastapi import HTTPException
 from sqlalchemy import func
 from sqlalchemy.orm import Session
 
 from .. import crud, models, schemas
+from . import barcode_service
 from ..upload_limits import MAX_CSV_BYTES, MAX_EXPANDED_BYTES, MAX_IMPORT_FILES
 
 
@@ -123,13 +125,15 @@ def _ensure_unit(
     return unit
 
 
-def _barcode_by_product(directory: Path, warnings: list[str]) -> dict[int, str]:
-    barcodes: dict[int, str] = {}
+def _barcode_by_product(directory: Path, warnings: list[str]) -> dict[int, list[str]]:
+    barcodes: dict[int, list[str]] = {}
     for row in _rows(directory, "product_barcodes.csv", warnings):
         product_id = _int(row.get("product_id"))
         barcode = _text(row.get("barcode"))
-        if product_id is not None and barcode and product_id not in barcodes:
-            barcodes[product_id] = barcode
+        if product_id is not None and barcode:
+            codes = barcodes.setdefault(product_id, [])
+            if barcode not in codes:
+                codes.append(barcode)
     return barcodes
 
 
@@ -271,6 +275,11 @@ def import_grocy_csv_directory(
         food.serving_unit = unit.name if unit is not None else food.serving_unit
         food.calories_per_100g = _float(row.get("calories"))
         db.flush()
+        for code in barcode_by_product.get(grocy_id, []):
+            try:
+                barcode_service.append_barcodes(db, food, [code])
+            except HTTPException as exc:
+                warnings.append(f"{food.name}: EAN {code} nicht uebernommen: {exc.detail}")
         food_by_grocy_id[grocy_id] = food
 
     for row in _rows(csv_directory, "stock_current_location_content.csv", warnings):
@@ -344,7 +353,7 @@ def import_grocy_csv_directory(
         item.expiry_days = expiry_days
         item.purchase_date = purchase_date
         item.price = price
-        item.barcode = barcode_by_product.get(grocy_product_id or -1)
+        item.barcode = food.barcode
         item.notes = _text(product_row.get("description"))
         item.product_group_id = group.id if group is not None else food.product_group_id
         item.product_unit_id = unit.id if unit is not None else food.product_unit_id

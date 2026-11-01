@@ -199,10 +199,19 @@ class Food(TimestampMixin, Base):
         cascade="all, delete-orphan",
         order_by="FoodConversion.id",
     )
+    barcode_entries = relationship(
+        "FoodBarcode", back_populates="food", cascade="all, delete-orphan",
+        order_by="FoodBarcode.id",
+    )
     recipe_ingredients = relationship("RecipeIngredient", back_populates="food")
     inventory_items = relationship("InventoryItem", back_populates="food")
     meal_logs = relationship("MealLog", back_populates="food")
     shopping_items = relationship("ShoppingListItem", back_populates="food")
+
+    @property
+    def barcodes(self):
+        # Keep old databases and clients using the single primary barcode valid.
+        return list(dict.fromkeys(code for code in [self.barcode, *(entry.barcode for entry in self.barcode_entries)] if code))
 
     __table_args__ = (
         UniqueConstraint("name", "brand", name="uq_food_name_brand"),
@@ -213,6 +222,15 @@ class Food(TimestampMixin, Base):
         ),
         CheckConstraint("price IS NULL OR price >= 0", name="ck_food_price_non_negative"),
     )
+
+
+class FoodBarcode(Base):
+    __tablename__ = "food_barcodes"
+
+    id = Column(Integer, primary_key=True)
+    food_id = Column(Integer, ForeignKey("foods.id", ondelete="CASCADE"), nullable=False, index=True)
+    barcode = Column(String(128), nullable=False, unique=True)
+    food = relationship("Food", back_populates="barcode_entries")
 
 
 class FoodConversion(TimestampMixin, Base):

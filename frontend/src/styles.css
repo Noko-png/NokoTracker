@@ -1760,6 +1760,18 @@ button {
   grid-template-columns: minmax(0, 1fr) minmax(112px, 0.7fr) auto;
 }
 
+.food-barcode-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 8px;
+  align-items: end;
+}
+
+.food-barcode-hint {
+  color: var(--muted);
+  font-size: 0.8rem;
+}
+
 .food-conversion-empty {
   min-height: 34px;
   padding: 8px;

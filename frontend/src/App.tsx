@@ -1,3 +1,4 @@
+import { addFoodBarcode, foodBarcodes, foodMatchesSearch, normalizeBarcodes } from "./barcodes";
 import {
   formatFractionalQuantity,
   normalizeFractionalQuantityValue,
@@ -296,7 +297,7 @@ type FoodForm = {
   product_group_id: string;
   product_unit_id: string;
   minimum_quantity: string;
-  barcode: string;
+  barcodes: string[];
   purchase_date: string;
   expiry_days: string;
   price: string;
@@ -554,7 +555,7 @@ const macroMeta: Array<{
   { key: "carbs", label: "Kohlenhydrate", unit: "g", tone: "red" },
 ];
 
-const appVersion = "3.1.12";
+const appVersion = "3.1.13";
 const updateSourceLabel = "main / github.com/Noko-png/NokoTracker";
 
 const emptyNutrition: NutritionDay = {
@@ -626,7 +627,7 @@ function createInitialFoodForm(): FoodForm {
     product_group_id: "",
     product_unit_id: "",
     minimum_quantity: "0",
-    barcode: "",
+    barcodes: [""],
     purchase_date: getLocalDate(),
     expiry_days: "",
     price: "",
@@ -1560,7 +1561,7 @@ function createFoodFormFromFood(food: Food): FoodForm {
     product_group_id: toFormValue(food.product_group_id),
     product_unit_id: toFormValue(food.product_unit_id),
     minimum_quantity: formatFractionalQuantity(food.minimum_quantity ?? 0),
-    barcode: food.barcode ?? "",
+    barcodes: foodBarcodes(food).length ? foodBarcodes(food) : [""],
     purchase_date: food.purchase_date ?? getLocalDate(),
     expiry_days: toFormValue(food.expiry_days),
     price: toFormValue(food.price),
@@ -1578,6 +1579,7 @@ function createFoodFormFromFood(food: Food): FoodForm {
 }
 
 function createFoodPayload(form: FoodForm) {
+  const barcodes = normalizeBarcodes(form.barcodes);
   return {
     name: form.name,
     emoji: form.emoji.trim() || defaultFoodEmoji,
@@ -1587,7 +1589,8 @@ function createFoodPayload(form: FoodForm) {
     product_group_id: optionalNumber(form.product_group_id),
     product_unit_id: optionalNumber(form.product_unit_id),
     minimum_quantity: toQuantityNumber(form.minimum_quantity, 0),
-    barcode: optionalText(form.barcode),
+    barcode: barcodes[0] ?? null,
+    barcodes,
     purchase_date: form.purchase_date,
     expiry_days: optionalInteger(form.expiry_days),
     price: optionalNumber(form.price),
@@ -2135,7 +2138,7 @@ export default function App() {
       const productGroupName = item.product_group?.name ?? item.category ?? "";
       const matchesSearch = `${item.name} ${item.brand ?? ""} ${productGroupName} ${
         item.storage_location ?? ""
-      } ${item.barcode ?? ""}`
+      } ${item.barcode ?? ""} ${item.food ? foodBarcodes(item.food).join(" ") : ""}`
         .toLowerCase()
         .includes(inventorySearch.toLowerCase());
       const matchesCategory =
@@ -7322,7 +7325,7 @@ function InventoryPage({
     const normalizedQuery = query.trim().toLowerCase();
     const selectedFood = foods.find((food) => {
       const label = formatFoodSuggestionLabel(food).toLowerCase();
-      return label === normalizedQuery || food.name.toLowerCase() === normalizedQuery;
+      return label === normalizedQuery || food.name.toLowerCase() === normalizedQuery || foodBarcodes(food).includes(normalizedQuery);
     });
 
     if (selectedFood) {
@@ -8799,7 +8802,7 @@ function MasterDataPanel({
       ...foodForm,
       name: result.name || foodForm.name,
       brand: result.brand ?? foodForm.brand,
-      barcode: result.barcode,
+      barcodes: addFoodBarcode(foodForm.barcodes, result.barcode),
       calories_per_100g: toFormValue(result.calories_per_100g),
       protein_per_100g: toFormValue(result.protein_per_100g),
       fat_per_100g: toFormValue(result.fat_per_100g),
@@ -8811,9 +8814,21 @@ function MasterDataPanel({
   }
 
   async function lookupFoodBarcode(code: string) {
-    const normalizedBarcode = code.replace(/\D/g, "");
-    if (normalizedBarcode.length < 8) {
+    const normalizedBarcode = normalizeBarcodes([code])[0] ?? "";
+    if (!/^[0-9]{8,128}$/.test(normalizedBarcode)) {
       setFoodBarcodeStatus("Bitte einen gueltigen EAN-Code eingeben.");
+      return;
+    }
+
+    if (editingFoodId !== null) {
+      const barcodes = addFoodBarcode(foodForm.barcodes, normalizedBarcode);
+      if (barcodes.length > 100) {
+        setFoodBarcodeStatus("Pro Produkt sind maximal 100 EAN-Codes möglich.");
+        return;
+      }
+      onFoodFormChange({ ...foodForm, barcodes });
+      setFoodCameraError("");
+      setFoodBarcodeStatus("EAN zum Produkt hinzugefuegt. Zum Uebernehmen bitte speichern.");
       return;
     }
 
@@ -8902,6 +8917,7 @@ function MasterDataPanel({
           food.name,
           food.brand,
           food.category,
+          ...foodBarcodes(food),
           group?.name,
           storageLocation,
           unitName,
@@ -9177,8 +9193,8 @@ function MasterDataPanel({
                     <div className="nutrition-barcode-panel food-barcode-panel">
                       <div className="nutrition-barcode-panel-head">
                         <div>
-                          <strong>EAN importieren</strong>
-                          <span>Name, Marke und Nährwerte übernehmen</span>
+                          <strong>{editingFoodId === null ? "EAN importieren" : "EAN hinzufügen"}</strong>
+                          <span>{editingFoodId === null ? "Name, Marke und Nährwerte übernehmen" : "Weiteren Code diesem Produkt zuordnen"}</span>
                         </div>
                         <button
                           className="icon-button compact"
@@ -9335,13 +9351,48 @@ function MasterDataPanel({
                       ))}
                     </select>
                   </label>
-                  <TextInput
-                    label="Barcode (optional)"
-                    onChange={(barcode) =>
-                      onFoodFormChange({ ...foodForm, barcode })
-                    }
-                    value={foodForm.barcode}
-                  />
+                  <div className="food-conversion-editor">
+                    <div className="food-conversion-head">
+                      <span>EAN-Codes (optional)</span>
+                      <button
+                        className="button secondary"
+                        disabled={foodForm.barcodes.length >= 100}
+                        onClick={() => onFoodFormChange({ ...foodForm, barcodes: [...foodForm.barcodes, ""] })}
+                        type="button"
+                      >
+                        <Plus size={16} /> EAN hinzufügen
+                      </button>
+                    </div>
+                    {foodForm.barcodes.map((code, index) => (
+                      <div className="food-barcode-row" key={index}>
+                        <label>
+                          <span>EAN-Code {index + 1}</span>
+                          <input
+                            inputMode="numeric"
+                            maxLength={128}
+                            onChange={(event) => onFoodFormChange({
+                              ...foodForm,
+                              barcodes: foodForm.barcodes.map((value, position) => position === index ? event.target.value : value),
+                            })}
+                            type="text"
+                            value={code}
+                          />
+                        </label>
+                        <button
+                          className="icon-button danger"
+                          onClick={() => {
+                            const barcodes = foodForm.barcodes.filter((_, position) => position !== index);
+                            onFoodFormChange({ ...foodForm, barcodes: barcodes.length ? barcodes : [""] });
+                          }}
+                          title={`EAN-Code ${index + 1} entfernen`}
+                          type="button"
+                        >
+                          <Trash2 size={16} />
+                        </button>
+                      </div>
+                    ))}
+                    <span className="food-barcode-hint">Alle Codes verwenden dieselben Nährwerte und denselben Bestand.</span>
+                  </div>
                   <DateInput
                     label="Einlagerungsdatum"
                     onChange={(purchase_date) =>
@@ -9964,7 +10015,7 @@ function updateIngredientFoodSearch(
   const normalizedQuery = query.trim().toLowerCase();
   const selectedFood = foods.find((food) => {
     const label = formatFoodSuggestionLabel(food).toLowerCase();
-    return label === normalizedQuery || food.name.toLowerCase() === normalizedQuery;
+    return label === normalizedQuery || food.name.toLowerCase() === normalizedQuery || foodBarcodes(food).includes(normalizedQuery);
   });
 
   return {
@@ -9997,7 +10048,7 @@ function findFoodByIngredientForm(foods: Food[], form: RecipeIngredientForm) {
   return (
     foods.find((food) => {
       const label = formatFoodSuggestionLabel(food).toLowerCase();
-      return label === normalizedQuery || food.name.toLowerCase() === normalizedQuery;
+      return label === normalizedQuery || food.name.toLowerCase() === normalizedQuery || foodBarcodes(food).includes(normalizedQuery);
     }) ?? null
   );
 }
@@ -11941,11 +11992,7 @@ function NutritionPage({
   }
 
   const filteredFoods = foods
-    .filter((food) =>
-      `${food.name} ${food.brand ?? ""}`
-        .toLowerCase()
-        .includes(nutritionSearch.toLowerCase()),
-    )
+    .filter((food) => foodMatchesSearch(food, nutritionSearch))
     .slice(0, 8);
   const filteredRecipes = recipes
     .filter((recipe) =>
@@ -12091,13 +12138,13 @@ function NutritionPage({
   function matchingInventoryItemsForFood(food: Food) {
     const items = new Map<number, DeductableInventoryItem>();
     for (const item of barcodeInventoryItems) {
-      if (item.quantity > 0) {
+      if (item.quantity > 0 && item.food_id === food.id) {
         items.set(item.id, item);
       }
     }
     for (const item of inventory) {
       const matchesFood = item.food_id === food.id;
-      const matchesBarcode = Boolean(food.barcode && item.barcode === food.barcode);
+      const matchesBarcode = item.food_id == null && Boolean(item.barcode && foodBarcodes(food).includes(item.barcode));
       if ((matchesFood || matchesBarcode) && item.quantity > 0) {
         items.set(item.id, item);
       }
@@ -13165,7 +13212,7 @@ function ShoppingPage({
   const normalizedFoodSearch = foodSearchQuery.trim().toLowerCase();
   const filteredFoodOptions = foodOptions
     .filter((food) =>
-      formatFoodSuggestionLabel(food).toLowerCase().includes(normalizedFoodSearch),
+      foodMatchesSearch(food, normalizedFoodSearch),
     )
     .slice(0, 10);
   const openItems = items.filter((item) => !item.is_checked);

@@ -74,7 +74,7 @@ class BackupTest(unittest.TestCase):
             db.add_all([
                 models.CalendarGroup(id=1, name="Arbeit", user_id=1),
                 models.CalendarGroup(id=2, name="Urlaub", suppresses_group_ids=[1]),
-                models.Food(id=1, name="Lebensmittel", product_group_id=1,
+                models.Food(id=1, name="Lebensmittel", barcode="0012345678905", product_group_id=1,
                             product_unit_id=1, expiry_days=14, is_archived=True),
                 models.TrainingPlan(id=1, name="Plan", user_id=1),
             ])
@@ -86,6 +86,8 @@ class BackupTest(unittest.TestCase):
                 models.CalendarEvent(id=2, title="ToDo", start_at=datetime(2026, 10, 28),
                                      entry_type="task", is_completed=True),
                 models.FoodConversion(id=1, food_id=1, unit="Packung", quantity=500),
+                models.FoodBarcode(food_id=1, barcode="0012345678905"),
+                models.FoodBarcode(food_id=1, barcode="4012345678901"),
                 models.InventoryItem(id=1, name="Lebensmittel", food_id=1, quantity=2,
                                      purchase_date=date(2026, 10, 28), expiry_days=14),
                 models.Recipe(id=1, name="Rezept", is_archived=True,
@@ -111,6 +113,15 @@ class BackupTest(unittest.TestCase):
             db.add(models.ReceiptBooking(receipt_id="b" * 64))
             db.commit()
 
+    def test_older_backup_without_alias_table_keeps_legacy_ean(self):
+        source = self.root / "legacy-barcodes.db"
+        self.seed_all_tables(self.create_database(source))
+        self.execute(source, "DROP TABLE food_barcodes;")
+        self.upload(source.read_bytes())
+        with Session(self.engine) as db:
+            self.assertEqual(db.get(models.Food, 1).barcodes, ["0012345678905"])
+            self.assertEqual(db.query(models.FoodBarcode).count(), 0)
+
     def test_older_backup_without_booking_tables_still_imports(self):
         source = self.root / "legacy.db"
         source_engine = self.create_database(source)
@@ -133,6 +144,7 @@ class BackupTest(unittest.TestCase):
             self.assertEqual(db.get(models.InventoryItem, 1).quantity, 2)
             self.assertEqual(db.query(models.MealInventoryBooking).count(), 0)
             self.assertEqual(db.query(models.ReceiptBooking).one().receipt_id, "b" * 64)
+            self.assertEqual(db.get(models.Food, 1).barcodes, ["0012345678905", "4012345678901"])
 
     def test_export_import_preserves_all_tables_and_backs_up_previous_database(self):
         source = self.root / "source.db"

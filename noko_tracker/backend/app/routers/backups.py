@@ -100,7 +100,7 @@ def validate_sqlite_database(path: Path) -> tuple[dict[str, int], list[str]]:
                     "SELECT name FROM sqlite_master WHERE type = 'table'"
                 )
             }
-            missing_tables = sorted(EXPECTED_TABLES - table_names - BOOKING_TABLES)
+            missing_tables = sorted(EXPECTED_TABLES - table_names - BOOKING_TABLES - {"food_barcodes"})
             if missing_tables:
                 raise ValueError(
                     "Die Datenbank ist unvollstaendig oder nicht kompatibel. Fehlende Tabellen: "

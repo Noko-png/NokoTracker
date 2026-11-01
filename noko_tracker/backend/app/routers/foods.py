@@ -10,6 +10,7 @@ from sqlalchemy.orm import Session
 
 from .. import crud, models, schemas
 from ..database import get_db
+from ..services import barcode_service
 
 
 router = APIRouter(prefix="/foods", tags=["foods"])
@@ -76,10 +77,7 @@ def replace_food_conversions(
 
 
 def normalize_barcode(value: str) -> str:
-    normalized = re.sub(r"\D", "", value or "")
-    if len(normalized) < 8:
-        raise HTTPException(status_code=422, detail="Barcode is too short")
-    return normalized
+    return barcode_service.normalize_barcode(value)
 
 
 def number_from_open_food_facts(value) -> float | None:
@@ -177,13 +175,16 @@ def ensure_food_for_inventory_item(
     item: models.InventoryItem,
 ) -> models.Food:
     if item.food is not None:
+        barcode_service.append_barcodes(db, item.food, [item.barcode] if item.barcode else [])
         return item.food
 
     product_unit = item.product_unit or crud.get_or_create_product_unit(db, item.unit)
     brand = item.brand.strip() if item.brand else None
     food = crud.get_food_by_name_brand(db, item.name, brand) or models.Food(name=item.name)
     for field, value in food_payload_from_inventory_item(item, product_unit).items():
-        setattr(food, field, value)
+        if field != "barcode":
+            setattr(food, field, value)
+    barcode_service.append_barcodes(db, food, [item.barcode] if item.barcode else [])
     db.add(food)
     db.flush()
     item.food_id = food.id
@@ -275,12 +276,7 @@ def upsert_food_from_open_food_facts(
 ) -> models.Food:
     values = food_values_from_open_food_facts(barcode, product)
     product_unit = crud.get_or_create_product_unit(db, "serving")
-    food = (
-        db.query(models.Food)
-        .filter(models.Food.barcode == barcode)
-        .filter(models.Food.is_archived.is_(False))
-        .first()
-    )
+    food = barcode_service.find_food(db, barcode)
     if food is None:
         food = crud.get_food_by_name_brand(db, values["name"], values["brand"])
     if food is None:
@@ -290,7 +286,6 @@ def upsert_food_from_open_food_facts(
     food.emoji = food.emoji or schemas.DEFAULT_FOOD_EMOJI
     food.brand = values["brand"]
     food.category = values["category"]
-    food.barcode = barcode
     food.product_unit_id = product_unit.id
     food.serving_size = values["serving_size"]
     food.serving_unit = values["serving_unit"]
@@ -298,6 +293,7 @@ def upsert_food_from_open_food_facts(
     food.protein_per_100g = values["protein_per_100g"]
     food.fat_per_100g = values["fat_per_100g"]
     food.carbs_per_100g = values["carbs_per_100g"]
+    barcode_service.append_barcodes(db, food, [barcode])
     db.add(food)
     db.flush()
     return food
@@ -385,8 +381,9 @@ def barcode_lookup_response(
 def create_food(food_in: schemas.FoodCreate, db: Session = Depends(get_db)):
     validate_food_references(db, food_in.product_group_id, food_in.product_unit_id)
     try:
-        data = food_in.model_dump(exclude={"conversions"})
+        data = food_in.model_dump(exclude={"conversions", "barcode", "barcodes"})
         food = models.Food(**data)
+        barcode_service.apply_input(db, food, food_in)
         replace_food_conversions(db, food, food_in.conversions)
         db.add(food)
         db.commit()
@@ -395,6 +392,9 @@ def create_food(food_in: schemas.FoodCreate, db: Session = Depends(get_db)):
     except IntegrityError as exc:
         db.rollback()
         raise HTTPException(status_code=409, detail="Food already exists or is invalid") from exc
+    except Exception:
+        db.rollback()
+        raise
 
 
 @router.get("", response_model=list[schemas.FoodRead])
@@ -413,12 +413,7 @@ def list_foods(
 @router.get("/barcode/{barcode}/preview", response_model=schemas.FoodBarcodePreviewRead)
 def preview_food_by_barcode(barcode: str, db: Session = Depends(get_db)):
     normalized_barcode = normalize_barcode(barcode)
-    local_food = (
-        db.query(models.Food)
-        .filter(models.Food.barcode == normalized_barcode)
-        .filter(models.Food.is_archived.is_(False))
-        .first()
-    )
+    local_food = barcode_service.find_food(db, normalized_barcode)
     if local_food is not None and food_has_nutrition(local_food):
         return food_barcode_preview_from_food(
             normalized_barcode,
@@ -457,12 +452,7 @@ def preview_food_by_barcode(barcode: str, db: Session = Depends(get_db)):
 @router.get("/barcode/{barcode}", response_model=schemas.FoodBarcodeLookupRead)
 def lookup_food_by_barcode(barcode: str, db: Session = Depends(get_db)):
     normalized_barcode = normalize_barcode(barcode)
-    local_food = (
-        db.query(models.Food)
-        .filter(models.Food.barcode == normalized_barcode)
-        .filter(models.Food.is_archived.is_(False))
-        .first()
-    )
+    local_food = barcode_service.find_food(db, normalized_barcode)
     matching_inventory = (
         db.query(models.InventoryItem)
         .filter(models.InventoryItem.barcode == normalized_barcode)
@@ -471,20 +461,19 @@ def lookup_food_by_barcode(barcode: str, db: Session = Depends(get_db)):
     )
     if local_food is not None:
         source = "local_food"
+        barcode_service.append_barcodes(db, local_food, [normalized_barcode])
         if not food_has_nutrition(local_food):
             refreshed_food = refresh_food_from_open_food_facts(db, normalized_barcode)
             if refreshed_food is not None:
-                db.commit()
-                db.refresh(refreshed_food)
                 local_food = refreshed_food
                 source = "open_food_facts"
-        if not matching_inventory:
-            matching_inventory = (
-                db.query(models.InventoryItem)
-                .filter(models.InventoryItem.food_id == local_food.id)
-                .order_by(models.InventoryItem.id)
-                .all()
-            )
+        db.commit()
+        matching_inventory = (
+            db.query(models.InventoryItem)
+            .filter(models.InventoryItem.food_id == local_food.id)
+            .order_by(models.InventoryItem.id)
+            .all()
+        )
         return barcode_lookup_response(
             normalized_barcode,
             source,
@@ -502,6 +491,9 @@ def lookup_food_by_barcode(barcode: str, db: Session = Depends(get_db)):
                 source = "open_food_facts"
         db.commit()
         db.refresh(food)
+        matching_inventory = db.query(models.InventoryItem).filter(
+            models.InventoryItem.food_id == food.id,
+        ).order_by(models.InventoryItem.id).all()
         return barcode_lookup_response(
             normalized_barcode,
             source,
@@ -520,7 +512,8 @@ def lookup_food_by_barcode(barcode: str, db: Session = Depends(get_db)):
         normalized_barcode,
         "open_food_facts",
         food,
-        [],
+        db.query(models.InventoryItem).filter(models.InventoryItem.food_id == food.id)
+        .order_by(models.InventoryItem.id).all(),
     )
 
 
@@ -532,7 +525,7 @@ def read_food(food_id: int, db: Session = Depends(get_db)):
 @router.patch("/{food_id}", response_model=schemas.FoodRead)
 def update_food(food_id: int, food_in: schemas.FoodUpdate, db: Session = Depends(get_db)):
     food = get_food_or_404(db, food_id)
-    patch = food_in.model_dump(exclude_unset=True, exclude={"conversions"})
+    patch = food_in.model_dump(exclude_unset=True, exclude={"conversions", "barcode", "barcodes"})
     validate_food_references(
         db,
         patch.get("product_group_id"),
@@ -541,6 +534,7 @@ def update_food(food_id: int, food_in: schemas.FoodUpdate, db: Session = Depends
     try:
         for field, value in patch.items():
             setattr(food, field, value)
+        barcode_service.apply_input(db, food, food_in)
         replace_food_conversions(db, food, food_in.conversions)
         db.add(food)
         db.commit()
@@ -549,6 +543,9 @@ def update_food(food_id: int, food_in: schemas.FoodUpdate, db: Session = Depends
     except IntegrityError as exc:
         db.rollback()
         raise HTTPException(status_code=409, detail="Food could not be updated") from exc
+    except Exception:
+        db.rollback()
+        raise
 
 
 @router.delete("/{food_id}", status_code=status.HTTP_204_NO_CONTENT)

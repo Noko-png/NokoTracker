@@ -1,5 +1,12 @@
 # Changelog
 
+## 3.1.13
+
+- Produkte unterstuetzen mehrere optionale EAN-Codes. Codes lassen sich einzeln hinzufuegen, scannen und entfernen; vorhandene Einzelcodes bleiben erhalten.
+- Alle EANs verweisen auf dasselbe Produkt. Tracker, Rezepte, Einkaufsliste und Bestand verwenden weiterhin dieselben Naehrwerte, Mengen und Produktverknuepfungen. Die Suche beruecksichtigt auch zusaetzliche Codes.
+- Fremde oder mehrdeutige EAN-Zuordnungen werden abgewiesen. Beim Bearbeiten fuegt ein Scan nur den Code hinzu und ueberschreibt keine Produktdaten.
+- Datenbanksicherungen enthalten alle EANs; aeltere Sicherungen bleiben importierbar. Grocy uebernimmt mehrere Codes je Produkt und meldet ungueltige oder bereits belegte Codes.
+
 ## 3.1.12
 
 - In der Stammdatenverwaltung wird beim Wechsel der Produktgruppe die Standardhaltbarkeit der neuen Gruppe sofort ins Lebensmittel-Formular uebernommen, auch wenn zuvor bereits eine Haltbarkeit eingetragen war.

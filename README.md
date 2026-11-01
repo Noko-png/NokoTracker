@@ -70,6 +70,12 @@ Neue Versionen laufen ausschliesslich ueber `main`. Wenn in GitHub eine neue Ver
 
 Falls in Home Assistant noch eine alte URL mit `/tree/home-assistant-addon` oder `/tree/main` hinterlegt ist, diese einmal entfernen und nur die direkte Repository-URL `https://github.com/Noko-png/NokoTracker` hinzufuegen.
 
+## EAN-Codes je Produkt
+
+In den Produktstammdaten koennen unter **EAN-Codes (optional)** mehrere Codes hinzugefuegt oder entfernt werden. Beim Bearbeiten ordnet der Scanner weitere EANs dem Produkt zu. Anschliessend speichern. Alle Codes verwenden dieselben Naehrwerte, Einheiten und denselben Bestand; Tracker, Rezepte und Einkaufsliste bleiben mit demselben Produkt verbunden. Codes fuer Produkte mit unterschiedlichen Naehrwerten oder Mengeneinheiten sollten getrennten Produkten zugeordnet werden.
+
+Bestehende Einzelcodes bleiben erhalten. Jeder Code darf nur einem Produkt gehoeren. Export und Import sichern die komplette EAN-Liste; auch alte Sicherungen mit einem Einzelcode und mehrere EANs aus Grocy werden unterstuetzt.
+
 ## Import und Export
 
 In den Einstellungen kannst du die NokoTracker-Datenbank als SQLite-Datei herunterladen oder eine vorhandene `.db`/`.sqlite`-Datei hochladen. Beim Import wird die bestehende Datenbank vorher automatisch als Backup gesichert.

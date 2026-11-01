@@ -68,6 +68,7 @@ export type Food = {
   product_unit_id?: number | null;
   minimum_quantity: number;
   barcode?: string | null;
+  barcodes?: string[];
   purchase_date?: string | null;
   expiry_days?: number | null;
   price?: number | null;

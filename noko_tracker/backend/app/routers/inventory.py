@@ -6,6 +6,7 @@ from sqlalchemy.orm import Session
 
 from .. import crud, models, schemas
 from ..database import get_db
+from ..services import barcode_service
 
 
 router = APIRouter(prefix="/inventory", tags=["inventory"])
@@ -60,6 +61,8 @@ def inventory_payload_with_food(
 ) -> dict:
     product_unit = resolve_product_unit(db, item_in)
     payload = item_in.model_dump(exclude={"expected_updated_at"})
+    payload["barcode"] = barcode_service.normalize_barcode(item_in.barcode) if item_in.barcode and item_in.barcode.strip() else None
+    codes = [payload["barcode"]] if payload["barcode"] else []
     brand = normalized_text(item_in.brand)
     category = normalized_text(item_in.category)
 
@@ -68,6 +71,7 @@ def inventory_payload_with_food(
         if food is None:
             raise HTTPException(status_code=404, detail="Food not found")
 
+        barcode_service.append_barcodes(db, food, codes)
         payload["name"] = food.name
         payload["emoji"] = food.emoji
         payload["brand"] = normalized_text(food.brand)
@@ -89,7 +93,7 @@ def inventory_payload_with_food(
     food.product_group_id = item_in.product_group_id
     food.product_unit_id = product_unit.id
     food.minimum_quantity = item_in.minimum_quantity
-    food.barcode = normalized_text(item_in.barcode)
+    barcode_service.append_barcodes(db, food, codes)
     food.purchase_date = item_in.purchase_date
     food.expiry_days = item_in.expiry_days
     food.price = item_in.price
@@ -206,6 +210,9 @@ def create_inventory_item(item_in: schemas.InventoryItemCreate, db: Session = De
     except IntegrityError as exc:
         db.rollback()
         raise HTTPException(status_code=409, detail="Inventory item could not be created") from exc
+    except Exception:
+        db.rollback()
+        raise
 
 
 @router.put("/{item_id}", response_model=schemas.InventoryItemRead)
@@ -231,6 +238,9 @@ def replace_inventory_item(
     except IntegrityError as exc:
         db.rollback()
         raise HTTPException(status_code=409, detail="Inventory item could not be updated") from exc
+    except Exception:
+        db.rollback()
+        raise
 
 
 @router.delete("/{item_id}", status_code=status.HTTP_204_NO_CONTENT)

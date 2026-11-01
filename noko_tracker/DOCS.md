@@ -34,6 +34,12 @@ Einkaeufe und Zubereitungen erhalten jeweils eine eigene Charge. Dadurch bleiben
 
 Alte Abbuchungen vor 3.1.10 besitzen keinen verlaesslichen Chargennachweis. Bereits markierte Altbuchungen lassen deshalb keine automatische Mengenkorrektur oder Rueckbuchung beim Loeschen zu; Notizen und Datum bleiben bearbeitbar. Bereits vorhandene Fehlbestaende muessen anhand des tatsaechlichen Vorrats manuell berichtigt werden. Aeltere Sicherungen sind weiterhin importierbar, enthalten aber keine Nachweise oder Belegkennungen aus der Zeit vor diesem Update.
 
+## Mehrere EAN-Codes ab 3.1.13
+
+In den Produktstammdaten unter **EAN-Codes (optional)** mit **EAN hinzufuegen** weitere Codes eintragen oder beim Bearbeiten einscannen und speichern. Einzelne Codes koennen entfernt werden. Jeder Code gehoert zu genau einem Produkt; doppelte Zuordnungen werden abgewiesen. Bestehende Einzelcodes werden weiterhin erkannt.
+
+Alle EANs eines Produkts nutzen dieselben Naehrwerte, Einheiten und denselben Bestand in Tracker, Rezepten und Einkaufsliste. Varianten mit anderen Naehrwerten oder Mengeneinheiten als eigene Produkte anlegen. Datenbanksicherungen enthalten alle Codes, alte Sicherungen bleiben importierbar. Der Grocy-Import uebernimmt mehrere EANs pro Produkt und meldet Konflikte.
+
 ## Persistenz
 
 Die Datenbank liegt im Add-on-Datenverzeichnis:

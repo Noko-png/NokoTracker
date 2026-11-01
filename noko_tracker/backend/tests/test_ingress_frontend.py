@@ -18,6 +18,10 @@ from app import database
 database.engine = create_engine("sqlite://", connect_args={"check_same_thread": False}, poolclass=StaticPool)
 database.SessionLocal.configure(bind=database.engine)
 from app.main import app
+from app import schemas
+from app.routers.foods import create_food
+with database.SessionLocal() as db:
+    create_food(schemas.FoodCreate(name="EAN-Test", barcodes=["0012345678905", "4012345678901"], calories_per_100g=100), db)
 
 async def request(path, *, accept="application/json", username="owner", peer="172.30.32.2", authenticated=True):
     headers = {"host": "localhost", "accept": accept, "x-ingress-path": "/api/hassio_ingress/test-session/"}
@@ -46,6 +50,10 @@ async def main():
         assert status == 200 and b"application/json" in headers[b"content-type"], (path, status, body[:80])
         session = json.loads(body)
         assert session["is_admin"] and session["ha_username"] == "owner"
+    for code in ("0012345678905", "4012345678901"):
+        status, headers, body = await request("/foods/barcode/" + code)
+        assert status == 200 and b"application/json" in headers[b"content-type"], (status, body[:200])
+        assert json.loads(body)["food"]["barcodes"] == ["0012345678905", "4012345678901"]
     status, headers, body = await request("/", accept="text/html")
     assert status == 200 and b"<!doctype html>" in body.lower()
     assert headers.get(b"cache-control") == b"no-store"

@@ -350,6 +350,7 @@ class FoodBase(BaseModel):
     product_unit_id: Optional[int] = None
     minimum_quantity: float = Field(0.0, ge=0)
     barcode: Optional[str] = Field(None, max_length=128)
+    barcodes: list[str] = Field(default_factory=list, max_length=100)
     purchase_date: Optional[date] = Field(default_factory=date.today)
     expiry_days: Optional[int] = Field(None, ge=0)
     price: Optional[float] = Field(None, ge=0)
@@ -386,6 +387,7 @@ class FoodUpdate(BaseModel):
     product_unit_id: Optional[int] = None
     minimum_quantity: Optional[float] = Field(None, ge=0)
     barcode: Optional[str] = Field(None, max_length=128)
+    barcodes: Optional[list[str]] = Field(None, max_length=100)
     purchase_date: Optional[date] = None
     expiry_days: Optional[int] = Field(None, ge=0)
     price: Optional[float] = Field(None, ge=0)
@@ -449,6 +451,7 @@ class FoodSummary(ORMBase):
     product_unit_id: Optional[int] = None
     minimum_quantity: float = 0.0
     barcode: Optional[str] = None
+    barcodes: list[str] = Field(default_factory=list)
     purchase_date: Optional[date] = None
     expiry_days: Optional[int] = None
     price: Optional[float] = None
