@@ -1,3 +1,5 @@
+import { readJsonResponse } from "./response";
+
 const configuredApiBaseUrl = import.meta.env.VITE_API_BASE_URL;
 
 export const API_BASE_URL =
@@ -712,6 +714,7 @@ type RequestOptions = Omit<RequestInit, "body"> & {
 
 async function request<T>(path: string, options: RequestOptions = {}): Promise<T> {
   const headers = new Headers(options.headers);
+  headers.set("Accept", "application/json");
   const isFormData =
     typeof FormData !== "undefined" && options.body instanceof FormData;
   const body =
@@ -728,24 +731,7 @@ async function request<T>(path: string, options: RequestOptions = {}): Promise<T
     body,
   });
 
-  if (!response.ok) {
-    let message = `${response.status} ${response.statusText}`;
-    try {
-      const payload = await response.json();
-      if (typeof payload.detail === "string") {
-        message = payload.detail;
-      }
-    } catch {
-      // Keep the HTTP status when the backend sends an empty error body.
-    }
-    throw new Error(message);
-  }
-
-  if (response.status === 204) {
-    return undefined as T;
-  }
-
-  return response.json() as Promise<T>;
+  return readJsonResponse<T>(response);
 }
 
 export function getDashboardSummary() {

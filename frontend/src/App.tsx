@@ -554,7 +554,7 @@ const macroMeta: Array<{
   { key: "carbs", label: "Kohlenhydrate", unit: "g", tone: "red" },
 ];
 
-const appVersion = "3.1.10";
+const appVersion = "3.1.11";
 const updateSourceLabel = "main / github.com/Noko-png/NokoTracker";
 
 const emptyNutrition: NutritionDay = {
@@ -3841,6 +3841,7 @@ export default function App() {
       {!session ? <p>{apiError ?? "Anmeldung wird geprueft …"}</p> : <>
         <p>Dein Home-Assistant-Konto ist noch keinem NokoTracker-Profil zugeordnet.</p>
         {!session.admin_configured && <p>Trage zuerst in der HA-Add-on-Konfiguration unter „admin_username“ den HA-Anmeldenamen des Administrators ein und starte das Add-on neu.</p>}
+        {session.ha_username && <p>Dein HA-Anmeldename: <code>{session.ha_username}</code>. Falls du der Administrator bist, trage diesen Wert unter „admin_username“ ein und starte das Add-on neu. Der unten links angezeigte Profilname kann davon abweichen.</p>}
         <p>Der Administrator kann dein vorhandenes Profil in den Einstellungen mit dieser HA-Benutzer-ID verbinden:</p>
         <code style={{ overflowWrap: "anywhere" }}>{session.ha_user_id}</code>
       </>}

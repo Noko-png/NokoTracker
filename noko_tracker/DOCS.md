@@ -20,6 +20,12 @@ Gewicht, Training, Mahlzeiten, Mealprep und ToDos sind persoenlich. Bestand, Leb
 
 Das Add-on akzeptiert ausschliesslich Verbindungen des HA-Ingress-Supervisors. Direkter Portzugriff ist entfernt. Die HA-Anmeldung ersetzt die bisher wirkungslosen NokoTracker-Passwoerter; vorhandene Passwortwerte werden beim Start entfernt. Das Add-on benoetigt keine zusaetzlichen Supervisor- oder Core-API-Rechte.
 
+## Startfehler und Administratorname ab 3.1.11
+
+Version 3.1.11 behebt einen Fehler, bei dem die Sitzungsanfrage im Add-on versehentlich die HTML-Startseite statt JSON erhielt. Die Meldung "Unexpected token '<'" trat dadurch auch mit richtig eingestelltem Administratornamen auf. Das Add-on aktualisieren und anschliessend die NokoTracker-Oberflaeche erneut oeffnen.
+
+Unter admin_username gehoert der exakte HA-Anmeldename. Der Name unten links in Home Assistant ist der Anzeigename und kann davon abweichen. Ab 3.1.11 zeigt NokoTracker bei fehlender Profilzuordnung den ueber Ingress erkannten Anmeldenamen an. Soll dieses Konto Administrator sein, diesen Wert in der Add-on-Konfiguration verwenden und das Add-on neu starten. Andere Nutzer werden weiterhin vom Administrator ihrem eigenen NokoTracker-Profil zugeordnet.
+
 ## Bestandsbuchungen ab 3.1.10
 
 Beim Aktualisieren werden die neuen Buchungstabellen automatisch angelegt; vorhandene Bestaende bleiben erhalten. Mahlzeit und Bestandsabzug werden gemeinsam gespeichert. Wird eine neu gebuchte Mahlzeit korrigiert oder geloescht, werden die dokumentierten Abbuchungen entsprechend angepasst oder zurueckgenommen. Bei fehlendem Bestand bleibt die bisherige Buchung erhalten.

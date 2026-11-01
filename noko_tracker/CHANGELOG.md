@@ -1,5 +1,13 @@
 # Changelog
 
+## 3.1.11
+
+- Home-Assistant-Start repariert: Die Sitzungs-API wird vor der allgemeinen Frontend-Route registriert. Anfragen an /session erhalten JSON statt der HTML-Startseite; der Fehler "Unexpected token '<'" beim Oeffnen entfaellt.
+- API-Anfragen kennzeichnen JSON als erwartete Antwort. Unbekannte API-Pfade liefern einen JSON-Fehler; unerwartete HTML-Antworten werden im Frontend verstaendlich erklaert. Die Startseite wird nicht zwischengespeichert.
+- Bei fehlender Profilzuordnung wird der von Home Assistant uebermittelte Anmeldename angezeigt. admin_username erwartet diesen Anmeldenamen, nicht den gegebenenfalls abweichenden Anzeigenamen unten links.
+- Neuer Integrationstest startet die vollstaendige Add-on-App mit Frontend und prueft Sitzungs-API, statische Dateien, API-Fehler und Ingress-Zugriffsrechte. Tests fuer JSON-/HTML-Antworten ergaenzt.
+- Versionsangaben einschliesslich des Docker-Build-Standardwerts auf 3.1.11 angeglichen.
+
 ## 3.1.10
 
 - Dezimalmengen bleiben bei Eingabe, Anzeige und Buchung erhalten. Kleine Mengen wie 5 g aus einem kg werden nicht mehr auf null oder auf benachbarte Brueche gerundet.

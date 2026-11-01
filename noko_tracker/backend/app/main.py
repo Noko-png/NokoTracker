@@ -1,7 +1,7 @@
 import os
 from pathlib import Path
 
-from fastapi import FastAPI
+from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
@@ -903,7 +903,7 @@ ensure_default_user()
 app = FastAPI(
     title="Heim-ERP Backend",
     description="Backend API fuer ein privates Heim-ERP mit Kalender, Vorrat, Rezepten, Mahlzeiten und Einkaufsliste.",
-    version="3.1.10",
+    version="3.1.11",
 )
 
 app.add_middleware(
@@ -971,21 +971,26 @@ def configure_frontend() -> None:
 
     @app.get("/", include_in_schema=False)
     def read_frontend_index():
-        return FileResponse(index_file)
+        return FileResponse(index_file, headers={"Cache-Control": "no-store"})
 
     @app.get("/{full_path:path}", include_in_schema=False)
-    def read_frontend_asset_or_index(full_path: str):
+    def read_frontend_asset_or_index(full_path: str, request: Request):
+        # A missing API route must not look like a successful JSON response.
+        if "application/json" in request.headers.get("accept", "").lower():
+            raise HTTPException(status_code=404, detail="API-Endpunkt wurde nicht gefunden")
         requested_path = (static_dir / full_path).resolve()
         try:
             requested_path.relative_to(static_dir)
         except ValueError:
-            return FileResponse(index_file)
+            raise HTTPException(status_code=404, detail="Datei wurde nicht gefunden")
 
         if requested_path.is_file():
             return FileResponse(requested_path)
 
-        return FileResponse(index_file)
+        return FileResponse(index_file, headers={"Cache-Control": "no-store"})
 
 
-configure_frontend()
+# install_security also registers /session. All API routes must precede the SPA
+# catch-all; otherwise the initial session request receives index.html.
 install_security(app)
+configure_frontend()
