@@ -555,7 +555,7 @@ const macroMeta: Array<{
   { key: "carbs", label: "Kohlenhydrate", unit: "g", tone: "red" },
 ];
 
-const appVersion = "3.1.13";
+const appVersion = "3.1.14";
 const updateSourceLabel = "main / github.com/Noko-png/NokoTracker";
 
 const emptyNutrition: NutritionDay = {
@@ -2360,6 +2360,14 @@ export default function App() {
     setApiError(null);
     setFoodForm(createFoodFormFromFood(food));
     setEditingFoodId(food.id);
+  }
+
+  async function createFoodFromBarcode(barcode: string): Promise<Food> {
+    const result = await lookupFoodByBarcode(barcode);
+    await loadData();
+    // Keep the imported product visible even when the list endpoint is paginated.
+    setFoods((current) => [result.food, ...current.filter((food) => food.id !== result.food.id)]);
+    return result.food;
   }
 
   function cancelEditingFood() {
@@ -4173,6 +4181,7 @@ export default function App() {
               />
             ) : (
               <MasterDataPanel
+                onCreateFoodFromBarcode={createFoodFromBarcode}
                 activeTab={activeMasterDataTab}
                 foodError={apiError}
                 editingFoodId={editingFoodId}
@@ -8543,6 +8552,7 @@ const masterDataTabs: Array<{ id: MasterDataTab; label: string }> = [
 ];
 
 function MasterDataPanel({
+  onCreateFoodFromBarcode,
   foodError,
   activeTab,
   editingFoodId,
@@ -8582,6 +8592,7 @@ function MasterDataPanel({
   storageLocations,
 }: {
   activeTab: MasterDataTab;
+  onCreateFoodFromBarcode: (barcode: string) => Promise<Food>;
   editingFoodId: number | null;
   editingProductGroupId: number | null;
   editingProductUnitId: number | null;
@@ -8620,6 +8631,7 @@ function MasterDataPanel({
   storageLocations: StorageLocation[];
 }) {
   const [foodEditorOpen, setFoodEditorOpen] = useState(false);
+  const [foodBarcodeCreateMode, setFoodBarcodeCreateMode] = useState(false);
   const [foodSearch, setFoodSearch] = useState("");
   const [foodProductGroupFilter, setFoodProductGroupFilter] = useState("all");
   const [foodStorageLocationFilter, setFoodStorageLocationFilter] =
@@ -8637,6 +8649,7 @@ function MasterDataPanel({
   const foodBarcodeStreamRef = useRef<MediaStream | null>(null);
   const foodBarcodeScanLoopRef = useRef<number | null>(null);
   const foodBarcodeScannerRunningRef = useRef(false);
+  const foodBarcodeRequestRef = useRef(0);
   const productGroupById = useMemo(
     () => new Map(productGroups.map((group) => [group.id, group])),
     [productGroups],
@@ -8780,6 +8793,9 @@ function MasterDataPanel({
   }
 
   function resetFoodBarcodePanel() {
+    foodBarcodeRequestRef.current += 1;
+    setFoodBarcodeBusy(false);
+    setFoodBarcodeCreateMode(false);
     stopFoodBarcodeScanner();
     setFoodBarcodePanelOpen(false);
     setFoodBarcodeInput("");
@@ -8814,13 +8830,14 @@ function MasterDataPanel({
   }
 
   async function lookupFoodBarcode(code: string) {
+    if (foodBarcodeBusy) return;
     const normalizedBarcode = normalizeBarcodes([code])[0] ?? "";
     if (!/^[0-9]{8,128}$/.test(normalizedBarcode)) {
       setFoodBarcodeStatus("Bitte einen gueltigen EAN-Code eingeben.");
       return;
     }
 
-    if (editingFoodId !== null) {
+    if (!foodBarcodeCreateMode && editingFoodId !== null) {
       const barcodes = addFoodBarcode(foodForm.barcodes, normalizedBarcode);
       if (barcodes.length > 100) {
         setFoodBarcodeStatus("Pro Produkt sind maximal 100 EAN-Codes möglich.");
@@ -8832,19 +8849,35 @@ function MasterDataPanel({
       return;
     }
 
+    const requestId = ++foodBarcodeRequestRef.current;
     try {
       setFoodBarcodeBusy(true);
       setFoodBarcodeStatus("EAN wird gesucht...");
+      if (foodBarcodeCreateMode) {
+        const food = await onCreateFoodFromBarcode(normalizedBarcode);
+        if (requestId !== foodBarcodeRequestRef.current) return;
+        onEditFood(food);
+        setFoodBarcodeCreateMode(false);
+        setFoodBarcodePanelOpen(false);
+        setFoodSearch("");
+        setFoodProductGroupFilter("all");
+        setFoodStorageLocationFilter("all");
+        setFoodBarcodeStatus(`${food.name} ist in den Stammdaten gespeichert. Angaben prüfen und bei Bedarf ergänzen.`);
+        setFoodCameraError("");
+        return;
+      }
       const result = await previewFoodByBarcode(normalizedBarcode);
+      if (requestId !== foodBarcodeRequestRef.current) return;
       applyFoodBarcodePreview(result);
     } catch (error) {
+      if (requestId !== foodBarcodeRequestRef.current) return;
       setFoodBarcodeStatus(
         error instanceof Error
           ? error.message
           : "EAN konnte nicht gefunden werden.",
       );
     } finally {
-      setFoodBarcodeBusy(false);
+      if (requestId === foodBarcodeRequestRef.current) setFoodBarcodeBusy(false);
     }
   }
 
@@ -8903,7 +8936,10 @@ function MasterDataPanel({
     }
   }
 
-  useEffect(() => () => stopFoodBarcodeScanner(), []);
+  useEffect(() => () => {
+    foodBarcodeRequestRef.current += 1;
+    stopFoodBarcodeScanner();
+  }, []);
 
   const filteredFoods = useMemo(() => {
     const searchTerm = foodSearch.trim().toLowerCase();
@@ -8981,6 +9017,21 @@ function MasterDataPanel({
         <section className="food-master-view">
           <div className="food-master-header">
             <h3>Produkte</h3>
+            <div className="food-master-actions">
+            <button
+              className="button secondary"
+              onClick={() => {
+                onCancelEditingFood();
+                resetFoodBarcodePanel();
+                setFoodBarcodeCreateMode(true);
+                setFoodBarcodePanelOpen(true);
+                setFoodEditorOpen(true);
+              }}
+              type="button"
+            >
+              <ScanBarcode size={16} />
+              Aus EAN erstellen
+            </button>
             <button
               className="button primary food-add-button"
               onClick={() => {
@@ -8992,6 +9043,7 @@ function MasterDataPanel({
             >
               Hinzufügen
             </button>
+            </div>
           </div>
 
           <div className="food-master-filter-row">
@@ -9131,11 +9183,11 @@ function MasterDataPanel({
           </div>
 
           {foodEditorOpen && (
-            <ModalBackdrop onClose={cancelFoodEditor}>
+            <ModalBackdrop className="modal-backdrop food-editor-backdrop" onClose={cancelFoodEditor}>
               <section className="modal-panel food-editor-modal">
                 <div className="panel-header">
                   <h2>
-                    {editingFoodId === null
+                    {foodBarcodeCreateMode ? "Lebensmittel aus EAN erstellen" : editingFoodId === null
                       ? "Lebensmittel hinzufügen"
                       : "Lebensmittel bearbeiten"}
                   </h2>
@@ -9151,6 +9203,11 @@ function MasterDataPanel({
                 <form
                   className="master-data-form"
                   onSubmit={(event) => {
+                    if (foodBarcodeCreateMode) {
+                      event.preventDefault();
+                      void lookupFoodBarcode(foodBarcodeInput);
+                      return;
+                    }
                     void onFoodSubmit(event).then((saved) => {
                       if (saved) {
                         closeFoodEditor();
@@ -9164,7 +9221,7 @@ function MasterDataPanel({
                       <span>{foodError}</span>
                     </div>
                   )}
-                  <div className="food-barcode-tools">
+                  {!foodBarcodeCreateMode && <div className="food-barcode-tools">
                     <button
                       className={`button secondary ${
                         foodBarcodePanelOpen ? "active" : ""
@@ -9188,22 +9245,22 @@ function MasterDataPanel({
                         {foodBarcodeStatus}
                       </span>
                     )}
-                  </div>
+                  </div>}
                   {foodBarcodePanelOpen && (
                     <div className="nutrition-barcode-panel food-barcode-panel">
                       <div className="nutrition-barcode-panel-head">
                         <div>
-                          <strong>{editingFoodId === null ? "EAN importieren" : "EAN hinzufügen"}</strong>
-                          <span>{editingFoodId === null ? "Name, Marke und Nährwerte übernehmen" : "Weiteren Code diesem Produkt zuordnen"}</span>
+                          <strong>{foodBarcodeCreateMode ? "EAN eingeben oder scannen" : editingFoodId === null ? "EAN importieren" : "EAN hinzufügen"}</strong>
+                          <span>{foodBarcodeCreateMode ? "Neue Lebensmittel werden direkt gespeichert. Vorhandene Produkte werden geöffnet." : editingFoodId === null ? "Name, Marke und Nährwerte übernehmen" : "Weiteren Code diesem Produkt zuordnen"}</span>
                         </div>
-                        <button
+                        {!foodBarcodeCreateMode && <button
                           className="icon-button compact"
                           onClick={resetFoodBarcodePanel}
                           title="EAN-Import schliessen"
                           type="button"
                         >
                           <X size={15} />
-                        </button>
+                        </button>}
                       </div>
                       <div className="nutrition-camera-frame">
                         <video
@@ -9237,7 +9294,10 @@ function MasterDataPanel({
                         <label>
                           <span>EAN-Code</span>
                           <input
+                            autoFocus={foodBarcodeCreateMode}
+                            disabled={foodBarcodeBusy}
                             inputMode="numeric"
+                            maxLength={128}
                             onChange={(event) =>
                               setFoodBarcodeInput(event.target.value)
                             }
@@ -9257,11 +9317,12 @@ function MasterDataPanel({
                           onClick={() => void lookupFoodBarcode(foodBarcodeInput)}
                           type="button"
                         >
-                          {foodBarcodeBusy ? "Suche" : "Übernehmen"}
+                          {foodBarcodeBusy ? "Suche…" : foodBarcodeCreateMode ? "Erstellen / öffnen" : "Übernehmen"}
                         </button>
                       </div>
                       {(foodBarcodeStatus || foodCameraError) && (
                         <div
+                          role="status"
                           className={`nutrition-barcode-message ${
                             foodCameraError ? "error" : ""
                           }`}
@@ -9271,6 +9332,21 @@ function MasterDataPanel({
                       )}
                     </div>
                   )}
+                  {foodBarcodeCreateMode ? (
+                    <div className="form-actions">
+                      <button className="button secondary" type="button" disabled={foodBarcodeBusy}
+                        onClick={() => {
+                          const code = normalizeBarcodes([foodBarcodeInput])[0] ?? "";
+                          if (/^[0-9]{8,128}$/.test(code)) onFoodFormChange({ ...foodForm, barcodes: [code] });
+                          resetFoodBarcodePanel();
+                        }}>
+                        Manuell anlegen
+                      </button>
+                      <button className="button secondary" type="button" onClick={cancelFoodEditor}>
+                        Schließen
+                      </button>
+                    </div>
+                  ) : <>
                   <TextInput
                     label="Name"
                     onChange={(name) => onFoodFormChange({ ...foodForm, name })}
@@ -9520,6 +9596,7 @@ function MasterDataPanel({
                     editing={editingFoodId !== null}
                     onCancel={cancelFoodEditor}
                   />
+                  </>}
                 </form>
               </section>
             </ModalBackdrop>

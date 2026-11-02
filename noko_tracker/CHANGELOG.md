@@ -1,5 +1,12 @@
 # Changelog
 
+## 3.1.14
+
+- Neuer Button "Aus EAN erstellen" unter Stammdaten > Lebensmittel: EAN eintippen oder mit der Kamera scannen. Die Suche verwendet dieselbe Methode wie der Kalorientracker.
+- Neue Lebensmittel werden mit Name, Marke, Kategorie, Portionsangaben und Naehrwerten direkt gespeichert und zur weiteren Bearbeitung geoeffnet. Bereits bekannte Codes oeffnen das vorhandene Produkt ohne Duplikat; es wird kein Bestand und keine Mahlzeit gebucht.
+- Unbekannte Codes und Verbindungsfehler werden verstaendlich angezeigt. Die manuelle Anlage uebernimmt den eingegebenen EAN-Code. Verspaetete Antworten veraendern kein inzwischen geschlossenes oder neues Formular.
+- Lebensmittel-Dialoge bleiben am Handy ueber der oberen App-Leiste sichtbar. Browser-Regressionstests pruefen EAN-Anlage, Bearbeitung und Fehlerfaelle auf Handy- und Desktopbreite.
+
 ## 3.1.13
 
 - Produkte unterstuetzen mehrere optionale EAN-Codes. Codes lassen sich einzeln hinzufuegen, scannen und entfernen; vorhandene Einzelcodes bleiben erhalten.

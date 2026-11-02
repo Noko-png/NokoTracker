@@ -72,6 +72,8 @@ Falls in Home Assistant noch eine alte URL mit `/tree/home-assistant-addon` oder
 
 ## EAN-Codes je Produkt
 
+Mit **Stammdaten > Lebensmittel > Aus EAN erstellen** wird ein Produkt anhand eines eingegebenen oder gescannten EAN-Codes gesucht. Wie im Kalorientracker werden die verfuegbaren Produktdaten aus Open Food Facts uebernommen und direkt gespeichert. Bekannte Codes oeffnen das vorhandene Lebensmittel. Angaben anschliessend pruefen und bei Bedarf ergaenzen; Bestand oder Mahlzeiten entstehen dabei nicht. Bei unbekannten Codes ist die manuelle Anlage moeglich.
+
 In den Produktstammdaten koennen unter **EAN-Codes (optional)** mehrere Codes hinzugefuegt oder entfernt werden. Beim Bearbeiten ordnet der Scanner weitere EANs dem Produkt zu. Anschliessend speichern. Alle Codes verwenden dieselben Naehrwerte, Einheiten und denselben Bestand; Tracker, Rezepte und Einkaufsliste bleiben mit demselben Produkt verbunden. Codes fuer Produkte mit unterschiedlichen Naehrwerten oder Mengeneinheiten sollten getrennten Produkten zugeordnet werden.
 
 Bestehende Einzelcodes bleiben erhalten. Jeder Code darf nur einem Produkt gehoeren. Export und Import sichern die komplette EAN-Liste; auch alte Sicherungen mit einem Einzelcode und mehrere EANs aus Grocy werden unterstuetzt.

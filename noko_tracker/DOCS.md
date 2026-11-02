@@ -36,6 +36,8 @@ Alte Abbuchungen vor 3.1.10 besitzen keinen verlaesslichen Chargennachweis. Bere
 
 ## Mehrere EAN-Codes ab 3.1.13
 
+Ab 3.1.14 legt **Stammdaten > Lebensmittel > Aus EAN erstellen** Lebensmittel direkt aus einem eingegebenen oder gescannten EAN-Code an. Die Suche verwendet wie der Kalorientracker Open Food Facts. Name, Marke, Kategorie, Portionsangaben und Naehrwerte werden gespeichert; bekannte Codes oeffnen das vorhandene Produkt. Angaben im anschliessenden Formular pruefen und ergaenzen. Es werden weder Bestand noch Mahlzeiten gebucht. Bei unbekannten Codes kann mit uebernommener EAN manuell weitergearbeitet werden.
+
 In den Produktstammdaten unter **EAN-Codes (optional)** mit **EAN hinzufuegen** weitere Codes eintragen oder beim Bearbeiten einscannen und speichern. Einzelne Codes koennen entfernt werden. Jeder Code gehoert zu genau einem Produkt; doppelte Zuordnungen werden abgewiesen. Bestehende Einzelcodes werden weiterhin erkannt.
 
 Alle EANs eines Produkts nutzen dieselben Naehrwerte, Einheiten und denselben Bestand in Tracker, Rezepten und Einkaufsliste. Varianten mit anderen Naehrwerten oder Mengeneinheiten als eigene Produkte anlegen. Datenbanksicherungen enthalten alle Codes, alte Sicherungen bleiben importierbar. Der Grocy-Import uebernimmt mehrere EANs pro Produkt und meldet Konflikte.

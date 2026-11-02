@@ -57,5 +57,11 @@ erneutes Oeffnen, Speicherkonflikte und Wiederholen nach einem Fehler.
 Die gespeicherten Werte und das berechnete Ablaufdatum werden ueber die API
 der isolierten Datenbank kontrolliert.
 
+Der Test prueft ausserdem **Aus EAN erstellen**: neue Stammdaten mit Naehrwerten
+und Portionsangaben, wiederholte Codes ohne Duplikate, anschliessendes Bearbeiten,
+ungueltige und unbekannte Codes, Netzfehler sowie den Wechsel zur manuellen Anlage.
+Die EAN-Antworten stammen aus festen Testdaten; externe Dienste werden nicht aufgerufen.
+Mit `FOOD_TEST_SCREENSHOTS` koennen Screenshots in einem vorhandenen Ordner gespeichert werden.
+
 Abweichende Ports lassen sich mit `FOOD_TEST_API_URL`,
 `FOOD_TEST_FRONTEND_URL` und `FOOD_TEST_CDP_URL` setzen.

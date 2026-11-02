@@ -9,10 +9,29 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from sqlalchemy import create_engine
 from sqlalchemy.orm import Session
 from sqlalchemy.pool import StaticPool
+from fastapi import HTTPException
 
 from app import models
 from app.database import Base, get_db
 from app.main import app
+from app.routers import foods
+
+
+def test_ean_product(barcode):
+    # Deterministic EAN data: browser tests never call an external service.
+    if barcode == "5012345678900":
+        raise HTTPException(502, "EAN-Suche momentan nicht erreichbar")
+    if barcode != "0012345678905":
+        return None
+    return {
+        "product_name_de": "EAN Testdrink", "brands": "EAN Testmarke",
+        "categories": "Getraenke", "serving_size": "250 ml",
+        "nutriments": {"energy-kcal_100g": 46, "proteins_100g": 1.1,
+                       "fat_100g": 1.5, "carbohydrates_100g": 6.8},
+    }
+
+
+foods.open_food_facts_product = test_ean_product
 
 test_engine = create_engine(
     "sqlite://", connect_args={"check_same_thread": False}, poolclass=StaticPool

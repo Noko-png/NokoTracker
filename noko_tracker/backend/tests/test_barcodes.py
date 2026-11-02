@@ -170,6 +170,43 @@ class BarcodeTest(unittest.TestCase):
         self.assertEqual(food.barcode, A)
         self.assertEqual([lot.id for lot in result["inventory_items"]], [item.id])
 
+    def test_ean_creates_complete_master_data_without_stock_or_meal(self):
+        product = {
+            "product_name_de": "Haferdrink", "brands": "Testmarke", "categories": "Getraenke, Pflanzlich",
+            "serving_size": "250 ml", "nutriments": {
+                "energy-kcal_100g": 46, "proteins_100g": 1.1,
+                "fat_100g": 1.5, "carbohydrates_100g": 6.8,
+            },
+        }
+        with patch.object(foods, "open_food_facts_product", return_value=product) as lookup:
+            result = foods.lookup_food_by_barcode(A, self.db)
+            created = s.FoodRead.model_validate(result["food"])
+            self.assertEqual((created.name, created.brand, created.category), ("Haferdrink", "Testmarke", "Getraenke"))
+            self.assertEqual((created.serving_size, created.serving_unit), (250, "ml"))
+            self.assertEqual((created.calories_per_100g, created.protein_per_100g, created.fat_per_100g, created.carbs_per_100g), (46, 1.1, 1.5, 6.8))
+            self.assertEqual(created.barcodes, [A])
+            self.assertIsNotNone(self.db.get(m.ProductUnit, created.product_unit_id))
+            repeated = foods.lookup_food_by_barcode(A, self.db)
+            self.assertEqual(repeated["food"].id, created.id)
+            lookup.assert_called_once_with(A)
+        self.assertEqual(self.db.query(m.Food).count(), 1)
+        self.assertEqual(self.db.query(m.InventoryItem).count(), 0)
+        self.assertEqual(self.db.query(m.MealLog).count(), 0)
+        foods.update_food(created.id, s.FoodUpdate(expiry_days=7, storage_location="Vorrat"), self.db)
+        self.assertEqual(self.db.get(m.Food, created.id).barcodes, [A])
+
+    def test_missing_ean_and_network_failure_create_no_product(self):
+        with self.assertRaises(HTTPException) as caught:
+            foods.lookup_food_by_barcode(A, self.db)
+        self.assertEqual(caught.exception.status_code, 404)
+        self.assertIn("manuell", caught.exception.detail)
+        with patch.object(foods, "open_food_facts_product", side_effect=HTTPException(502, "offline")):
+            with self.assertRaises(HTTPException) as caught:
+                foods.lookup_food_by_barcode(A, self.db)
+            self.assertEqual(caught.exception.status_code, 502)
+        self.assertEqual(self.db.query(m.Food).count(), 0)
+        self.assertEqual(self.db.query(m.FoodBarcode).count(), 0)
+
     def test_tracker_and_cooking_consume_shared_stock_across_codes(self):
         food = self.food()
         first, second = self.stock(food, A), self.stock(food, B)

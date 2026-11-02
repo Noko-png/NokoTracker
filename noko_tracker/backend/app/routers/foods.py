@@ -207,9 +207,9 @@ def open_food_facts_product(barcode: str) -> dict | None:
         except HTTPError as exc:
             if exc.code == 404:
                 continue
-            raise HTTPException(status_code=502, detail="Barcode lookup failed") from exc
+            raise HTTPException(status_code=502, detail="EAN-Suche ist momentan nicht erreichbar. Bitte erneut versuchen oder das Lebensmittel manuell anlegen.") from exc
         except (TimeoutError, URLError, json.JSONDecodeError) as exc:
-            raise HTTPException(status_code=502, detail="Barcode lookup failed") from exc
+            raise HTTPException(status_code=502, detail="EAN-Suche ist momentan nicht erreichbar. Bitte erneut versuchen oder das Lebensmittel manuell anlegen.") from exc
 
         product = payload.get("product")
         if not isinstance(product, dict):
@@ -445,7 +445,7 @@ def preview_food_by_barcode(barcode: str, db: Session = Depends(get_db)):
         )
 
     if product is None:
-        raise HTTPException(status_code=404, detail="Barcode not found")
+        raise HTTPException(status_code=404, detail="Zu diesem EAN-Code wurde kein Lebensmittel gefunden. Bitte den Code pruefen oder das Lebensmittel manuell anlegen.")
     return food_barcode_preview_from_open_food_facts(normalized_barcode, product)
 
 
@@ -503,7 +503,7 @@ def lookup_food_by_barcode(barcode: str, db: Session = Depends(get_db)):
 
     product = open_food_facts_product(normalized_barcode)
     if product is None:
-        raise HTTPException(status_code=404, detail="Barcode not found")
+        raise HTTPException(status_code=404, detail="Zu diesem EAN-Code wurde kein Lebensmittel gefunden. Bitte den Code pruefen oder das Lebensmittel manuell anlegen.")
 
     food = upsert_food_from_open_food_facts(db, normalized_barcode, product)
     db.commit()

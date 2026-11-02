@@ -2313,6 +2313,16 @@ th {
   min-width: 104px;
 }
 
+.food-master-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.food-master-actions .button {
+  flex: 1 1 auto;
+}
+
 .food-master-filter-row {
   display: grid;
   grid-template-columns: minmax(260px, 1fr) minmax(220px, 0.7fr) minmax(220px, 0.7fr);
@@ -2500,6 +2510,10 @@ th {
   flex-wrap: wrap;
 }
 
+.food-editor-backdrop {
+  z-index: 50;
+}
+
 .food-barcode-tools .button.active {
   border-color: #93c5fd;
   background: var(--blue-soft);
@@ -2518,7 +2532,7 @@ th {
 }
 
 .food-barcode-form {
-  grid-template-columns: minmax(0, 1fr) 138px;
+  grid-template-columns: minmax(0, 1fr) auto;
 }
 
 .inventory-page-layout {

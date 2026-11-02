@@ -1,4 +1,6 @@
 import assert from "node:assert/strict";
+import { writeFile } from "node:fs/promises";
+import { join } from "node:path";
 
 // Reuse the existing isolated database fixture, never the normal backend.
 const api = process.env.FOOD_TEST_API_URL ?? "http://127.0.0.1:8015";
@@ -88,6 +90,16 @@ async function fill(scope, label, value) {
 async function readField(scope, label) {
   return evaluate(`${field(scope, label)}.value`);
 }
+async function clickButton(scope, text) {
+  const expression = `Array.from(document.querySelectorAll(${JSON.stringify(`${scope} button`)})).find(el => el.textContent.trim() === ${JSON.stringify(text)})`;
+  await waitFor(`Boolean(${expression})`);
+  await evaluate(`${expression}.click()`);
+}
+async function screenshot(name) {
+  if (!process.env.FOOD_TEST_SCREENSHOTS) return;
+  const { data } = await send('Page.captureScreenshot', { format: 'png' });
+  await writeFile(join(process.env.FOOD_TEST_SCREENSHOTS, name), Buffer.from(data, 'base64'));
+}
 const foodForm = ".food-editor-modal form";
 const stockForm = ".inventory-edit-modal form";
 const daysLabel = "Haltbarkeit bis Ablauf (Tage)";
@@ -115,6 +127,7 @@ try {
     });
     await send("Page.navigate", { url: frontend });
     await waitFor("document.body.innerText.includes('Kalendertest')");
+    await waitFor("!document.querySelector('.loading-bar')");
     await click('[title="Stammdaten verwalten"]');
     await waitFor("Array.from(document.querySelectorAll('.sidebar-master-option')).some(el => el.textContent.trim() === 'Lebensmittel')");
     await evaluate("Array.from(document.querySelectorAll('.sidebar-master-option')).find(el => el.textContent.trim() === 'Lebensmittel').click()");
@@ -164,6 +177,57 @@ try {
     await waitFor(`!document.querySelector('${stockForm}')`);
     assert.equal((await request(`/inventory/${stock.id}`)).expiry_date, "2026-10-25");
     console.log(`PASS ${width}px inventory editing: error retains inputs, retry recalculates expiry, zero days persists`);
+
+    if (!await evaluate("Boolean(document.querySelector('.sidebar-master-options'))")) {
+      await click('[title="Stammdaten verwalten"]');
+    }
+    await clickButton('.sidebar-master-options', 'Lebensmittel');
+    await clickButton('.food-master-header', 'Aus EAN erstellen');
+    await waitFor("document.querySelector('.food-editor-modal h2')?.textContent === 'Lebensmittel aus EAN erstellen'");
+    assert.equal(await evaluate(`(() => {
+      const header = document.querySelector('.food-editor-modal .panel-header');
+      const rect = header.getBoundingClientRect();
+      return header.contains(document.elementFromPoint(rect.x + 10, rect.y + 10));
+    })()`), true, 'EAN dialog title must remain above the mobile app bar');
+    assert.equal(await evaluate(`Boolean(document.querySelector('${foodForm} input[required]'))`), false);
+    await fill(foodForm, 'EAN-Code', '0012345678905');
+    await screenshot(`ean-create-${width}.png`);
+    await clickButton(foodForm, 'Erstellen / öffnen');
+    await waitFor("document.querySelector('.food-barcode-inline-status')?.textContent.includes('in den Stammdaten gespeichert')");
+    assert.equal(await readField(foodForm, 'Name'), 'EAN Testdrink');
+    assert.equal(await readField(foodForm, 'Markenname (optional)'), 'EAN Testmarke');
+    assert.equal(await readField(foodForm, 'Kalorien / 100g'), '46');
+    await screenshot(`ean-created-${width}.png`);
+    const imported = (await request('/foods')).find(item => item.name === 'EAN Testdrink');
+    assert.ok(imported);
+    assert.equal(imported.serving_size, 250);
+    assert.equal(imported.serving_unit, 'ml');
+    assert.deepEqual(imported.barcodes, ['0012345678905']);
+    assert.equal((await request('/inventory')).length, 1);
+    assert.equal((await request('/meals/logs')).length, 0);
+    await fill(foodForm, daysLabel, '14');
+    await click(`${foodForm} button[type=submit]`);
+    await waitFor(`!document.querySelector('${foodForm}')`);
+    assert.equal((await request(`/foods/${imported.id}`)).expiry_days, 14);
+    await clickButton('.food-master-header', 'Aus EAN erstellen');
+    await fill(foodForm, 'EAN-Code', '0012345678905');
+    await clickButton(foodForm, 'Erstellen / öffnen');
+    await waitFor("document.querySelector('.food-barcode-inline-status')?.textContent.includes('in den Stammdaten gespeichert')");
+    assert.equal(await readField(foodForm, daysLabel), '14');
+    assert.equal((await request('/foods')).filter(item => item.name === 'EAN Testdrink').length, 1);
+    await click('.food-editor-modal [title="Schliessen"]');
+    await clickButton('.food-master-header', 'Aus EAN erstellen');
+    for (const [code, expected] of [['123', 'gueltigen'], ['5012345678900', 'nicht erreichbar'], ['4012345678901', 'kein Lebensmittel']]) {
+      await fill(foodForm, 'EAN-Code', code);
+      await clickButton(foodForm, 'Erstellen / öffnen');
+      await waitFor(`document.querySelector('${foodForm} [role=status]')?.textContent.includes(${JSON.stringify(expected)})`);
+    }
+    assert.equal((await request('/foods')).length, 3);
+    await clickButton(foodForm, 'Manuell anlegen');
+    assert.equal(await readField(foodForm, 'EAN-Code 1'), '4012345678901');
+    assert.equal(await readField(foodForm, 'Name'), '');
+    await click('.food-editor-modal [title="Schliessen"]');
+    console.log(`PASS ${width}px EAN creation: full master data, repeated scan opens existing product, editing, error recovery and manual fallback`);
   }
 } finally {
   await send("Page.navigate", { url: "about:blank" });
