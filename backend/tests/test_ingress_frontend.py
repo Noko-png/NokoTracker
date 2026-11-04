@@ -87,6 +87,10 @@ async def main():
     status, _, body = await request("/session", username="different-login")
     assert status == 200 and not json.loads(body)["is_admin"]
     assert json.loads(body)["ha_username"] == "different-login"
+    status, headers, body = await request("/health-connect/test")
+    assert status == 200 and json.loads(body)["status"] == "not_configured"
+    assert headers.get(b"cache-control") == b"no-store, private"
+    assert (await request("/health-connect/test", username="different-login"))[0] == 403
     assert (await request("/session", peer="192.168.1.50"))[0] == 403
     assert (await request("/session", authenticated=False))[0] == 401
     print("Complete HA app: session JSON, HTML/assets, unknown API, username mismatch and ingress access checks passed.")
@@ -107,6 +111,7 @@ class IngressFrontendTest(unittest.TestCase):
             environment = {
                 **os.environ, "DATABASE_URL": "sqlite://", "NOKO_STATIC_DIR": str(root),
                 "NOKO_AUTH_MODE": "ingress", "NOKO_ADMIN_USERNAME": "owner",
+                "SUPERVISOR_TOKEN": "",
             }
             result = subprocess.run(
                 [sys.executable, "-c", SMOKE_TEST], cwd=addon_backend, env=environment,

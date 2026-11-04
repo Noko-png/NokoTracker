@@ -84,6 +84,12 @@ Ballaststoffe und Zucker werden in Gramm je 100 g gespeichert, Koffein optional 
 
 Die neuen Werte sind in Datenbanksicherungen enthalten. Bestehende Installationen werden beim Start ergaenzt; aeltere Sicherungen bleiben importierbar und erhalten fuer Ballaststoffe/Zucker den Standardwert 0 sowie ein leeres Koffeinfeld.
 
+## Test Health dashboard
+
+Ab 3.1.16 koennen Administratoren unter **Test Health dashboard** die Health-Connect-Sensoren der Home-Assistant-Companion-App testweise abrufen. Auf dem Handy sowohl die Leserechte in Health Connect als auch die einzelnen Sensoren unter **Einstellungen > Companion App > Sensoren verwalten > Health Connect** aktivieren. Danach die App synchronisieren und das Dashboard oeffnen. Schritte, Puls/Ruhepuls und Schlafdauer werden mit Quelle, Einheit und HA-Aktualisierungszeit angezeigt. Umbenannte Sensoren koennen per Sensor-ID ausgewaehlt werden.
+
+Die Testansicht speichert keine Messwerte, ordnet sie keinem Profil zu und ist nur fuer Administratoren erreichbar. Der Abruf benoetigt die HA-Add-on-Installation; ein lokal gestarteter NokoTracker meldet den fehlenden HA-Anschluss. Hinweise zu den neuen HA-API-Rechten stehen in der [Add-on-Dokumentation](noko_tracker/DOCS.md).
+
 ## Import und Export
 
 In den Einstellungen kannst du die NokoTracker-Datenbank als SQLite-Datei herunterladen oder eine vorhandene `.db`/`.sqlite`-Datei hochladen. Beim Import wird die bestehende Datenbank vorher automatisch als Backup gesichert.

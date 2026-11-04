@@ -56,6 +56,41 @@ export function getSession() {
   return request<SessionInfo>("/session");
 }
 
+export type HealthSensorSelection = {
+  steps_entity?: string;
+  pulse_entity?: string;
+  sleep_entity?: string;
+};
+
+export type HealthTestSensor = {
+  entity_id: string;
+  name: string;
+  kind: "steps" | "heart_rate" | "resting_heart_rate" | "sleep";
+  value: number | null;
+  unit: string | null;
+  state: "available" | "unknown" | "unavailable" | "invalid" | "missing";
+  last_updated: string | null;
+  selection: "automatic" | "manual";
+};
+
+export type HealthTestResult = {
+  status: "connected" | "empty" | "not_configured";
+  message: string;
+  checked_at: string;
+  sensors: HealthTestSensor[];
+};
+
+export function getHealthTest(selection: HealthSensorSelection = {}, signal?: AbortSignal) {
+  const params = new URLSearchParams();
+  for (const [key, value] of Object.entries(selection)) {
+    if (value?.trim()) params.set(key, value.trim());
+  }
+  const query = params.toString();
+  return request<HealthTestResult>(`/health-connect/test${query ? `?${query}` : ""}`, {
+    signal, cache: "no-store",
+  });
+}
+
 export type Food = {
   id: number;
   name: string;

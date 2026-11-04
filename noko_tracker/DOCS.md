@@ -18,7 +18,7 @@ Dieses Add-on startet ein FastAPI-Backend auf Port `8000` und liefert das gebaut
 
 Gewicht, Training, Mahlzeiten, Mealprep und ToDos sind persoenlich. Bestand, Lebensmittel, Rezepte, Einkaufsliste und Kalendertermine bleiben gemeinsam. Der konfigurierte Administrator verwaltet Profile, Datenbanksicherungen und Grocy-Importe. Kassenzettel koennen weiterhin fuer den gemeinsamen Bestand gebucht werden.
 
-Das Add-on akzeptiert ausschliesslich Verbindungen des HA-Ingress-Supervisors. Direkter Portzugriff ist entfernt. Die HA-Anmeldung ersetzt die bisher wirkungslosen NokoTracker-Passwoerter; vorhandene Passwortwerte werden beim Start entfernt. Das Add-on benoetigt keine zusaetzlichen Supervisor- oder Core-API-Rechte.
+Das Add-on akzeptiert ausschliesslich Verbindungen des HA-Ingress-Supervisors. Direkter Portzugriff ist entfernt. Die HA-Anmeldung ersetzt die bisher wirkungslosen NokoTracker-Passwoerter; vorhandene Passwortwerte werden beim Start entfernt. Seit 3.1.16 benoetigt die Health-Testseite Zugriff auf die HA-Core-API; siehe unten.
 
 ## Startfehler und Administratorname ab 3.1.11
 
@@ -41,6 +41,23 @@ Ab 3.1.14 legt **Stammdaten > Lebensmittel > Aus EAN erstellen** Lebensmittel di
 In den Produktstammdaten unter **EAN-Codes (optional)** mit **EAN hinzufuegen** weitere Codes eintragen oder beim Bearbeiten einscannen und speichern. Einzelne Codes koennen entfernt werden. Jeder Code gehoert zu genau einem Produkt; doppelte Zuordnungen werden abgewiesen. Bestehende Einzelcodes werden weiterhin erkannt.
 
 Alle EANs eines Produkts nutzen dieselben Naehrwerte, Einheiten und denselben Bestand in Tracker, Rezepten und Einkaufsliste. Varianten mit anderen Naehrwerten oder Mengeneinheiten als eigene Produkte anlegen. Datenbanksicherungen enthalten alle Codes, alte Sicherungen bleiben importierbar. Der Grocy-Import uebernimmt mehrere EANs pro Produkt und meldet Konflikte.
+
+## Test Health dashboard ab 3.1.16
+
+1. Das Add-on auf 3.1.16 aktualisieren und starten. Als konfigurierter NokoTracker-Administrator anmelden.
+2. Auf dem Handy in Health Connect pruefen, ob Samsung Health Schritte, Herzfrequenz und Schlaf bereitstellt und Home Assistant diese lesen darf.
+3. In der HA-App unter **Einstellungen > Companion App > Sensoren verwalten > Health Connect** die jeweiligen Sensoren aktivieren. Die Android-Datenfreigabe allein reicht nicht aus.
+4. Samsung Health synchronisieren, die HA-App oeffnen und in NokoTracker **Test Health dashboard** aufrufen. Beim Oeffnen startet die Abfrage; **Daten abrufen** wiederholt sie.
+
+Die automatische Suche erkennt Sensor-IDs mit `health_connect_daily_steps`, `health_connect_heart_rate`, `health_connect_resting_heart_rate` und `health_connect_sleep_duration`, auch mit Geraetepraefix oder nummeriertem Suffix. Fuer umbenannte Sensoren im aufklappbaren Bereich die exakte `sensor.*`-ID aus Home Assistant angeben. Leere Felder verwenden die automatische Suche. Mehrere Handys werden getrennt angezeigt, Werte werden nicht addiert. Diese Testauswahl wird nicht gespeichert.
+
+Die Seite zeigt die letzten HA-Sensorwerte, keinen Echtzeitstream und keine vollstaendige Historie. Die HA-Aktualisierungszeit ist nicht zwingend die Messzeit; ein nicht aktualisierter Tages-Schrittwert kann vom Vortag stammen. Fehlende Werte bleiben als fehlend erkennbar. Gesundheitswerte werden nur fuer die geoeffnete Ansicht gehalten, nicht in der NokoTracker-Datenbank oder dauerhaft im Browser gespeichert; Home Assistant kann sie weiterhin in seiner eigenen Historie und seinen Sicherungen speichern.
+
+**Zugriff und Berechtigungen:** Die Seite und ihre API sind nur fuer Administratoren freigegeben, da automatisch gefundene Sensoren noch keinem NokoTracker-Profil zugeordnet sind. Normale Nutzer erhalten auch beim direkten API-Aufruf keinen Zugriff. Der User-Schalter wird auf dieser Seite ausgeblendet.
+
+Das Add-on setzt jetzt `homeassistant_api: true`. Der interne `SUPERVISOR_TOKEN` besitzt damit technisch administrative HA-Core-API-Rechte; das ist keine auf Sensoren begrenzte HA-Berechtigung. NokoTracker implementiert ausschliesslich `GET http://supervisor/core/api/states`, filtert die Antwort im Backend und gibt nur die benoetigten Sensorfelder weiter. Beliebige URLs, Schreibaktionen, Weiterleitungen und Umgebungs-Proxys werden nicht verwendet. Der Token gelangt nicht ins Frontend, in Datenbanksicherungen oder ins Git-Repository. Es wird kein weiterer Netzwerkport geoeffnet. Grundlage: [offizielle HA-Dokumentation](https://contributors.home-assistant.io/apps/guides/communication/).
+
+Bei fehlendem Zugriff das Add-on aktualisieren und neu starten. Ein leerer Fund bei erfolgreicher Verbindung deutet auf deaktivierte oder umbenannte Sensoren hin. Lokal ohne HA-Supervisor wird der fehlende Anschluss angezeigt; es werden keine Beispieldaten als echte Messwerte ausgegeben.
 
 ## Persistenz
 

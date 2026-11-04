@@ -6,6 +6,7 @@ import {
 } from "./quantity";
 import {
   AlertTriangle,
+  HeartPulse,
   Apple,
   BarChart3,
   CalendarDays,
@@ -195,6 +196,7 @@ import {
   withCalendarDate,
 } from "./calendar";
 import { CalendarRecurrenceFields } from "./CalendarRecurrenceFields";
+import { HealthTestPage } from "./HealthTestPage";
 
 type BarcodeDetectorResult = {
   rawValue: string;
@@ -216,6 +218,7 @@ type InventoryDeduction = {
 };
 
 type Page =
+  | "healthTest"
   | "dashboard"
   | "todos"
   | "calendar"
@@ -505,6 +508,7 @@ const navigation = [
   { id: "todos", label: "ToDo Tracker", icon: CheckCircle2 },
   { id: "nutrition", label: "Kalorientracker", icon: Gauge },
   { id: "training", label: "Training", icon: Dumbbell },
+  { id: "healthTest", label: "Test Health dashboard", icon: HeartPulse },
   { id: "calendar", label: "Kalender", icon: CalendarDays },
   { id: "foods", label: "Bestandsübersicht", icon: Apple },
   { id: "shopping", label: "Einkaufsliste", icon: ShoppingCart },
@@ -558,7 +562,7 @@ const macroMeta: Array<{
   { key: "carbs", label: "Kohlenhydrate", unit: "g", tone: "red" },
 ];
 
-const appVersion = "3.1.15";
+const appVersion = "3.1.16";
 const updateSourceLabel = "main / github.com/Noko-png/NokoTracker";
 
 const emptyNutrition: NutritionDay = {
@@ -3930,7 +3934,7 @@ export default function App() {
         </div>
 
         <nav className="nav-list" aria-label="Navigation">
-          {navigation.map(({ id, label, icon: Icon }) => (
+          {navigation.filter(item => item.id !== "healthTest" || session.is_admin).map(({ id, label, icon: Icon }) => (
             <button
               className={`nav-item ${activePage === id ? "active" : ""}`}
               key={id}
@@ -4014,7 +4018,7 @@ export default function App() {
             <p className="eyebrow">NokoTracker</p>
             <h1>{pageTitle}</h1>
           </div>
-          <div className="topbar-actions">
+          {activePage !== "healthTest" && <div className="topbar-actions">
             <label className="compact-field">
               <span>User</span>
               <select
@@ -4032,7 +4036,7 @@ export default function App() {
               <RefreshCw size={16} />
               Aktualisieren
             </button>
-          </div>
+          </div>}
         </header>
 
         {apiError && (
@@ -4043,6 +4047,8 @@ export default function App() {
         )}
 
         {loading && <div className="loading-bar" />}
+
+        {activePage === "healthTest" && session.is_admin && <HealthTestPage key={session.ha_user_id ?? "local"} />}
 
         {activePage === "dashboard" && (
           <DashboardPage

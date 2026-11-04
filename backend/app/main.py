@@ -11,6 +11,7 @@ from .routers import (
     calendar,
     dashboard,
     foods,
+    health_connect,
     imports,
     inventory,
     meals,
@@ -900,7 +901,7 @@ ensure_default_user()
 app = FastAPI(
     title="Heim-ERP Backend",
     description="Backend API fuer ein privates Heim-ERP mit Kalender, Vorrat, Rezepten, Mahlzeiten und Einkaufsliste.",
-    version="3.1.15",
+    version="3.1.16",
 )
 
 app.add_middleware(
@@ -934,6 +935,7 @@ app.include_router(product_groups.router)
 app.include_router(product_units.router)
 app.include_router(storage_locations.router)
 app.include_router(foods.router)
+app.include_router(health_connect.router)
 app.include_router(recipes.router)
 app.include_router(meals.router)
 app.include_router(nutrition.router)

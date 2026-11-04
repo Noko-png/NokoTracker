@@ -1,5 +1,14 @@
 # Changelog
 
+## 3.1.16
+
+- Neue Seite "Test Health dashboard" fuer Administratoren: Ruft beim Oeffnen und auf Knopfdruck Schritte, Puls/Ruhepuls und Schlafdauer der HA-Companion-App ab.
+- Automatische Suche nach Health-Connect-Sensoren; umbenannte Sensoren oder einzelne Handys koennen ueber ihre Sensor-ID ausgewaehlt werden. Quelle, Einheit und letzte HA-Aktualisierung bleiben sichtbar. Mehrere Quellen werden getrennt angezeigt.
+- Nicht verfuegbare, unbekannte oder ungueltige Werte werden nicht als 0 angezeigt. Verbindungsprobleme und noch nicht aktivierte Sensoren erhalten konkrete Hinweise. Lokale Entwicklung zeigt den fehlenden HA-Anschluss an.
+- Lesender Test ohne dauerhafte Speicherung oder Profilzuordnung. Zugriff ist serverseitig auf Administratoren begrenzt; die Seite ist fuer normale Nutzer ausgeblendet.
+- Das Add-on nutzt jetzt die HA-Core-API ueber den internen Supervisor-Zugang. Der Zugangsschluessel bleibt im Backend; das einzige implementierte Ziel ist die lesende Sensorabfrage. Ingress bleibt erforderlich, ohne neuen oeffentlichen Port.
+- Tests pruefen Zugriffsrechte, gefilterte Antworten, Netzwerkfehler, die HA-Routen sowie die Handy- und Desktopdarstellung.
+
 ## 3.1.15
 
 - Lebensmittel-Stammdaten enthalten Ballaststoffe und Zucker in g je 100 g sowie optional Koffein in mg je 100 g. Dezimalwerte werden gespeichert; bei Koffein bleiben ein leeres Feld und eine eingetragene 0 unterscheidbar.

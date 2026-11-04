@@ -1,0 +1,28 @@
+.health-test { display: grid; gap: 20px; min-width: 0; }
+.health-test-intro { display: flex; align-items: flex-start; justify-content: space-between; gap: 20px; }
+.health-test-intro p { margin: 0 0 10px; }
+.health-test-intro .eyebrow { display: flex; align-items: center; gap: 8px; }
+.health-test-intro > div { max-width: 760px; }
+.health-test-intro > button { flex-shrink: 0; }
+.health-test-status { display: grid; gap: 6px; padding: 16px; border: 1px solid var(--line); border-radius: 12px; background: var(--surface-soft); }
+.health-test-status.connected { border-color: var(--green); }
+.health-test-status span, .health-reading-note { color: var(--muted); font-size: 0.88rem; }
+.health-test-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 16px; }
+.health-test-card, .health-test-help { min-width: 0; padding: 20px; background: var(--surface); border: 1px solid var(--line); border-radius: 14px; }
+.health-test h2 { display: flex; align-items: center; gap: 10px; margin: 0 0 16px; font-size: 1.1rem; }
+.health-reading { display: grid; gap: 7px; padding: 16px 0; border-top: 1px solid var(--line); }
+.health-reading-name, .health-reading code { overflow-wrap: anywhere; }
+.health-reading code { color: var(--muted); font-size: 0.75rem; }
+.health-reading-value { display: flex; flex-wrap: wrap; align-items: baseline; gap: 8px; font-size: 2rem; font-weight: 750; }
+.health-reading-value span { font-size: 0.9rem; font-weight: 400; }
+.health-test-help ol { padding-left: 22px; }
+.health-test-help li { margin: 10px 0; }
+.health-test-help p:last-child { margin-bottom: 0; }
+.health-test-help summary { font-weight: 650; cursor: pointer; }
+.health-test-inputs { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 16px; margin: 20px 0; }
+.health-test-inputs label { display: grid; gap: 6px; min-width: 0; }
+.health-test-inputs input { width: 100%; min-width: 0; padding: 10px; border: 1px solid var(--line); border-radius: 8px; background: var(--field-bg); color: var(--field-text); }
+@media (max-width: 1100px) {
+  .health-test-grid, .health-test-inputs { grid-template-columns: 1fr; }
+  .health-test-intro { flex-direction: column; }
+}
