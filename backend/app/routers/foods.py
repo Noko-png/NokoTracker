@@ -1,4 +1,5 @@
 import json
+import math
 import re
 from urllib.error import HTTPError, URLError
 from urllib.parse import quote
@@ -86,7 +87,8 @@ def number_from_open_food_facts(value) -> float | None:
             return None
         if isinstance(value, str):
             value = value.strip().replace(",", ".")
-        return max(float(value), 0.0)
+        number = float(value)
+        return max(number, 0.0) if math.isfinite(number) else None
     except (TypeError, ValueError):
         return None
 
@@ -102,6 +104,24 @@ def nutrition_value(nutriments: dict, *keys: str) -> float:
 def product_nutriments(product: dict) -> dict:
     nutriments = product.get("nutriments")
     return nutriments if isinstance(nutriments, dict) else {}
+
+
+def additional_nutrients_from_open_food_facts(product: dict) -> dict:
+    # OFF *_100g amounts are normalized to grams, including caffeine:
+    # https://github.com/openfoodfacts/openfoodfacts-server/blob/main/html/data-fields.txt
+    nutriments = product_nutriments(product)
+    values = {}
+    for source, target, factor in (
+        ("fiber_100g", "fiber_per_100g", 1),
+        ("sugars_100g", "sugar_per_100g", 1),
+        ("caffeine_100g", "caffeine_mg_per_100g", 1000),
+    ):
+        value = number_from_open_food_facts(nutriments.get(source))
+        if value is not None:
+            converted = value * factor
+            if math.isfinite(converted):
+                values[target] = round(converted, 8)
+    return values
 
 
 def product_nutrition_score(product: dict) -> int:
@@ -266,6 +286,10 @@ def food_values_from_open_food_facts(barcode: str, product: dict) -> dict:
             "carbohydrates",
             "carbohydrates_value",
         ),
+        "fiber_per_100g": 0.0,
+        "sugar_per_100g": 0.0,
+        "caffeine_mg_per_100g": None,
+        **additional_nutrients_from_open_food_facts(product),
     }
 
 
@@ -293,6 +317,9 @@ def upsert_food_from_open_food_facts(
     food.protein_per_100g = values["protein_per_100g"]
     food.fat_per_100g = values["fat_per_100g"]
     food.carbs_per_100g = values["carbs_per_100g"]
+    # A missing external value must not erase manually entered information.
+    for field, value in additional_nutrients_from_open_food_facts(product).items():
+        setattr(food, field, value)
     barcode_service.append_barcodes(db, food, [barcode])
     db.add(food)
     db.flush()
@@ -331,6 +358,9 @@ def food_barcode_preview_from_food(
         "protein_per_100g": food.protein_per_100g,
         "fat_per_100g": food.fat_per_100g,
         "carbs_per_100g": food.carbs_per_100g,
+        "fiber_per_100g": food.fiber_per_100g,
+        "sugar_per_100g": food.sugar_per_100g,
+        "caffeine_mg_per_100g": food.caffeine_mg_per_100g,
     }
 
 

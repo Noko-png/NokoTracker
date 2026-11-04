@@ -27,7 +27,8 @@ def test_ean_product(barcode):
         "product_name_de": "EAN Testdrink", "brands": "EAN Testmarke",
         "categories": "Getraenke", "serving_size": "250 ml",
         "nutriments": {"energy-kcal_100g": 46, "proteins_100g": 1.1,
-                       "fat_100g": 1.5, "carbohydrates_100g": 6.8},
+                       "fat_100g": 1.5, "carbohydrates_100g": 6.8,
+                       "fiber_100g": 0.75, "sugars_100g": 4.2, "caffeine_100g": 0.032},
     }
 
 

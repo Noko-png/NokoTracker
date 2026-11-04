@@ -361,6 +361,9 @@ class FoodBase(BaseModel):
     protein_per_100g: float = Field(0.0, ge=0)
     carbs_per_100g: float = Field(0.0, ge=0)
     fat_per_100g: float = Field(0.0, ge=0)
+    fiber_per_100g: float = Field(0.0, ge=0, allow_inf_nan=False)
+    sugar_per_100g: float = Field(0.0, ge=0, allow_inf_nan=False)
+    caffeine_mg_per_100g: Optional[float] = Field(None, ge=0, allow_inf_nan=False)
 
     @field_validator("emoji", mode="before")
     @classmethod
@@ -398,6 +401,16 @@ class FoodUpdate(BaseModel):
     protein_per_100g: Optional[float] = Field(None, ge=0)
     carbs_per_100g: Optional[float] = Field(None, ge=0)
     fat_per_100g: Optional[float] = Field(None, ge=0)
+    fiber_per_100g: Optional[float] = Field(None, ge=0, allow_inf_nan=False)
+    sugar_per_100g: Optional[float] = Field(None, ge=0, allow_inf_nan=False)
+    caffeine_mg_per_100g: Optional[float] = Field(None, ge=0, allow_inf_nan=False)
+
+    @field_validator("fiber_per_100g", "sugar_per_100g")
+    @classmethod
+    def require_nutrient_value(cls, value):
+        if value is None:
+            raise ValueError("Bitte einen Zahlenwert eingeben")
+        return value
 
     @field_validator("emoji", mode="before")
     @classmethod
@@ -437,6 +450,9 @@ class FoodBarcodePreviewRead(BaseModel):
     protein_per_100g: float = 0.0
     fat_per_100g: float = 0.0
     carbs_per_100g: float = 0.0
+    fiber_per_100g: float = Field(0.0, ge=0, allow_inf_nan=False)
+    sugar_per_100g: float = Field(0.0, ge=0, allow_inf_nan=False)
+    caffeine_mg_per_100g: Optional[float] = Field(None, ge=0, allow_inf_nan=False)
 
 
 class FoodSummary(ORMBase):
@@ -462,6 +478,9 @@ class FoodSummary(ORMBase):
     protein_per_100g: float
     carbs_per_100g: float
     fat_per_100g: float
+    fiber_per_100g: float = Field(0.0, ge=0, allow_inf_nan=False)
+    sugar_per_100g: float = Field(0.0, ge=0, allow_inf_nan=False)
+    caffeine_mg_per_100g: Optional[float] = Field(None, ge=0, allow_inf_nan=False)
 
 
 class ProductGroupBase(BaseModel):

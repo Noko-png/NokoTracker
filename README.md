@@ -78,6 +78,12 @@ In den Produktstammdaten koennen unter **EAN-Codes (optional)** mehrere Codes hi
 
 Bestehende Einzelcodes bleiben erhalten. Jeder Code darf nur einem Produkt gehoeren. Export und Import sichern die komplette EAN-Liste; auch alte Sicherungen mit einem Einzelcode und mehrere EANs aus Grocy werden unterstuetzt.
 
+## Naehrwerte in den Lebensmittel-Stammdaten
+
+Ballaststoffe und Zucker werden in Gramm je 100 g gespeichert, Koffein optional in Milligramm je 100 g. Ein leeres Koffeinfeld bedeutet "nicht angegeben"; eine eingetragene 0 bleibt als bekannter Nullwert erhalten. Beim Anlegen per EAN werden verfuegbare Angaben ebenfalls uebernommen.
+
+Die neuen Werte sind in Datenbanksicherungen enthalten. Bestehende Installationen werden beim Start ergaenzt; aeltere Sicherungen bleiben importierbar und erhalten fuer Ballaststoffe/Zucker den Standardwert 0 sowie ein leeres Koffeinfeld.
+
 ## Import und Export
 
 In den Einstellungen kannst du die NokoTracker-Datenbank als SQLite-Datei herunterladen oder eine vorhandene `.db`/`.sqlite`-Datei hochladen. Beim Import wird die bestehende Datenbank vorher automatisch als Backup gesichert.

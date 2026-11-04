@@ -26,6 +26,8 @@ router = APIRouter(prefix="/database", tags=["database"])
 EXPECTED_TABLES = set(models.Base.metadata.tables)
 # Added in 3.1.10; older backups have no reversible booking history.
 BOOKING_TABLES = {"meal_inventory_bookings", "receipt_bookings"}
+# Added in 3.1.15; older backups use the defaults from the current schema.
+FOOD_NUTRIENT_COLUMNS = {"fiber_per_100g", "sugar_per_100g", "caffeine_mg_per_100g"}
 MAX_SQLITE_VALUE_BYTES = 12 * 1024 * 1024
 
 TRAINING_TABLES = {
@@ -114,6 +116,8 @@ def validate_sqlite_database(path: Path) -> tuple[dict[str, int], list[str]]:
                     row[1] for row in connection.execute(f'PRAGMA table_info("{table.name}")')
                 }
                 optional_columns = {"home_assistant_user_id"} if table.name == "users" else set()
+                if table.name == "foods":
+                    optional_columns |= FOOD_NUTRIENT_COLUMNS
                 missing_columns = sorted(set(table.columns.keys()) - columns - optional_columns)
                 if missing_columns:
                     raise ValueError(
@@ -250,7 +254,9 @@ def restore_database(upload_path: Path, db_path: Path, filename: str):
                 for table in models.Base.metadata.sorted_tables:
                     if table.name not in table_counts:
                         continue
-                    columns = [column.name for column in table.columns if column.name != "home_assistant_user_id"]
+                    source_columns = {row[1] for row in source.execute(f'PRAGMA table_info("{table.name}")')}
+                    columns = [column.name for column in table.columns
+                               if column.name in source_columns and column.name != "home_assistant_user_id"]
                     names = ", ".join(f'"{name}"' for name in columns)
                     placeholders = ", ".join("?" for name in columns)
                     for row in source.execute(f'SELECT {names} FROM "{table.name}"'):

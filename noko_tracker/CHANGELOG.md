@@ -1,5 +1,13 @@
 # Changelog
 
+## 3.1.15
+
+- Lebensmittel-Stammdaten enthalten Ballaststoffe und Zucker in g je 100 g sowie optional Koffein in mg je 100 g. Dezimalwerte werden gespeichert; bei Koffein bleiben ein leeres Feld und eine eingetragene 0 unterscheidbar.
+- Die EAN-Anlage uebernimmt verfuegbare Werte aus Open Food Facts und rechnet Koffein in Milligramm um. Fehlende externe Angaben loeschen keine bereits gespeicherten neuen Naehrwerte.
+- Bestehende Datenbanken werden automatisch erweitert. Die bisherige Bereinigung entfernt Ballaststoffe und Zucker aus den Lebensmittel-Stammdaten nicht mehr; gespeicherte Angaben bleiben auch nach einem Neustart erhalten.
+- Export und Import sichern die neuen Felder. Aeltere Sicherungen bleiben kompatibel und erhalten Standardwerte fuer die fehlenden Spalten.
+- Regressionstests pruefen Speicherung, Validierung, EAN-Uebernahme, Datenbankmigration und Sicherungen sowie das Bearbeiten auf Handy- und Desktopbreite.
+
 ## 3.1.14
 
 - Neuer Button "Aus EAN erstellen" unter Stammdaten > Lebensmittel: EAN eintippen oder mit der Kamera scannen. Die Suche verwendet dieselbe Methode wie der Kalorientracker.

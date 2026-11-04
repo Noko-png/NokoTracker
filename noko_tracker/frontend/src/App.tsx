@@ -308,6 +308,9 @@ type FoodForm = {
   protein_per_100g: string;
   fat_per_100g: string;
   carbs_per_100g: string;
+  fiber_per_100g: string;
+  sugar_per_100g: string;
+  caffeine_mg_per_100g: string;
 };
 
 type StorageLocationForm = {
@@ -555,7 +558,7 @@ const macroMeta: Array<{
   { key: "carbs", label: "Kohlenhydrate", unit: "g", tone: "red" },
 ];
 
-const appVersion = "3.1.14";
+const appVersion = "3.1.15";
 const updateSourceLabel = "main / github.com/Noko-png/NokoTracker";
 
 const emptyNutrition: NutritionDay = {
@@ -638,6 +641,9 @@ function createInitialFoodForm(): FoodForm {
     protein_per_100g: "0",
     fat_per_100g: "0",
     carbs_per_100g: "0",
+    fiber_per_100g: "0",
+    sugar_per_100g: "0",
+    caffeine_mg_per_100g: "",
   };
 }
 
@@ -1575,6 +1581,9 @@ function createFoodFormFromFood(food: Food): FoodForm {
     protein_per_100g: toFormValue(food.protein_per_100g),
     fat_per_100g: toFormValue(food.fat_per_100g),
     carbs_per_100g: toFormValue(food.carbs_per_100g),
+    fiber_per_100g: toFormValue(food.fiber_per_100g ?? 0),
+    sugar_per_100g: toFormValue(food.sugar_per_100g ?? 0),
+    caffeine_mg_per_100g: toFormValue(food.caffeine_mg_per_100g),
   };
 }
 
@@ -1606,6 +1615,9 @@ function createFoodPayload(form: FoodForm) {
     protein_per_100g: toNumber(form.protein_per_100g),
     fat_per_100g: toNumber(form.fat_per_100g),
     carbs_per_100g: toNumber(form.carbs_per_100g),
+    fiber_per_100g: toNumber(form.fiber_per_100g),
+    sugar_per_100g: toNumber(form.sugar_per_100g),
+    caffeine_mg_per_100g: optionalNumber(form.caffeine_mg_per_100g),
   };
 }
 
@@ -8823,6 +8835,9 @@ function MasterDataPanel({
       protein_per_100g: toFormValue(result.protein_per_100g),
       fat_per_100g: toFormValue(result.fat_per_100g),
       carbs_per_100g: toFormValue(result.carbs_per_100g),
+      fiber_per_100g: toFormValue(result.fiber_per_100g ?? 0),
+      sugar_per_100g: toFormValue(result.sugar_per_100g ?? 0),
+      caffeine_mg_per_100g: toFormValue(result.caffeine_mg_per_100g),
     });
     setFoodBarcodeInput(result.barcode);
     setFoodBarcodeStatus(`${result.name} gefunden und ins Formular uebernommen.`);
@@ -9590,6 +9605,27 @@ function MasterDataPanel({
                         onFoodFormChange({ ...foodForm, carbs_per_100g })
                       }
                       value={foodForm.carbs_per_100g}
+                    />
+                    <NumberInput
+                      label="Ballaststoffe (g / 100 g)"
+                      min="0"
+                      step="any"
+                      onChange={(fiber_per_100g) => onFoodFormChange({ ...foodForm, fiber_per_100g })}
+                      value={foodForm.fiber_per_100g}
+                    />
+                    <NumberInput
+                      label="Zucker (g / 100 g)"
+                      min="0"
+                      step="any"
+                      onChange={(sugar_per_100g) => onFoodFormChange({ ...foodForm, sugar_per_100g })}
+                      value={foodForm.sugar_per_100g}
+                    />
+                    <NumberInput
+                      label="Koffein (mg / 100 g, optional)"
+                      min="0"
+                      step="any"
+                      onChange={(caffeine_mg_per_100g) => onFoodFormChange({ ...foodForm, caffeine_mg_per_100g })}
+                      value={foodForm.caffeine_mg_per_100g}
                     />
                   </div>
                   <MasterDataFormActions

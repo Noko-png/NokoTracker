@@ -191,6 +191,10 @@ class Food(TimestampMixin, Base):
     carbs_per_100g = Column(Float, default=0.0, nullable=False)
     fat_per_100g = Column(Float, default=0.0, nullable=False)
 
+    fiber_per_100g = Column(Float, default=0.0, server_default="0", nullable=False)
+    sugar_per_100g = Column(Float, default=0.0, server_default="0", nullable=False)
+    caffeine_mg_per_100g = Column(Float, nullable=True)
+
     product_group = relationship("ProductGroup", back_populates="foods")
     product_unit = relationship("ProductUnit", back_populates="foods")
     conversions = relationship(

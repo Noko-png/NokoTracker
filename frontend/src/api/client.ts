@@ -81,6 +81,9 @@ export type Food = {
   fat_per_100g: number;
   created_at: string;
   updated_at: string;
+  fiber_per_100g: number;
+  sugar_per_100g: number;
+  caffeine_mg_per_100g?: number | null;
 };
 
 export type FoodConversion = {
@@ -221,6 +224,9 @@ export type FoodBarcodePreview = {
   protein_per_100g: number;
   fat_per_100g: number;
   carbs_per_100g: number;
+  fiber_per_100g: number;
+  sugar_per_100g: number;
+  caffeine_mg_per_100g?: number | null;
 };
 
 export type RecipeIngredient = {

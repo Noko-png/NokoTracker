@@ -30,6 +30,32 @@ class FoodEditingTest(unittest.TestCase):
         self.db.close()
         self.engine.dispose()
 
+    def test_additional_nutrients_create_update_and_clear_optional_caffeine(self):
+        self.assertEqual((self.food.fiber_per_100g, self.food.sugar_per_100g, self.food.caffeine_mg_per_100g), (0, 0, None))
+        created = foods.create_food(schemas.FoodCreate(
+            name="Naehrstofftest", fiber_per_100g=4.25, sugar_per_100g=12.6, caffeine_mg_per_100g=32.5,
+        ), self.db)
+        read = schemas.FoodRead.model_validate(created)
+        self.assertEqual((read.fiber_per_100g, read.sugar_per_100g, read.caffeine_mg_per_100g), (4.25, 12.6, 32.5))
+        foods.update_food(created.id, schemas.FoodUpdate(expiry_days=7), self.db)
+        self.assertEqual((created.fiber_per_100g, created.sugar_per_100g, created.caffeine_mg_per_100g), (4.25, 12.6, 32.5))
+        for caffeine in (0, 16.25, None):
+            foods.update_food(created.id, schemas.FoodUpdate(caffeine_mg_per_100g=caffeine), self.db)
+            self.db.expire_all()
+            self.assertEqual(created.caffeine_mg_per_100g, caffeine)
+        foods.update_food(created.id, schemas.FoodUpdate(fiber_per_100g=0, sugar_per_100g=0), self.db)
+        self.assertEqual((created.fiber_per_100g, created.sugar_per_100g), (0, 0))
+
+    def test_additional_nutrients_reject_negative_and_non_finite_values(self):
+        for field in ("fiber_per_100g", "sugar_per_100g", "caffeine_mg_per_100g"):
+            for value in (-1, float("nan"), float("inf")):
+                for schema in (schemas.FoodCreate, schemas.FoodUpdate):
+                    with self.subTest(field=field, value=value, schema=schema), self.assertRaises(ValueError):
+                        schema(name="Ungueltig", **{field: value})
+        for field in ("fiber_per_100g", "sugar_per_100g"):
+            with self.assertRaises(ValueError):
+                schemas.FoodUpdate(**{field: None})
+
     def test_full_edit_saves_dates_and_other_fields_with_existing_conversions(self):
         payload = schemas.FoodCreate.model_validate(
             schemas.FoodRead.model_validate(self.food).model_dump()

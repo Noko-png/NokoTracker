@@ -17,11 +17,34 @@ from app import database
 # The ingress auth check runs in a worker thread. Share only this test database.
 database.engine = create_engine("sqlite://", connect_args={"check_same_thread": False}, poolclass=StaticPool)
 database.SessionLocal.configure(bind=database.engine)
+# Simulate an existing 3.1.14 installation before the real startup migrations.
+from app import models
+models.Base.metadata.create_all(database.engine)
+with database.SessionLocal() as db:
+    db.add(models.Food(name="Legacy food", calories_per_100g=123))
+    db.commit()
+with database.engine.begin() as connection:
+    for column in ("fiber_per_100g", "sugar_per_100g", "caffeine_mg_per_100g"):
+        connection.exec_driver_sql("ALTER TABLE foods DROP COLUMN " + column)
 from app.main import app
+from app.main import migrate_sqlite_food_schema, drop_sqlite_obsolete_nutrition_columns
 from app import schemas
 from app.routers.foods import create_food
 with database.SessionLocal() as db:
+    legacy = db.query(models.Food).filter_by(name="Legacy food").one()
+    assert (legacy.fiber_per_100g, legacy.sugar_per_100g, legacy.caffeine_mg_per_100g, legacy.calories_per_100g) == (0, 0, None, 123)
+    legacy.fiber_per_100g = 4.25
+    legacy.sugar_per_100g = 12.6
+    legacy.caffeine_mg_per_100g = 32.5
+    db.commit()
     create_food(schemas.FoodCreate(name="EAN-Test", barcodes=["0012345678905", "4012345678901"], calories_per_100g=100), db)
+
+# Subsequent startup migrations must preserve the saved nutrients.
+migrate_sqlite_food_schema()
+drop_sqlite_obsolete_nutrition_columns()
+with database.SessionLocal() as db:
+    legacy = db.query(models.Food).filter_by(name="Legacy food").one()
+    assert (legacy.fiber_per_100g, legacy.sugar_per_100g, legacy.caffeine_mg_per_100g, legacy.calories_per_100g) == (4.25, 12.6, 32.5, 123)
 
 async def request(path, *, accept="application/json", username="owner", peer="172.30.32.2", authenticated=True):
     headers = {"host": "localhost", "accept": accept, "x-ingress-path": "/api/hassio_ingress/test-session/"}

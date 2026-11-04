@@ -176,6 +176,8 @@ class BarcodeTest(unittest.TestCase):
             "serving_size": "250 ml", "nutriments": {
                 "energy-kcal_100g": 46, "proteins_100g": 1.1,
                 "fat_100g": 1.5, "carbohydrates_100g": 6.8,
+                "fiber_100g": 0.75, "sugars_100g": 4.2, "caffeine_100g": 0.032,
+                "caffeine_unit": "mg", "caffeine_value": 32,
             },
         }
         with patch.object(foods, "open_food_facts_product", return_value=product) as lookup:
@@ -185,6 +187,7 @@ class BarcodeTest(unittest.TestCase):
             self.assertEqual((created.serving_size, created.serving_unit), (250, "ml"))
             self.assertEqual((created.calories_per_100g, created.protein_per_100g, created.fat_per_100g, created.carbs_per_100g), (46, 1.1, 1.5, 6.8))
             self.assertEqual(created.barcodes, [A])
+            self.assertEqual((created.fiber_per_100g, created.sugar_per_100g, created.caffeine_mg_per_100g), (0.75, 4.2, 32))
             self.assertIsNotNone(self.db.get(m.ProductUnit, created.product_unit_id))
             repeated = foods.lookup_food_by_barcode(A, self.db)
             self.assertEqual(repeated["food"].id, created.id)
@@ -194,6 +197,27 @@ class BarcodeTest(unittest.TestCase):
         self.assertEqual(self.db.query(m.MealLog).count(), 0)
         foods.update_food(created.id, s.FoodUpdate(expiry_days=7, storage_location="Vorrat"), self.db)
         self.assertEqual(self.db.get(m.Food, created.id).barcodes, [A])
+
+    def test_ean_preview_preserves_optional_values_and_refresh_keeps_missing_values(self):
+        product = {"product_name": "Test", "nutriments": {"fiber_100g": 1.25, "sugars_100g": 0}}
+        with patch.object(foods, "open_food_facts_product", return_value=product):
+            preview = s.FoodBarcodePreviewRead(**foods.preview_food_by_barcode(C, self.db))
+        self.assertEqual((preview.fiber_per_100g, preview.sugar_per_100g, preview.caffeine_mg_per_100g), (1.25, 0, None))
+        food = self.food(fiber_per_100g=2.5, sugar_per_100g=6.25, caffeine_mg_per_100g=32)
+        foods.upsert_food_from_open_food_facts(self.db, A, {"product_name": food.name})
+        self.db.commit()
+        self.assertEqual((food.fiber_per_100g, food.sugar_per_100g, food.caffeine_mg_per_100g), (2.5, 6.25, 32))
+        foods.upsert_food_from_open_food_facts(self.db, A, {"product_name": food.name, "nutriments": {
+            "fiber_100g": 0, "sugars_100g": 0, "caffeine_100g": 0,
+        }})
+        self.db.commit()
+        self.assertEqual((food.fiber_per_100g, food.sugar_per_100g, food.caffeine_mg_per_100g), (0, 0, 0))
+
+    def test_ean_skips_invalid_or_unscaled_additional_nutrients(self):
+        values = foods.additional_nutrients_from_open_food_facts({"nutriments": {
+            "fiber_100g": "NaN", "sugars_100g": "Infinity", "caffeine_value": 32, "caffeine_unit": "mg",
+        }})
+        self.assertEqual(values, {})
 
     def test_missing_ean_and_network_failure_create_no_product(self):
         with self.assertRaises(HTTPException) as caught:

@@ -195,6 +195,9 @@ def migrate_sqlite_food_schema() -> None:
         "storage_location": "ALTER TABLE foods ADD COLUMN storage_location VARCHAR(120)",
         "minimum_quantity": "ALTER TABLE foods ADD COLUMN minimum_quantity FLOAT NOT NULL DEFAULT 0",
         "barcode": "ALTER TABLE foods ADD COLUMN barcode VARCHAR(128)",
+        "fiber_per_100g": "ALTER TABLE foods ADD COLUMN fiber_per_100g FLOAT NOT NULL DEFAULT 0",
+        "sugar_per_100g": "ALTER TABLE foods ADD COLUMN sugar_per_100g FLOAT NOT NULL DEFAULT 0",
+        "caffeine_mg_per_100g": "ALTER TABLE foods ADD COLUMN caffeine_mg_per_100g FLOAT",
         "purchase_date": "ALTER TABLE foods ADD COLUMN purchase_date DATE",
         "expiry_days": "ALTER TABLE foods ADD COLUMN expiry_days INTEGER",
         "price": "ALTER TABLE foods ADD COLUMN price FLOAT",
@@ -592,15 +595,14 @@ def drop_sqlite_obsolete_nutrition_columns() -> None:
     if not DATABASE_URL.startswith("sqlite"):
         return
 
-    obsolete_columns = {
-        "fiber_per_100g",
-        "sugar_per_100g",
-        "sodium_mg_per_100g",
+    obsolete_columns_by_table = {
+        "foods": {"sodium_mg_per_100g"},
+        "inventory_items": {"fiber_per_100g", "sugar_per_100g", "sodium_mg_per_100g"},
     }
 
     with engine.begin() as connection:
         inspector = inspect(connection)
-        for table_name in ("foods", "inventory_items"):
+        for table_name, obsolete_columns in obsolete_columns_by_table.items():
             if table_name not in inspector.get_table_names():
                 continue
 
@@ -898,7 +900,7 @@ ensure_default_user()
 app = FastAPI(
     title="Heim-ERP Backend",
     description="Backend API fuer ein privates Heim-ERP mit Kalender, Vorrat, Rezepten, Mahlzeiten und Einkaufsliste.",
-    version="3.1.14",
+    version="3.1.15",
 )
 
 app.add_middleware(

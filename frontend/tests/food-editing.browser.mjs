@@ -103,6 +103,9 @@ async function screenshot(name) {
 const foodForm = ".food-editor-modal form";
 const stockForm = ".inventory-edit-modal form";
 const daysLabel = "Haltbarkeit bis Ablauf (Tage)";
+const fiberLabel = "Ballaststoffe (g / 100 g)";
+const sugarLabel = "Zucker (g / 100 g)";
+const caffeineLabel = "Koffein (mg / 100 g, optional)";
 try {
   await send("Page.enable");
   await send("Runtime.enable");
@@ -132,6 +135,10 @@ try {
     await waitFor("Array.from(document.querySelectorAll('.sidebar-master-option')).some(el => el.textContent.trim() === 'Lebensmittel')");
     await evaluate("Array.from(document.querySelectorAll('.sidebar-master-option')).find(el => el.textContent.trim() === 'Lebensmittel').click()");
     await click('[title="Lebensmittel bearbeiten"]');
+    assert.equal(await readField(foodForm, caffeineLabel), "");
+    await fill(foodForm, fiberLabel, "2.75");
+    await fill(foodForm, sugarLabel, "8.5");
+    await fill(foodForm, caffeineLabel, "32.5");
     await fill(foodForm, daysLabel, "14");
     await fill(foodForm, "Einlagerungsdatum", "2026-10-25");
     await fill(foodForm, "Name", "Z Belegt");
@@ -147,13 +154,29 @@ try {
     assert.equal(updatedFood.expiry_days, 14);
     assert.equal(updatedFood.purchase_date, "2026-10-25");
     assert.equal(updatedFood.conversions[0].quantity, 500);
+    assert.equal(updatedFood.fiber_per_100g, 2.75);
+    assert.equal(updatedFood.sugar_per_100g, 8.5);
+    assert.equal(updatedFood.caffeine_mg_per_100g, 32.5);
     await click('[title="Lebensmittel bearbeiten"]');
+    assert.equal(await readField(foodForm, fiberLabel), "2.75");
+    assert.equal(await readField(foodForm, sugarLabel), "8.5");
+    assert.equal(await readField(foodForm, caffeineLabel), "32.5");
+    await evaluate(`${field(foodForm, caffeineLabel)}.scrollIntoView({ block: 'center' })`);
+    await screenshot(`food-nutrients-${width}.png`);
+    await fill(foodForm, caffeineLabel, "0");
     assert.equal(await readField(foodForm, daysLabel), "14");
     await fill(foodForm, daysLabel, "0");
     await click(`${foodForm} button[type=submit]`);
     await waitFor(`!document.querySelector('${foodForm}')`);
     assert.equal((await request(`/foods/${food.id}`)).expiry_days, 0);
-    console.log(`PASS ${width}px food editing: conflict retains inputs, retry saves, zero days persists`);
+    assert.equal((await request(`/foods/${food.id}`)).caffeine_mg_per_100g, 0);
+    await click('[title="Lebensmittel bearbeiten"]');
+    assert.equal(await readField(foodForm, caffeineLabel), "0");
+    await fill(foodForm, caffeineLabel, "");
+    await click(`${foodForm} button[type=submit]`);
+    await waitFor(`!document.querySelector('${foodForm}')`);
+    assert.equal((await request(`/foods/${food.id}`)).caffeine_mg_per_100g, null);
+    console.log(`PASS ${width}px food editing: conflict retains inputs, retry saves, nutrients persist, caffeine zero and empty stay distinct`);
 
     await click('[title="Bestandsübersicht"]');
     await click('.stock-action.edit');
@@ -197,6 +220,9 @@ try {
     assert.equal(await readField(foodForm, 'Name'), 'EAN Testdrink');
     assert.equal(await readField(foodForm, 'Markenname (optional)'), 'EAN Testmarke');
     assert.equal(await readField(foodForm, 'Kalorien / 100g'), '46');
+    assert.equal(await readField(foodForm, fiberLabel), '0.75');
+    assert.equal(await readField(foodForm, sugarLabel), '4.2');
+    assert.equal(await readField(foodForm, caffeineLabel), '32');
     await screenshot(`ean-created-${width}.png`);
     const imported = (await request('/foods')).find(item => item.name === 'EAN Testdrink');
     assert.ok(imported);

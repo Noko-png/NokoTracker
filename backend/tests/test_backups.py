@@ -75,7 +75,8 @@ class BackupTest(unittest.TestCase):
                 models.CalendarGroup(id=1, name="Arbeit", user_id=1),
                 models.CalendarGroup(id=2, name="Urlaub", suppresses_group_ids=[1]),
                 models.Food(id=1, name="Lebensmittel", barcode="0012345678905", product_group_id=1,
-                            product_unit_id=1, expiry_days=14, is_archived=True),
+                            product_unit_id=1, expiry_days=14, is_archived=True,
+                            fiber_per_100g=4.25, sugar_per_100g=12.6, caffeine_mg_per_100g=32.5),
                 models.TrainingPlan(id=1, name="Plan", user_id=1),
             ])
             db.flush()
@@ -121,6 +122,21 @@ class BackupTest(unittest.TestCase):
         with Session(self.engine) as db:
             self.assertEqual(db.get(models.Food, 1).barcodes, ["0012345678905"])
             self.assertEqual(db.query(models.FoodBarcode).count(), 0)
+
+    def test_older_backup_without_new_nutrients_uses_safe_defaults(self):
+        source = self.root / "legacy-nutrients.db"
+        self.seed_all_tables(self.create_database(source))
+        self.execute(source, """
+            ALTER TABLE foods DROP COLUMN fiber_per_100g;
+            ALTER TABLE foods DROP COLUMN sugar_per_100g;
+            ALTER TABLE foods DROP COLUMN caffeine_mg_per_100g;
+        """)
+        self.upload(source.read_bytes())
+        with Session(self.engine) as db:
+            food = db.get(models.Food, 1)
+            self.assertEqual((food.fiber_per_100g, food.sugar_per_100g, food.caffeine_mg_per_100g), (0, 0, None))
+            self.assertEqual(food.expiry_days, 14)
+            self.assertEqual(food.barcodes, ["0012345678905", "4012345678901"])
 
     def test_older_backup_without_booking_tables_still_imports(self):
         source = self.root / "legacy.db"
