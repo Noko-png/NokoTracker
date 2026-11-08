@@ -65,3 +65,20 @@ Mit `FOOD_TEST_SCREENSHOTS` koennen Screenshots in einem vorhandenen Ordner gesp
 
 Abweichende Ports lassen sich mit `FOOD_TEST_API_URL`,
 `FOOD_TEST_FRONTEND_URL` und `FOOD_TEST_CDP_URL` setzen.
+
+## Import und Export
+
+`npm run test:database-ui` prueft echte Datei-Uploads auf Desktop- und Handybreite:
+Auswahlpflicht, Bestaetigung abbrechen, nur Gewicht ersetzen, Profildaten zuordnen,
+unveraenderte andere Bereiche, dieselbe Datei erneut auswaehlen, einzelne Rezepte
+hinzufuegen und Rezeptdateien erkennen. Die API-Fixture verwendet ausschliesslich
+eigens erzeugte temporaere SQLite-Dateien.
+
+1. Im Backend: `python -m uvicorn database_ui_fixture:app --app-dir tests --host 127.0.0.1 --port 8022`
+2. Im Frontend: `npm run dev -- --port 5182 --strictPort` mit der Standard-API-Basis.
+3. Einen separaten Headless-Chrome wie oben mit Port `9232` und eigenem Profil starten.
+4. Im Frontend: `npm run test:database-ui`
+
+Abweichende Ports: `DATABASE_TEST_API_URL`, `DATABASE_TEST_FRONTEND_URL`,
+`DATABASE_TEST_CDP_URL`. `DATABASE_TEST_SCREENSHOTS` kann auf einen vorhandenen
+Ausgabeordner zeigen. Testserver und Testbrowser anschliessend beenden.

@@ -112,7 +112,7 @@ class SecurityMiddleware:
             try:
                 if scope["method"] in {"POST", "PATCH", "PUT"}:
                     async with self.upload_slots:
-                        limit = 65 * 1024 * 1024 if path.rstrip("/") == "/database/import" else 12 * 1024 * 1024
+                        limit = 65 * 1024 * 1024 if path.rstrip("/") in {"/database/import", "/database/preview"} else 12 * 1024 * 1024
                         if path.rstrip("/") == "/imports/grocy-csv/upload":
                             limit = 33 * 1024 * 1024
                         await self.bounded_request(scope, receive, send, headers, limit)

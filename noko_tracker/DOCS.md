@@ -67,7 +67,19 @@ Die Datenbank liegt im Add-on-Datenverzeichnis:
 /data/noko_tracker.db
 ```
 
-Die Einstellungen bieten einen Browser-Export und -Import der SQLite-Datenbank. Ein Import ersetzt die aktive Datenbank und legt vorher ein Backup der bisherigen Datei im Datenverzeichnis an.
+Unter **Einstellungen > Import und Export** koennen Administratoren SQLite-Dateien herunterladen und hochladen. Nach dem Hochladen zeigt eine Vorschau die enthaltenen Datenbereiche mit Anzahl der Datensaetze und die einzelnen Rezepte. Vor jedem Import wird ein Backup der bisherigen Datenbank im Datenverzeichnis erstellt.
+
+Ab 3.1.17 gibt es drei Importmodi:
+
+- **Ausgewaehlte Datenbereiche ersetzen:** Gewicht, Training, Kalender/ToDos, Rezepte, Lebensmittel/Stammdaten, Vorrat/Belegnachweise, Mahlzeiten/Mealprep und Einkaufsliste lassen sich einzeln auswaehlen. Nur angehakte Bereiche werden ersetzt; ein leerer angehakter Bereich wird geleert. Fuer einen reinen Gewichtsimport nur **Gewichtsdaten** ankreuzen.
+- **Einzelne Rezepte hinzufuegen:** Gewuenschte Rezepte ankreuzen. Sie werden als neue Rezepte angelegt; bestehende gleichnamige Rezepte bleiben erhalten. Fehlende Zutaten und deren Stammdaten werden ergaenzt, bestehende Zutaten anhand von Name und Marke wiederverwendet.
+- **Gesamte Datenbank ersetzen:** Vollstaendige Wiederherstellung wie bisher, einschliesslich Profilen.
+
+**Gerichte > Exportieren** speichert ein einzelnes Rezept mit seinen Zutaten, Naehrwerten, EANs, Einheiten, Umrechnungen und Bild in einer eigenen `.db`-Datei. Die Datei enthaelt keine Profile, Gewichtseintraege, Mahlzeiten oder Vorratsdaten. Beim Hochladen wird sie automatisch als Rezeptdatei erkannt und kann ausschliesslich zum Hinzufuegen von Rezepten verwendet werden.
+
+Bei Teilimporten bleiben Profile, Einstellungen und HA-Zuordnungen lokal. Persoenliche Eintraege werden ueber den exakten Profilnamen zugeordnet; fehlende Profile muessen vorher angelegt werden. Gleiche numerische IDs in zwei Datenbanken bedeuten keine Profilzuordnung. Benoetigte Lebensmittel, Rezepte, Produktgruppen und Einheiten werden bei Bedarf ergaenzt; vorhandene Haushaltsstammdaten werden dabei nicht ueberschrieben. Mehrdeutige Namen oder EAN-Konflikte brechen den Import ab.
+
+Ein Teilimport darf keine bestehenden Verknuepfungen beschaedigen. Falls etwa Vorrat noch mit Mahlzeitenbuchungen oder Einkaufseintraegen verbunden ist, muessen diese Bereiche ebenfalls ausgewaehlt werden; andernfalls bleibt die Datenbank unveraendert. Buchungsnachweise werden beim gemeinsamen Import von Mahlzeiten und Vorrat samt neu zugeordneten Chargen und Momentaufnahmen uebernommen. Mahlzeiten ohne Vorrat werden mit einem Hinweis als Altbuchungen ohne automatische Bestandskorrektur importiert. Beim alleinigen Import der Einkaufsliste entfallen Verknuepfungen zu fremden Bestandschargen; Produktzuordnungen bleiben erhalten.
 
 Sicherungen enthalten keine Passwoerter oder HA-Profilzuordnungen. Beim Wiederherstellen bleiben die lokalen Zuordnungen fuer identische Profilnamen erhalten. Auf einer neuen Installation muessen sie neu vergeben werden. Alte NokoTracker-Sicherungen bleiben importierbar. Unbekannte Tabellen werden mit Hinweis ausgelassen; Trigger, Views und virtuelle Tabellen werden abgewiesen. Die Anwendung erstellt das Datenbankschema selbst und uebernimmt nur die Daten. Wiederherstellungen sperren andere Datenbankzugriffe bis zum atomaren Austausch.
 

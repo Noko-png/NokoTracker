@@ -1,5 +1,13 @@
 # Changelog
 
+## 3.1.17
+
+- Einzelne Rezepte unter Gerichte mit Zutaten, Naehrwerten, EANs, Einheiten, Umrechnungen und Bild exportieren. Aus Rezeptdateien oder vollstaendigen Sicherungen koennen einzelne Rezepte hinzugefuegt werden, ohne bestehende Rezepte oder die Datenbank zu ersetzen.
+- Neue Importvorschau mit drei Modi: einzelne Rezepte hinzufuegen, ausgewaehlte Datenbereiche ersetzen oder die gesamte Datenbank wiederherstellen. Gewicht, Training, Kalender/ToDos, Rezepte, Lebensmittel/Stammdaten, Vorrat, Mahlzeiten und Einkaufsliste sind separat waehlbar.
+- Teilimporte lassen Profile und HA-Zuordnungen lokal und ordnen persoenliche Daten anhand exakter Profilnamen zu. Fremde IDs werden neu zugeordnet; fehlende Haushaltsstammdaten werden ergaenzt. Mehrdeutige Zuordnungen, EAN-Konflikte und beschaedigte Verknuepfungen fuehren zum Abbruch ohne Datenverlust.
+- Automatische Sicherung und atomare Uebernahme gelten fuer alle Importmodi. Rezeptdateien koennen keine komplette Datenbank ersetzen. Buchungsnachweise und Kalendergruppen behalten beim gemeinsamen Import ihre Verknuepfungen.
+- Regressionstests pruefen Teilimporte, Rezeptdateien, Profilzuordnung, Buchungsnachweise, unveraenderte andere Bereiche und Administratorrechte. Browser-Tests decken echte Datei-Uploads auf Desktop und Handy ab.
+
 ## 3.1.16
 
 - Neue Seite "Test Health dashboard" fuer Administratoren: Ruft beim Oeffnen und auf Knopfdruck Schritte, Puls/Ruhepuls und Schlafdauer der HA-Companion-App ab.

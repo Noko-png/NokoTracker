@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import os
+import json
 import sqlite3
 import tempfile
 import time
@@ -8,8 +9,9 @@ import uuid
 from contextlib import closing
 from datetime import datetime
 from pathlib import Path
+from typing import Annotated, Literal
 
-from fastapi import APIRouter, File, HTTPException, UploadFile
+from fastapi import APIRouter, File, Form, HTTPException, UploadFile
 from fastapi.responses import FileResponse
 from sqlalchemy.engine import make_url
 from starlette.background import BackgroundTask
@@ -19,6 +21,7 @@ from sqlalchemy import create_engine
 from .. import models, schemas
 from ..database import DATABASE_URL, DATABASE_LOCK, engine
 from ..upload_limits import MAX_DATABASE_BYTES, copy_upload
+from ..services.database_transfer import DATA_GROUPS, DataTransfer
 
 
 router = APIRouter(prefix="/database", tags=["database"])
@@ -155,7 +158,7 @@ def validate_sqlite_database(path: Path) -> tuple[dict[str, int], list[str]]:
     except sqlite3.DatabaseError as exc:
         raise ValueError("Die hochgeladene Datei ist keine gueltige SQLite-Datenbank.") from exc
 
-    extra_tables = sorted(table_names - EXPECTED_TABLES - {"sqlite_sequence", "sqlite_stat1", "sqlite_stat4"})
+    extra_tables = sorted(table_names - EXPECTED_TABLES - {"sqlite_sequence", "sqlite_stat1", "sqlite_stat4", "noko_recipe_export"})
     warnings = ["Unbekannte Tabellen werden nicht uebernommen: " + ", ".join(extra_tables)] if extra_tables else []
     if BOOKING_TABLES - table_names:
         warnings.append("Diese aeltere Sicherung enthaelt keine vollstaendigen Buchungsnachweise. Alte Abbuchungen koennen nicht automatisch rueckgaengig gemacht werden.")
@@ -205,9 +208,7 @@ def export_database():
     )
 
 
-@router.post("/import", response_model=schemas.DatabaseImportResult)
-async def import_database(file: UploadFile = File(...)):
-    db_path = sqlite_database_path()
+async def read_database_upload(file: UploadFile, callback):
     filename = Path(file.filename or "noko-tracker-import.db").name
     if not filename.lower().endswith((".db", ".sqlite", ".sqlite3")):
         raise HTTPException(
@@ -220,13 +221,90 @@ async def import_database(file: UploadFile = File(...)):
         with tempfile.NamedTemporaryFile(delete=False, suffix=Path(filename).suffix) as handle:
             upload_path = Path(handle.name)
             await copy_upload(file, handle, MAX_DATABASE_BYTES)
-        return await run_in_threadpool(restore_database, upload_path, db_path, filename)
+        return await run_in_threadpool(callback, upload_path, filename)
     finally:
         if upload_path:
             upload_path.unlink(missing_ok=True)
 
 
-def restore_database(upload_path: Path, db_path: Path, filename: str):
+def is_recipe_export(connection):
+    return connection.execute("SELECT 1 FROM sqlite_master WHERE type='table' AND name='noko_recipe_export'").fetchone() is not None
+
+
+@router.post("/preview", response_model=schemas.DatabaseImportPreview)
+async def preview_database(file: UploadFile = File(...)):
+    def inspect(path, filename):
+        try:
+            counts, warnings = validate_sqlite_database(path)
+        except ValueError as exc:
+            raise HTTPException(422, str(exc)) from exc
+        with closing(sqlite3.connect(f"{path.resolve().as_uri()}?mode=ro", uri=True)) as source:
+            return schemas.DatabaseImportPreview(
+                filename=filename,
+                recipe_bundle=is_recipe_export(source),
+                groups=[schemas.DatabaseImportGroup(key=key, label=label, rows=sum(counts.get(table, 0) for table in tables)) for key, (label, tables) in DATA_GROUPS.items()],
+                recipes=[schemas.DatabaseRecipePreview(id=row[0], name=row[1]) for row in source.execute("SELECT id,name FROM recipes ORDER BY name,id")],
+                warnings=warnings,
+            )
+    return await read_database_upload(file, inspect)
+
+
+def parse_selection(raw: str, item_type):
+    try:
+        value = json.loads(raw)
+        if not isinstance(value, list) or any(type(item) is not item_type for item in value):
+            raise ValueError()
+        return list(dict.fromkeys(value))
+    except (ValueError, TypeError) as exc:
+        raise HTTPException(422, "Ungueltige Importauswahl.") from exc
+
+
+@router.post("/import", response_model=schemas.DatabaseImportResult)
+async def import_database(
+    file: UploadFile = File(...),
+    mode: Annotated[Literal["full", "selected", "recipes"], Form()] = "full",
+    groups: Annotated[str, Form()] = "[]",
+    recipe_ids: Annotated[str, Form()] = "[]",
+):
+    selected_groups = parse_selection(groups, str)
+    selected_recipes = parse_selection(recipe_ids, int)
+    if mode not in {"full", "selected", "recipes"}:
+        raise HTTPException(422, "Unbekannter Importmodus.")
+    if mode == "selected" and (not selected_groups or set(selected_groups) - DATA_GROUPS.keys()):
+        raise HTTPException(422, "Bitte gueltige Datenbereiche zum Ersetzen auswaehlen.")
+    if mode == "recipes" and (not selected_recipes or any(value <= 0 for value in selected_recipes)):
+        raise HTTPException(422, "Bitte mindestens ein Rezept auswaehlen.")
+    db_path = sqlite_database_path()
+    return await read_database_upload(file, lambda path, filename: restore_database(
+        path, db_path, filename, mode=mode, groups=selected_groups, recipe_ids=selected_recipes,
+    ))
+
+
+@router.get("/recipes/{recipe_id}/export")
+def export_recipe(recipe_id: int):
+    db_path = sqlite_database_path()
+    with tempfile.NamedTemporaryFile(delete=False, suffix=".db") as handle:
+        path = Path(handle.name)
+    temporary_engine = create_engine("sqlite:///" + path.as_posix())
+    try:
+        models.Base.metadata.create_all(temporary_engine)
+        temporary_engine.dispose()
+        with DATABASE_LOCK, closing(sqlite3.connect(f"{db_path.as_uri()}?mode=ro", uri=True)) as source, closing(sqlite3.connect(path)) as target:
+            transfer = DataTransfer(source, target, recipe_only=True)
+            transfer.add_recipes([recipe_id])
+            target.execute("CREATE TABLE noko_recipe_export (version INTEGER NOT NULL)")
+            target.execute("INSERT INTO noko_recipe_export VALUES (1)")
+            target.commit()
+    except (ValueError, sqlite3.DatabaseError) as exc:
+        path.unlink(missing_ok=True)
+        raise HTTPException(422, "Rezept konnte nicht exportiert werden: " + str(exc)) from exc
+    finally:
+        temporary_engine.dispose()
+    return FileResponse(path, filename=f"noko-rezept-{recipe_id}.db", media_type="application/vnd.sqlite3",
+                        background=BackgroundTask(lambda: path.unlink(missing_ok=True)))
+
+
+def restore_database(upload_path: Path, db_path: Path, filename: str, *, mode="full", groups=None, recipe_ids=None):
     try:
         table_counts, warnings = validate_sqlite_database(upload_path)
     except ValueError as exc:
@@ -241,6 +319,31 @@ def restore_database(upload_path: Path, db_path: Path, filename: str):
         models.Base.metadata.create_all(clean_engine)
         clean_engine.dispose()
         with DATABASE_LOCK:
+            if mode != "full":
+                backup_sqlite_database(db_path, clean_path)
+                with closing(sqlite3.connect(f"{upload_path.resolve().as_uri()}?mode=ro", uri=True)) as source, closing(sqlite3.connect(clean_path)) as target:
+                    source.setlimit(sqlite3.SQLITE_LIMIT_LENGTH, MAX_SQLITE_VALUE_BYTES)
+                    source.execute("PRAGMA trusted_schema=OFF")
+                    if is_recipe_export(source) and mode != "recipes":
+                        raise ValueError("Eine Rezeptdatei kann nur zum Hinzufuegen von Rezepten verwendet werden.")
+                    transfer = DataTransfer(source, target, recipe_only=mode == "recipes")
+                    if mode == "recipes":
+                        transfer.add_recipes(recipe_ids)
+                    else:
+                        transfer.replace_groups(groups)
+                    target.commit()
+                    table_counts = dict(transfer.counts)
+                    warnings += transfer.warnings
+                engine.dispose()
+                backup_sqlite_database(db_path, backup_path)
+                remove_sqlite_sidecars(db_path)
+                os.replace(clean_path, db_path)
+                engine.dispose()
+                return schemas.DatabaseImportResult(
+                    filename=filename, backup_path=str(backup_path), imported_tables=table_counts,
+                    message="Ausgewaehlte Rezepte hinzugefuegt." if mode == "recipes" else "Ausgewaehlte Datenbereiche ersetzt.",
+                    training_rows=sum(table_counts.get(table, 0) for table in TRAINING_TABLES), warnings=warnings,
+                )
             bindings = {}
             if db_path.exists():
                 with closing(sqlite3.connect(db_path)) as current:
@@ -248,6 +351,8 @@ def restore_database(upload_path: Path, db_path: Path, filename: str):
             source = sqlite3.connect(f"{upload_path.resolve().as_uri()}?mode=ro", uri=True)
             target = sqlite3.connect(clean_path)
             try:
+                if is_recipe_export(source):
+                    raise ValueError("Eine Rezeptdatei kann nur zum Hinzufuegen von Rezepten verwendet werden.")
                 source.setlimit(sqlite3.SQLITE_LIMIT_LENGTH, MAX_SQLITE_VALUE_BYTES)
                 source.execute("PRAGMA trusted_schema=OFF")
                 target.execute("PRAGMA foreign_keys=ON")
@@ -278,6 +383,8 @@ def restore_database(upload_path: Path, db_path: Path, filename: str):
             engine.dispose()
     except sqlite3.IntegrityError as exc:
         raise HTTPException(422, "Die Sicherung verletzt Datenregeln. Die bisherige Datenbank bleibt erhalten.") from exc
+    except (ValueError, TypeError, KeyError) as exc:
+        raise HTTPException(422, str(exc)) from exc
     except (OSError, sqlite3.DatabaseError) as exc:
         raise HTTPException(status_code=500, detail="Datenbank konnte nicht importiert werden.") from exc
     finally:

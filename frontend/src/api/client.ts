@@ -687,6 +687,20 @@ export type DatabaseImportResult = {
   warnings: string[];
 };
 
+export type DatabaseImportOptions = {
+  mode: "full" | "selected" | "recipes";
+  groups: string[];
+  recipe_ids: number[];
+};
+
+export type DatabaseImportPreview = {
+  filename: string;
+  recipe_bundle: boolean;
+  groups: { key: string; label: string; rows: number }[];
+  recipes: { id: number; name: string }[];
+  warnings: string[];
+};
+
 export type ReceiptImportStatus = "ready" | "needs_review" | "ignored";
 
 export type ReceiptFoodSuggestion = {
@@ -1301,8 +1315,8 @@ export function importGrocyCsvUpload(files: File[], dryRun = false) {
   });
 }
 
-export async function exportDatabaseBackup() {
-  const response = await fetch(apiUrl("/database/export"));
+export async function exportDatabaseBackup(recipeId?: number) {
+  const response = await fetch(apiUrl(recipeId === undefined ? "/database/export" : `/database/recipes/${recipeId}/export`));
   if (!response.ok) {
     let message = `${response.status} ${response.statusText}`;
     try {
@@ -1319,9 +1333,18 @@ export async function exportDatabaseBackup() {
   return response.blob();
 }
 
-export function importDatabaseBackup(file: File) {
+export function previewDatabaseBackup(file: File) {
   const body = new FormData();
   body.set("file", file);
+  return request<DatabaseImportPreview>("/database/preview", { method: "POST", body });
+}
+
+export function importDatabaseBackup(file: File, options: DatabaseImportOptions) {
+  const body = new FormData();
+  body.set("file", file);
+  body.set("mode", options.mode);
+  body.set("groups", JSON.stringify(options.groups));
+  body.set("recipe_ids", JSON.stringify(options.recipe_ids));
 
   return request<DatabaseImportResult>("/database/import", {
     method: "POST",

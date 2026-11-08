@@ -1,4 +1,5 @@
 import { addFoodBarcode, foodBarcodes, foodMatchesSearch, normalizeBarcodes } from "./barcodes";
+import { DatabaseImportForm } from "./DatabaseImportForm";
 import {
   formatFractionalQuantity,
   normalizeFractionalQuantityValue,
@@ -61,6 +62,7 @@ import {
   type CalendarGroupCreate,
   type CsvImportResult,
   type DatabaseImportResult,
+  type DatabaseImportOptions,
   type DashboardSummary,
   type Food,
   type FoodBarcodeLookup,
@@ -562,7 +564,7 @@ const macroMeta: Array<{
   { key: "carbs", label: "Kohlenhydrate", unit: "g", tone: "red" },
 ];
 
-const appVersion = "3.1.16";
+const appVersion = "3.1.17";
 const updateSourceLabel = "main / github.com/Noko-png/NokoTracker";
 
 const emptyNutrition: NutritionDay = {
@@ -3759,20 +3761,20 @@ export default function App() {
     }
   }
 
-  async function downloadDatabaseBackup() {
+  async function downloadDatabaseBackup(recipe?: Recipe) {
     try {
       setApiError(null);
       setDatabaseTransferRunning(true);
-      const blob = await exportDatabaseBackup();
+      const blob = await exportDatabaseBackup(recipe?.id);
       const url = URL.createObjectURL(blob);
       const link = document.createElement("a");
       link.href = url;
-      link.download = `noko-tracker-${getLocalDate()}.db`;
+      link.download = recipe ? `noko-rezept-${recipe.id}.db` : `noko-tracker-${getLocalDate()}.db`;
       document.body.append(link);
       link.click();
       link.remove();
       URL.revokeObjectURL(url);
-      setDatabaseTransferMessage("Datenbank-Download gestartet.");
+      setDatabaseTransferMessage(recipe ? "Rezept-Download gestartet." : "Datenbank-Download gestartet.");
     } catch (error) {
       setApiError(error instanceof Error ? error.message : "API-Fehler");
     } finally {
@@ -3780,7 +3782,7 @@ export default function App() {
     }
   }
 
-  async function submitDatabaseImport(event: FormEvent) {
+  async function submitDatabaseImport(event: FormEvent, options: DatabaseImportOptions) {
     event.preventDefault();
     if (!databaseImportFile) {
       setApiError("Bitte eine Datenbankdatei auswaehlen.");
@@ -3788,7 +3790,11 @@ export default function App() {
     }
     if (
       !window.confirm(
-        "Die aktuelle Datenbank wird ersetzt. Vorher wird automatisch ein Backup erstellt. Fortfahren?",
+        options.mode === "recipes"
+          ? `${options.recipe_ids.length} Rezept(e) als neue Rezepte hinzufuegen? Vorher wird automatisch ein Backup erstellt.`
+          : options.mode === "selected"
+            ? `${options.groups.length} ausgewaehlte(r) Datenbereich(e) werden ersetzt. Nicht ausgewaehlte Bereiche bleiben erhalten; benoetigte Stammdaten werden gegebenenfalls ergaenzt. Vorher wird ein Backup erstellt. Fortfahren?`
+            : "Die gesamte aktuelle Datenbank wird ersetzt. Vorher wird automatisch ein Backup erstellt. Fortfahren?",
       )
     ) {
       return;
@@ -3797,7 +3803,7 @@ export default function App() {
     try {
       setApiError(null);
       setDatabaseTransferRunning(true);
-      const result = await importDatabaseBackup(databaseImportFile);
+      const result = await importDatabaseBackup(databaseImportFile, options);
       setDatabaseTransferResult(result);
       setDatabaseTransferMessage(result.message);
       setDatabaseImportFile(null);
@@ -4255,6 +4261,12 @@ export default function App() {
             onCloseEditor={closeRecipeEditor}
             onCreateRecipe={startCreatingRecipe}
             onEditRecipe={startEditingRecipe}
+            onExportRecipe={session.is_admin ? downloadDatabaseBackup : undefined}
+            onImportRecipes={session.is_admin ? () => {
+              setActivePage("settings");
+              requestAnimationFrame(() => document.getElementById("database-transfer")?.scrollIntoView({ behavior: "smooth", block: "start" }));
+            } : undefined}
+            transferBusy={databaseTransferRunning}
             onFormChange={setRecipeForm}
             onIngredientAmountChange={updateRecipeIngredientAmount}
             onIngredientFormChange={updateRecipeIngredientForm}
@@ -4360,7 +4372,7 @@ export default function App() {
             onCancelEditing={cancelEditingUser}
             onCsvImportFormChange={setCsvImportForm}
             onCsvImportSubmit={submitCsvImport}
-            onDatabaseExport={downloadDatabaseBackup}
+            onDatabaseExport={() => void downloadDatabaseBackup()}
             onDatabaseImportFileChange={setDatabaseImportFile}
             onDatabaseImportSubmit={submitDatabaseImport}
             onDelete={removeUser}
@@ -10485,6 +10497,9 @@ function RecipesPage({
   onDeletePendingIngredient,
   onDeleteRecipe,
   onEditRecipe,
+  onExportRecipe,
+  onImportRecipes,
+  transferBusy,
   onFormChange,
   onIngredientAmountChange,
   onIngredientFormChange,
@@ -10515,6 +10530,9 @@ function RecipesPage({
   onDeletePendingIngredient: (tempId: string) => void;
   onDeleteRecipe: (recipeId: number) => void;
   onEditRecipe: (recipe: Recipe) => void;
+  onExportRecipe?: (recipe: Recipe) => void;
+  onImportRecipes?: () => void;
+  transferBusy: boolean;
   onFormChange: (value: RecipeForm) => void;
   onIngredientAmountChange: (
     ingredient: RecipeIngredient,
@@ -11458,6 +11476,12 @@ function RecipesPage({
             </p>
             <h2>Gerichte</h2>
           </div>
+          {onImportRecipes && (
+            <button className="button secondary" onClick={onImportRecipes} type="button">
+              <Upload size={16} />
+              Rezepte importieren
+            </button>
+          )}
           <button className="button primary" onClick={onCreateRecipe} type="button">
             <Plus size={16} />
             Gericht erstellen
@@ -11530,6 +11554,18 @@ function RecipesPage({
                       )}
                     </div>
                     <div className="recipe-actions">
+                      {onExportRecipe && (
+                        <button
+                          className="button secondary"
+                          disabled={transferBusy}
+                          onClick={() => onExportRecipe(recipe)}
+                          type="button"
+                          title="Einzelnes Rezept mit Zutaten exportieren"
+                        >
+                          <Download size={16} />
+                          Exportieren
+                        </button>
+                      )}
                       <button
                         className="button secondary recipe-edit-button"
                         onClick={() => onEditRecipe(recipe)}
@@ -13743,7 +13779,7 @@ function SettingsPage({
   onCsvImportSubmit: (event: FormEvent) => void;
   onDatabaseExport: () => void;
   onDatabaseImportFileChange: (value: File | null) => void;
-  onDatabaseImportSubmit: (event: FormEvent) => void;
+  onDatabaseImportSubmit: (event: FormEvent, options: DatabaseImportOptions) => void;
   onDelete: (user: User) => void;
   onEdit: (user: User) => void;
   onFormChange: (value: UserForm) => void;
@@ -13976,8 +14012,8 @@ function SettingsPage({
           </form>
         </Panel>
 
-        <Panel title="Datenbank sichern">
-          <div className="settings-import-form">
+        <Panel title="Import und Export">
+          <div className="settings-import-form" id="database-transfer">
             <button
               className="button secondary full"
               disabled={databaseTransferRunning}
@@ -13988,27 +14024,12 @@ function SettingsPage({
               Datenbank herunterladen
             </button>
 
-            <form className="settings-import-form compact" onSubmit={onDatabaseImportSubmit}>
-              <label className="file-field">
-                <span>Datenbank hochladen</span>
-                <input
-                  accept=".db,.sqlite,.sqlite3"
-                  onChange={(event) =>
-                    onDatabaseImportFileChange(event.target.files?.[0] ?? null)
-                  }
-                  type="file"
-                />
-                <strong>{databaseImportFile?.name ?? "Keine Datei ausgewaehlt"}</strong>
-              </label>
-              <button
-                className="button danger full"
-                disabled={databaseTransferRunning || !databaseImportFile}
-                type="submit"
-              >
-                <Upload size={16} />
-                Datenbank importieren
-              </button>
-            </form>
+            <DatabaseImportForm
+              file={databaseImportFile}
+              busy={databaseTransferRunning}
+              onFileChange={onDatabaseImportFileChange}
+              onSubmit={onDatabaseImportSubmit}
+            />
 
             {(databaseTransferMessage || databaseTransferResult) && (
               <div className="database-transfer-result">

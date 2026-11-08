@@ -163,6 +163,7 @@ class SecurityTest(unittest.TestCase):
         for method, path, body in [
             ("POST", "/users", {"username": "C"}), ("DELETE", "/users/2", None),
             ("POST", "/database/import", None), ("GET", "/database/export", None),
+            ("POST", "/database/preview", None), ("GET", "/database/recipes/1/export", None),
             ("POST", "/imports/grocy-csv/upload", None),
             ("PATCH", "/users/1", {"home_assistant_user_id": "ha-attacker"}),
         ]:

@@ -92,6 +92,14 @@ Die Testansicht speichert keine Messwerte, ordnet sie keinem Profil zu und ist n
 
 ## Import und Export
 
-In den Einstellungen kannst du die NokoTracker-Datenbank als SQLite-Datei herunterladen oder eine vorhandene `.db`/`.sqlite`-Datei hochladen. Beim Import wird die bestehende Datenbank vorher automatisch als Backup gesichert.
+Administratoren koennen unter **Einstellungen > Import und Export** die Datenbank als SQLite-Datei herunterladen oder eine `.db`-, `.sqlite`- oder `.sqlite3`-Datei hochladen. Nach der Dateipruefung stehen drei Importmodi zur Wahl:
+
+- **Ausgewaehlte Datenbereiche ersetzen:** Gewicht, Training, Kalender/ToDos, Rezepte, Lebensmittel/Stammdaten, Vorrat/Belegnachweise, Mahlzeiten/Mealprep und Einkaufsliste einzeln ankreuzen. Beispielsweise ersetzt nur **Gewichtsdaten** saemtliche Gewichtseintraege; die anderen Bereiche bleiben erhalten. Ein ausgewaehlter leerer Bereich wird geleert.
+- **Einzelne Rezepte hinzufuegen:** Rezepte aus der Datei auswaehlen und als neue Rezepte ergaenzen. Bestehende, auch gleichnamige Rezepte bleiben erhalten. Unter **Gerichte > Exportieren** laesst sich jedes Rezept einzeln mit Zutaten, Einheiten, Umrechnungen, EANs, Naehrwerten und Bild exportieren. Eine solche Rezeptdatei kann keine ganze Datenbank ersetzen.
+- **Gesamte Datenbank ersetzen:** Vollstaendige Wiederherstellung wie bisher.
+
+Teilimporte ordnen Profile ueber den exakten Profilnamen zu, niemals ueber zufaellig gleiche IDs. Fehlende Profile vorher anlegen; Einstellungen und HA-Zuordnungen bleiben lokal. Benoetigte Haushaltsdaten werden bei Bedarf ergaenzt. Vorhandene Lebensmittel werden anhand von Name und Marke, benoetigte Rezepte anhand eindeutiger Namen zugeordnet und dabei nicht ueberschrieben. Mehrdeutige Zuordnungen und EAN-Konflikte brechen den Import ab.
+
+Kann ein Bereich wegen Verknuepfungen zu anderen Daten nicht allein ersetzt werden, bricht der Import ohne Aenderung ab; die verbundenen Bereiche muessen gemeinsam ausgewaehlt werden. Vorratsabbuchungen lassen sich nur zusammen mit dem Vorrat vollstaendig wiederherstellen. Beim Mahlzeitenimport ohne Vorrat bleiben Abbuchungen als Altbuchungen ohne automatische Rueckbuchung erhalten. Vor jedem Import wird die aktuelle Datenbank automatisch gesichert; die Uebernahme erfolgt erst nach erfolgreicher Pruefung.
 
 Der Grocy-Import kann weiterhin einen Serverordner lesen und zusaetzlich direkt im Browser CSV-Dateien oder ein ZIP-Archiv aus deinem PC hochladen.

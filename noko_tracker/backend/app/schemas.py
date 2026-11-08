@@ -1257,6 +1257,25 @@ class CsvImportResult(BaseModel):
     warnings: list[str] = Field(default_factory=list)
 
 
+class DatabaseImportGroup(BaseModel):
+    key: str
+    label: str
+    rows: int
+
+
+class DatabaseRecipePreview(BaseModel):
+    id: int
+    name: str
+
+
+class DatabaseImportPreview(BaseModel):
+    filename: str
+    recipe_bundle: bool = False
+    groups: list[DatabaseImportGroup]
+    recipes: list[DatabaseRecipePreview]
+    warnings: list[str] = Field(default_factory=list)
+
+
 class DatabaseImportResult(BaseModel):
     filename: str
     backup_path: Optional[str] = None
