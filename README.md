@@ -92,10 +92,9 @@ Die Testansicht speichert keine Messwerte, ordnet sie keinem Profil zu und ist n
 
 ## Import und Export
 
-Administratoren koennen unter **Einstellungen > Import und Export** die Datenbank als SQLite-Datei herunterladen oder eine `.db`-, `.sqlite`- oder `.sqlite3`-Datei hochladen. Nach der Dateipruefung stehen drei Importmodi zur Wahl:
+Administratoren koennen unter **Einstellungen > Import und Export** die Datenbank als SQLite-Datei herunterladen oder eine `.db`-, `.sqlite`- oder `.sqlite3`-Datei hochladen. Nach der Dateipruefung stehen zwei Importmodi zur Wahl:
 
 - **Ausgewaehlte Datenbereiche ersetzen:** Gewicht, Training, Kalender/ToDos, Rezepte, Lebensmittel/Stammdaten, Vorrat/Belegnachweise, Mahlzeiten/Mealprep und Einkaufsliste einzeln ankreuzen. Beispielsweise ersetzt nur **Gewichtsdaten** saemtliche Gewichtseintraege; die anderen Bereiche bleiben erhalten. Ein ausgewaehlter leerer Bereich wird geleert.
-- **Einzelne Rezepte hinzufuegen:** Rezepte aus der Datei auswaehlen und als neue Rezepte ergaenzen. Bestehende, auch gleichnamige Rezepte bleiben erhalten. Unter **Gerichte > Exportieren** laesst sich jedes Rezept einzeln mit Zutaten, Einheiten, Umrechnungen, EANs, Naehrwerten und Bild exportieren. Eine solche Rezeptdatei kann keine ganze Datenbank ersetzen.
 - **Gesamte Datenbank ersetzen:** Vollstaendige Wiederherstellung wie bisher.
 
 Teilimporte ordnen Profile ueber den exakten Profilnamen zu, niemals ueber zufaellig gleiche IDs. Fehlende Profile vorher anlegen; Einstellungen und HA-Zuordnungen bleiben lokal. Benoetigte Haushaltsdaten werden bei Bedarf ergaenzt. Vorhandene Lebensmittel werden anhand von Name und Marke, benoetigte Rezepte anhand eindeutiger Namen zugeordnet und dabei nicht ueberschrieben. Mehrdeutige Zuordnungen und EAN-Konflikte brechen den Import ab.
@@ -103,3 +102,11 @@ Teilimporte ordnen Profile ueber den exakten Profilnamen zu, niemals ueber zufae
 Kann ein Bereich wegen Verknuepfungen zu anderen Daten nicht allein ersetzt werden, bricht der Import ohne Aenderung ab; die verbundenen Bereiche muessen gemeinsam ausgewaehlt werden. Vorratsabbuchungen lassen sich nur zusammen mit dem Vorrat vollstaendig wiederherstellen. Beim Mahlzeitenimport ohne Vorrat bleiben Abbuchungen als Altbuchungen ohne automatische Rueckbuchung erhalten. Vor jedem Import wird die aktuelle Datenbank automatisch gesichert; die Uebernahme erfolgt erst nach erfolgreicher Pruefung.
 
 Der Grocy-Import kann weiterhin einen Serverordner lesen und zusaetzlich direkt im Browser CSV-Dateien oder ein ZIP-Archiv aus deinem PC hochladen.
+
+## Rezepte importieren, exportieren und duplizieren
+
+Die Rezeptfunktionen sind ab 3.1.18 direkt unter **Gerichte** erreichbar und vom allgemeinen Datenbankimport getrennt. **Rezepte importieren** oeffnet einen eigenen Dialog: Eine Rezeptdatei oder vollstaendige Datenbanksicherung laden, gewuenschte Rezepte auswaehlen und hinzufuegen. Bestehende, auch gleichnamige Rezepte bleiben erhalten. Benoetigte Zutaten werden ergaenzt oder anhand von Name und Marke zugeordnet. Rezeptdateien koennen nicht im allgemeinen Datenbankdialog importiert werden.
+
+Im **Drei-Punkte-Menue** neben jedem Rezept stehen **Duplizieren** und fuer Administratoren **Exportieren** zur Verfuegung. Der Export enthaelt das einzelne Rezept mit Zutaten, Einheiten, Umrechnungen, EANs, Naehrwerten und Bild; persoenliche Daten und Vorrat werden nicht exportiert.
+
+**Duplizieren** legt sofort ein eigenes Rezept mit dem Zusatz **(Kopie)** an und oeffnet es im Bearbeitungsmodus. Name, Anleitung, Bild, Tags, Portionen, Zeiten und Zutatenmengen werden uebernommen. Die Zutaten verweisen weiterhin auf vorhandene Lebensmittel; Zutatenzeilen und das Lebensmittel fuer zubereitete Portionen gehoeren der Kopie. So kann die Kopie beispielsweise in **v2** umbenannt und angepasst werden, waehrend das Original erhalten bleibt. Auch beim Abbrechen der Bearbeitung bleibt die bereits angelegte Kopie bestehen.

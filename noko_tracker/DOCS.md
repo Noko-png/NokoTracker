@@ -67,15 +67,18 @@ Die Datenbank liegt im Add-on-Datenverzeichnis:
 /data/noko_tracker.db
 ```
 
-Unter **Einstellungen > Import und Export** koennen Administratoren SQLite-Dateien herunterladen und hochladen. Nach dem Hochladen zeigt eine Vorschau die enthaltenen Datenbereiche mit Anzahl der Datensaetze und die einzelnen Rezepte. Vor jedem Import wird ein Backup der bisherigen Datenbank im Datenverzeichnis erstellt.
+Unter **Einstellungen > Import und Export** koennen Administratoren SQLite-Dateien herunterladen und hochladen. Nach dem Hochladen zeigt eine Vorschau die enthaltenen Datenbereiche mit Anzahl der Datensaetze. Vor jedem Import wird ein Backup der bisherigen Datenbank im Datenverzeichnis erstellt.
 
-Ab 3.1.17 gibt es drei Importmodi:
+Seit 3.1.18 behandelt dieser Dialog ausschliesslich Datenbanksicherungen und bietet zwei Importmodi:
 
 - **Ausgewaehlte Datenbereiche ersetzen:** Gewicht, Training, Kalender/ToDos, Rezepte, Lebensmittel/Stammdaten, Vorrat/Belegnachweise, Mahlzeiten/Mealprep und Einkaufsliste lassen sich einzeln auswaehlen. Nur angehakte Bereiche werden ersetzt; ein leerer angehakter Bereich wird geleert. Fuer einen reinen Gewichtsimport nur **Gewichtsdaten** ankreuzen.
-- **Einzelne Rezepte hinzufuegen:** Gewuenschte Rezepte ankreuzen. Sie werden als neue Rezepte angelegt; bestehende gleichnamige Rezepte bleiben erhalten. Fehlende Zutaten und deren Stammdaten werden ergaenzt, bestehende Zutaten anhand von Name und Marke wiederverwendet.
 - **Gesamte Datenbank ersetzen:** Vollstaendige Wiederherstellung wie bisher, einschliesslich Profilen.
 
-**Gerichte > Exportieren** speichert ein einzelnes Rezept mit seinen Zutaten, Naehrwerten, EANs, Einheiten, Umrechnungen und Bild in einer eigenen `.db`-Datei. Die Datei enthaelt keine Profile, Gewichtseintraege, Mahlzeiten oder Vorratsdaten. Beim Hochladen wird sie automatisch als Rezeptdatei erkannt und kann ausschliesslich zum Hinzufuegen von Rezepten verwendet werden.
+**Gerichte > Rezepte importieren** oeffnet einen eigenen Dialog fuer Rezeptdateien und einzelne Rezepte aus vollstaendigen Sicherungen. Gewuenschte Rezepte ankreuzen und als neue Rezepte hinzufuegen; bestehende gleichnamige Rezepte bleiben erhalten. Fehlende Zutaten und deren Stammdaten werden ergaenzt, vorhandene Zutaten anhand von Name und Marke wiederverwendet. Vor der Uebernahme wird automatisch eine Sicherung erstellt. Import und Export bleiben Administratoren vorbehalten.
+
+**Gerichte > Drei-Punkte-Menue > Exportieren** speichert ein einzelnes Rezept mit seinen Zutaten, Naehrwerten, EANs, Einheiten, Umrechnungen und Bild in einer eigenen `.db`-Datei. Die Datei enthaelt keine Profile, Gewichtseintraege, Mahlzeiten oder Vorratsdaten. Rezeptdateien werden ausschliesslich im separaten Rezeptdialog geladen; der allgemeine Datenbankdialog verweist auf diesen Bereich.
+
+**Gerichte > Drei-Punkte-Menue > Duplizieren** legt eine aktive Kopie mit eigenem Namen an und oeffnet sofort deren Bearbeitungsansicht. Anleitung, Bild, Beschreibung, Tags, Portionen, Zeiten und Zutatenmengen werden uebernommen. Die Zutaten nutzen dieselben Lebensmittel, haben aber eigene Zutatenzeilen. Das Produkt fuer zubereitete Portionen wird ebenfalls neu angelegt. Aenderungen an der Kopie veraendern das Original nicht; Bestand und Mahlzeiten werden nicht kopiert. Wiederholtes Duplizieren erzeugt weitere eindeutige Kopien. Auch normale Nutzer koennen gemeinsame Rezepte fuer eigene Varianten duplizieren. Die Kopie ist bereits beim Oeffnen gespeichert und bleibt auch nach Abbrechen der Bearbeitung erhalten.
 
 Bei Teilimporten bleiben Profile, Einstellungen und HA-Zuordnungen lokal. Persoenliche Eintraege werden ueber den exakten Profilnamen zugeordnet; fehlende Profile muessen vorher angelegt werden. Gleiche numerische IDs in zwei Datenbanken bedeuten keine Profilzuordnung. Benoetigte Lebensmittel, Rezepte, Produktgruppen und Einheiten werden bei Bedarf ergaenzt; vorhandene Haushaltsstammdaten werden dabei nicht ueberschrieben. Mehrdeutige Namen oder EAN-Konflikte brechen den Import ab.
 

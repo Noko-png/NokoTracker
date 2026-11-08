@@ -8,6 +8,7 @@ from sqlalchemy.orm import Session
 
 from .. import crud, models, schemas
 from ..database import get_db
+from ..security import current_principal
 from ..services import nutrition_service, stock_booking_service as stock
 
 
@@ -316,12 +317,57 @@ def list_recipes(
     query = db.query(models.Recipe)
     if not include_archived:
         query = query.filter(models.Recipe.is_archived.is_(False))
-    return query.offset(skip).limit(limit).all()
+    return query.order_by(models.Recipe.id).offset(skip).limit(limit).all()
 
 
 @router.get("/{recipe_id}", response_model=schemas.RecipeRead)
 def read_recipe(recipe_id: int, db: Session = Depends(get_db)):
     return get_recipe_or_404(db, recipe_id)
+
+
+@router.post("/{recipe_id}/duplicate", response_model=schemas.RecipeRead, status_code=status.HTTP_201_CREATED)
+def duplicate_recipe(recipe_id: int, db: Session = Depends(get_db)):
+    source = get_recipe_or_404(db, recipe_id)
+    # A distinct name also keeps the prepared product independent from the
+    # source and from products left behind by archived/deleted recipes.
+    names = {name.casefold() for name, in db.query(models.Recipe.name)}
+    names.update(name.casefold() for name, in db.query(models.Food.name).filter(
+        func.lower(models.Food.brand) == "zubereitet"
+    ))
+    number = 1
+    while True:
+        suffix = " (Kopie)" if number == 1 else f" (Kopie {number})"
+        name = source.name[:200 - len(suffix)] + suffix
+        if name.casefold() not in names:
+            break
+        number += 1
+    principal = current_principal.get()
+    author_id = principal.user_id if principal and principal.user_id is not None else source.created_by_user_id
+    duplicate = models.Recipe(
+        name=name, emoji=source.emoji, description=source.description,
+        instructions=source.instructions, tags=list(source.tags), image_path=source.image_path,
+        servings=source.servings, prep_time_minutes=source.prep_time_minutes,
+        cook_time_minutes=source.cook_time_minutes, created_by_user_id=author_id,
+        is_archived=False,
+        ingredients=[models.RecipeIngredient(
+            food_id=ingredient.food_id, quantity=ingredient.quantity,
+            unit=ingredient.unit, notes=ingredient.notes,
+        ) for ingredient in source.ingredients],
+    )
+    try:
+        db.add(duplicate)
+        db.flush()
+        unit = crud.get_or_create_product_unit(db, "Portion")
+        recipe_prepared_food(db, duplicate, unit)
+        db.commit()
+        db.refresh(duplicate)
+        return duplicate
+    except IntegrityError as exc:
+        db.rollback()
+        raise HTTPException(409, "Rezept konnte nicht dupliziert werden.") from exc
+    except Exception:
+        db.rollback()
+        raise
 
 
 @router.patch("/{recipe_id}", response_model=schemas.RecipeRead)

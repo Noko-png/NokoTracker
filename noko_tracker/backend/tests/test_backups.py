@@ -15,7 +15,7 @@ from sqlalchemy.orm import Session
 
 from app import models
 from app.database import Base
-from app.routers import backups, meals
+from app.routers import backups, meals, recipe_transfers
 
 
 class BackupTest(unittest.TestCase):
@@ -58,16 +58,18 @@ class BackupTest(unittest.TestCase):
         async def run():
             file = UploadFile(filename="restore.db", file=io.BytesIO(content))
             try:
+                if options.get("mode") == "recipes":
+                    return await recipe_transfers.import_recipes(file, recipe_ids=options.get("recipe_ids", "[]"))
                 return await backups.import_database(file, **options)
             finally:
                 await file.close()
         return asyncio.run(run())
 
-    def preview(self, content):
+    def preview(self, content, *, recipes=False):
         async def run():
             file = UploadFile(filename="preview.db", file=io.BytesIO(content))
             try:
-                return await backups.preview_database(file)
+                return await (recipe_transfers.preview_recipes(file) if recipes else backups.preview_database(file))
             finally:
                 await file.close()
         return asyncio.run(run())
@@ -86,14 +88,16 @@ class BackupTest(unittest.TestCase):
             db.add(models.User(id=42, username="Test", password="!", home_assistant_user_id="trusted"))
             db.commit()
 
-    def test_preview_is_read_only_and_lists_groups_and_recipes(self):
+    def test_previews_are_separate_and_read_only(self):
         source = self.source_with_data()
         before = self.target.read_bytes()
         preview = self.preview(source.read_bytes())
-        self.assertFalse(preview.recipe_bundle)
         self.assertEqual({group.key for group in preview.groups}, set(backups.DATA_GROUPS))
         self.assertEqual(next(group.rows for group in preview.groups if group.key == "weight"), 1)
-        self.assertEqual([(recipe.id, recipe.name) for recipe in preview.recipes], [(1, "Rezept")])
+        self.assertNotIn("recipes", preview.model_dump())
+        recipe_preview = self.preview(source.read_bytes(), recipes=True)
+        self.assertEqual([(recipe.id, recipe.name) for recipe in recipe_preview.recipes], [(1, "Rezept")])
+        self.assertNotIn("groups", recipe_preview.model_dump())
         self.assertEqual(self.target.read_bytes(), before)
         self.assertFalse(list(self.root.glob("*.backup-*")))
 
@@ -199,11 +203,13 @@ class BackupTest(unittest.TestCase):
         source = self.source_with_data()
         self.execute(source, "UPDATE recipes SET created_by_user_id=1, prepared_food_id=1")
         with patch.object(backups, "sqlite_database_path", return_value=source):
-            response = backups.export_recipe(1)
+            response = recipe_transfers.export_recipe(1)
         try:
             content = Path(response.path).read_bytes()
-            preview = self.preview(content)
-            self.assertTrue(preview.recipe_bundle)
+            preview = self.preview(content, recipes=True)
+            with self.assertRaises(HTTPException) as caught:
+                self.preview(content)
+            self.assertIn("Gerichte", caught.exception.detail)
             rows = self.table_rows(Path(response.path))
             for table in ["users", "meal_logs", "weight_entries", "inventory_items", "calendar_events", "training_plans", "shopping_list_items"]:
                 self.assertEqual(rows[table], [], table)
@@ -229,7 +235,7 @@ class BackupTest(unittest.TestCase):
                 self.assertEqual(recipes[1].image_path, "data:image/png;base64,dGVzdA==")
             self.assertEqual(self.table_rows(self.target)["recipes"][:1], original)
             self.assertEqual(self.table_rows(self.target)["users"], before["users"])
-            self.assertEqual(result.imported_tables["recipes"], 1)
+            self.assertEqual(result.imported_count, 1)
             for mode, options in [("full", {}), ("selected", {"groups": '["weight"]'})]:
                 current = self.target.read_bytes()
                 with self.assertRaises(HTTPException):

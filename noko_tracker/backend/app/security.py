@@ -102,7 +102,8 @@ class SecurityMiddleware:
             public_ui = path in {"/", "/session", "/health", "/favicon.ico"} or path.startswith("/assets/")
             if principal and not principal.is_admin and principal.user_id is None and not public_ui:
                 raise HTTPException(403, "Dein HA-Konto ist noch keinem NokoTracker-Profil zugeordnet.")
-            admin_only = path.startswith(("/database/", "/imports/grocy-csv")) or (
+            recipe_transfer = path.startswith("/recipes/import") or re.fullmatch(r"/recipes/[^/]+/export/?", path)
+            admin_only = recipe_transfer or path.startswith(("/database/", "/imports/grocy-csv")) or (
                 path.rstrip("/") == "/users" and scope["method"] == "POST"
             ) or (path.startswith("/users/") and scope["method"] == "DELETE")
             if admin_only and (not principal or not principal.is_admin):
@@ -112,7 +113,9 @@ class SecurityMiddleware:
             try:
                 if scope["method"] in {"POST", "PATCH", "PUT"}:
                     async with self.upload_slots:
-                        limit = 65 * 1024 * 1024 if path.rstrip("/") in {"/database/import", "/database/preview"} else 12 * 1024 * 1024
+                        limit = 65 * 1024 * 1024 if path.rstrip("/") in {
+                            "/database/import", "/database/preview", "/recipes/import", "/recipes/import/preview",
+                        } else 12 * 1024 * 1024
                         if path.rstrip("/") == "/imports/grocy-csv/upload":
                             limit = 33 * 1024 * 1024
                         await self.bounded_request(scope, receive, send, headers, limit)

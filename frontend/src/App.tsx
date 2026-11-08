@@ -1,5 +1,7 @@
 import { addFoodBarcode, foodBarcodes, foodMatchesSearch, normalizeBarcodes } from "./barcodes";
 import { DatabaseImportForm } from "./DatabaseImportForm";
+import { RecipeActionsMenu } from "./RecipeActionsMenu";
+import { RecipeImportDialog } from "./RecipeImportDialog";
 import {
   formatFractionalQuantity,
   normalizeFractionalQuantityValue,
@@ -140,7 +142,9 @@ import {
   deleteTrainingPlan,
   deleteTrainingSession,
   deleteUser,
+  duplicateRecipe,
   exportDatabaseBackup,
+  exportRecipeBackup,
   generateShoppingListFromLowStock,
   getCalendarGroups,
   getCalendarEvents,
@@ -564,7 +568,7 @@ const macroMeta: Array<{
   { key: "carbs", label: "Kohlenhydrate", unit: "g", tone: "red" },
 ];
 
-const appVersion = "3.1.17";
+const appVersion = "3.1.18";
 const updateSourceLabel = "main / github.com/Noko-png/NokoTracker";
 
 const emptyNutrition: NutritionDay = {
@@ -1919,6 +1923,9 @@ export default function App() {
   const [databaseTransferResult, setDatabaseTransferResult] =
     useState<DatabaseImportResult | null>(null);
   const [databaseTransferMessage, setDatabaseTransferMessage] = useState("");
+  const [recipeActionRunning, setRecipeActionRunning] = useState(false);
+  const [recipeTransferMessage, setRecipeTransferMessage] = useState("");
+  const recipeActionInFlight = useRef(false);
   const [editingUserId, setEditingUserId] = useState<number | null>(null);
 
   const loadData = useCallback(async () => {
@@ -2673,6 +2680,25 @@ export default function App() {
     });
     setRecipeStepDraft("");
     setRecipeEditorOpen(true);
+  }
+
+  async function duplicateRecipeAndEdit(recipeId: number) {
+    if (recipeActionInFlight.current) return;
+    recipeActionInFlight.current = true;
+    setRecipeActionRunning(true);
+    setRecipeTransferMessage("");
+    try {
+      setApiError(null);
+      const copy = await duplicateRecipe(recipeId);
+      setRecipes(current => [...current, copy]);
+      startEditingRecipe(copy);
+      await loadData();
+    } catch (error) {
+      setApiError(error instanceof Error ? error.message : "Rezept konnte nicht dupliziert werden.");
+    } finally {
+      recipeActionInFlight.current = false;
+      setRecipeActionRunning(false);
+    }
   }
 
   function closeRecipeEditor() {
@@ -3761,20 +3787,40 @@ export default function App() {
     }
   }
 
-  async function downloadDatabaseBackup(recipe?: Recipe) {
+  function downloadBlob(blob: Blob, filename: string) {
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = filename;
+    document.body.append(link);
+    link.click();
+    link.remove();
+    URL.revokeObjectURL(url);
+  }
+
+  async function downloadRecipeBackup(recipe: Recipe) {
+    if (recipeActionInFlight.current) return;
+    recipeActionInFlight.current = true;
+    setRecipeActionRunning(true);
+    setRecipeTransferMessage("");
+    try {
+      setApiError(null);
+      downloadBlob(await exportRecipeBackup(recipe.id), `noko-rezept-${recipe.id}.db`);
+      setRecipeTransferMessage(`Rezeptdatei fuer "${recipe.name}" heruntergeladen.`);
+    } catch (error) {
+      setApiError(error instanceof Error ? error.message : "Rezept konnte nicht exportiert werden.");
+    } finally {
+      recipeActionInFlight.current = false;
+      setRecipeActionRunning(false);
+    }
+  }
+
+  async function downloadDatabaseBackup() {
     try {
       setApiError(null);
       setDatabaseTransferRunning(true);
-      const blob = await exportDatabaseBackup(recipe?.id);
-      const url = URL.createObjectURL(blob);
-      const link = document.createElement("a");
-      link.href = url;
-      link.download = recipe ? `noko-rezept-${recipe.id}.db` : `noko-tracker-${getLocalDate()}.db`;
-      document.body.append(link);
-      link.click();
-      link.remove();
-      URL.revokeObjectURL(url);
-      setDatabaseTransferMessage(recipe ? "Rezept-Download gestartet." : "Datenbank-Download gestartet.");
+      downloadBlob(await exportDatabaseBackup(), `noko-tracker-${getLocalDate()}.db`);
+      setDatabaseTransferMessage("Datenbank-Download gestartet.");
     } catch (error) {
       setApiError(error instanceof Error ? error.message : "API-Fehler");
     } finally {
@@ -3790,9 +3836,7 @@ export default function App() {
     }
     if (
       !window.confirm(
-        options.mode === "recipes"
-          ? `${options.recipe_ids.length} Rezept(e) als neue Rezepte hinzufuegen? Vorher wird automatisch ein Backup erstellt.`
-          : options.mode === "selected"
+        options.mode === "selected"
             ? `${options.groups.length} ausgewaehlte(r) Datenbereich(e) werden ersetzt. Nicht ausgewaehlte Bereiche bleiben erhalten; benoetigte Stammdaten werden gegebenenfalls ergaenzt. Vorher wird ein Backup erstellt. Fortfahren?`
             : "Die gesamte aktuelle Datenbank wird ersetzt. Vorher wird automatisch ein Backup erstellt. Fortfahren?",
       )
@@ -4261,12 +4305,12 @@ export default function App() {
             onCloseEditor={closeRecipeEditor}
             onCreateRecipe={startCreatingRecipe}
             onEditRecipe={startEditingRecipe}
-            onExportRecipe={session.is_admin ? downloadDatabaseBackup : undefined}
-            onImportRecipes={session.is_admin ? () => {
-              setActivePage("settings");
-              requestAnimationFrame(() => document.getElementById("database-transfer")?.scrollIntoView({ behavior: "smooth", block: "start" }));
-            } : undefined}
-            transferBusy={databaseTransferRunning}
+            onExportRecipe={session.is_admin ? downloadRecipeBackup : undefined}
+            onDuplicateRecipe={duplicateRecipeAndEdit}
+            canImportRecipes={session.is_admin}
+            onRecipesImported={loadData}
+            transferBusy={recipeActionRunning}
+            transferMessage={recipeTransferMessage}
             onFormChange={setRecipeForm}
             onIngredientAmountChange={updateRecipeIngredientAmount}
             onIngredientFormChange={updateRecipeIngredientForm}
@@ -10498,8 +10542,11 @@ function RecipesPage({
   onDeleteRecipe,
   onEditRecipe,
   onExportRecipe,
-  onImportRecipes,
+  onDuplicateRecipe,
+  canImportRecipes,
+  onRecipesImported,
   transferBusy,
+  transferMessage,
   onFormChange,
   onIngredientAmountChange,
   onIngredientFormChange,
@@ -10531,8 +10578,11 @@ function RecipesPage({
   onDeleteRecipe: (recipeId: number) => void;
   onEditRecipe: (recipe: Recipe) => void;
   onExportRecipe?: (recipe: Recipe) => void;
-  onImportRecipes?: () => void;
+  onDuplicateRecipe: (recipeId: number) => void;
+  canImportRecipes: boolean;
+  onRecipesImported: () => Promise<void>;
   transferBusy: boolean;
+  transferMessage: string;
   onFormChange: (value: RecipeForm) => void;
   onIngredientAmountChange: (
     ingredient: RecipeIngredient,
@@ -10560,6 +10610,8 @@ function RecipesPage({
   recipeNutrition: Record<number, RecipeNutrition>;
   recipes: Recipe[];
 }) {
+  const [recipeImportOpen, setRecipeImportOpen] = useState(false);
+  const closeRecipeImport = useCallback(() => setRecipeImportOpen(false), []);
   const editingRecipe =
     editingRecipeId === null
       ? null
@@ -10914,6 +10966,9 @@ function RecipesPage({
                 <small>Required</small>
               </div>
               <input
+                aria-label="Rezeptname"
+                autoFocus
+                maxLength={200}
                 onChange={(event) =>
                   onFormChange({ ...form, name: event.target.value })
                 }
@@ -11468,6 +11523,7 @@ function RecipesPage({
 
   return (
     <div className="recipes-page">
+      {recipeImportOpen && <RecipeImportDialog onClose={closeRecipeImport} onImported={onRecipesImported} />}
       <section className="section wide">
         <div className="section-header">
           <div>
@@ -11476,8 +11532,8 @@ function RecipesPage({
             </p>
             <h2>Gerichte</h2>
           </div>
-          {onImportRecipes && (
-            <button className="button secondary" onClick={onImportRecipes} type="button">
+          {canImportRecipes && (
+            <button className="button secondary" onClick={() => setRecipeImportOpen(true)} type="button">
               <Upload size={16} />
               Rezepte importieren
             </button>
@@ -11487,6 +11543,7 @@ function RecipesPage({
             Gericht erstellen
           </button>
         </div>
+        {transferMessage && <p className="database-import-hint" role="status">{transferMessage}</p>}
         <div className="recipe-filter-row">
           <label>
             <span>Tag</span>
@@ -11534,13 +11591,21 @@ function RecipesPage({
                     </div>
                   )}
                   <div className="recipe-head">
-                    <div>
-                      <h3 className="recipe-title-with-emoji">
-                        <span aria-hidden="true">
-                          {recipe.emoji || defaultRecipeEmoji}
-                        </span>
-                        <span>{recipe.name}</span>
-                      </h3>
+                    <div className="recipe-summary">
+                      <div className="recipe-card-heading">
+                        <h3 className="recipe-title-with-emoji">
+                          <span aria-hidden="true">
+                            {recipe.emoji || defaultRecipeEmoji}
+                          </span>
+                          <span>{recipe.name}</span>
+                        </h3>
+                        <RecipeActionsMenu
+                          name={recipe.name}
+                          busy={transferBusy}
+                          onDuplicate={() => onDuplicateRecipe(recipe.id)}
+                          onExport={onExportRecipe ? () => onExportRecipe(recipe) : undefined}
+                        />
+                      </div>
                       <span className="recipe-card-meta">
                         <span>{formatFractionalQuantity(recipe.servings)} Portionen</span>
                         <span>{formatNumber(caloriesPerServing, 0)} kcal / Portion</span>
@@ -11554,18 +11619,6 @@ function RecipesPage({
                       )}
                     </div>
                     <div className="recipe-actions">
-                      {onExportRecipe && (
-                        <button
-                          className="button secondary"
-                          disabled={transferBusy}
-                          onClick={() => onExportRecipe(recipe)}
-                          type="button"
-                          title="Einzelnes Rezept mit Zutaten exportieren"
-                        >
-                          <Download size={16} />
-                          Exportieren
-                        </button>
-                      )}
                       <button
                         className="button secondary recipe-edit-button"
                         onClick={() => onEditRecipe(recipe)}

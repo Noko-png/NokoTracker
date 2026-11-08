@@ -688,16 +688,26 @@ export type DatabaseImportResult = {
 };
 
 export type DatabaseImportOptions = {
-  mode: "full" | "selected" | "recipes";
+  mode: "full" | "selected";
   groups: string[];
-  recipe_ids: number[];
 };
 
 export type DatabaseImportPreview = {
   filename: string;
-  recipe_bundle: boolean;
   groups: { key: string; label: string; rows: number }[];
+  warnings: string[];
+};
+
+export type RecipeImportPreview = {
+  filename: string;
   recipes: { id: number; name: string }[];
+  warnings: string[];
+};
+
+export type RecipeImportResult = {
+  filename: string;
+  imported_count: number;
+  message: string;
   warnings: string[];
 };
 
@@ -975,8 +985,16 @@ export function deleteStorageLocation(id: number) {
   });
 }
 
-export function getRecipes() {
-  return request<Recipe[]>("/recipes");
+export async function getRecipes() {
+  // Keep newly imported/duplicated recipes visible even beyond the API's
+  // default page. The recipe editor resolves its ingredients from this list.
+  const recipes: Recipe[] = [];
+  const pageSize = 500;
+  while (true) {
+    const page = await request<Recipe[]>(`/recipes?skip=${recipes.length}&limit=${pageSize}`);
+    recipes.push(...page);
+    if (page.length < pageSize) return recipes;
+  }
 }
 
 export function createRecipe(recipe: RecipeCreate) {
@@ -984,6 +1002,10 @@ export function createRecipe(recipe: RecipeCreate) {
     method: "POST",
     body: recipe,
   });
+}
+
+export function duplicateRecipe(id: number) {
+  return request<Recipe>(`/recipes/${id}/duplicate`, { method: "POST" });
 }
 
 export function updateRecipe(id: number, recipe: RecipeUpdate) {
@@ -1315,8 +1337,8 @@ export function importGrocyCsvUpload(files: File[], dryRun = false) {
   });
 }
 
-export async function exportDatabaseBackup(recipeId?: number) {
-  const response = await fetch(apiUrl(recipeId === undefined ? "/database/export" : `/database/recipes/${recipeId}/export`));
+async function exportFile(path: string) {
+  const response = await fetch(apiUrl(path));
   if (!response.ok) {
     let message = `${response.status} ${response.statusText}`;
     try {
@@ -1333,6 +1355,27 @@ export async function exportDatabaseBackup(recipeId?: number) {
   return response.blob();
 }
 
+export function exportDatabaseBackup() {
+  return exportFile("/database/export");
+}
+
+export function exportRecipeBackup(recipeId: number) {
+  return exportFile(`/recipes/${recipeId}/export`);
+}
+
+export function previewRecipeImport(file: File) {
+  const body = new FormData();
+  body.set("file", file);
+  return request<RecipeImportPreview>("/recipes/import/preview", { method: "POST", body });
+}
+
+export function importRecipes(file: File, recipeIds: number[]) {
+  const body = new FormData();
+  body.set("file", file);
+  body.set("recipe_ids", JSON.stringify(recipeIds));
+  return request<RecipeImportResult>("/recipes/import", { method: "POST", body });
+}
+
 export function previewDatabaseBackup(file: File) {
   const body = new FormData();
   body.set("file", file);
@@ -1344,7 +1387,6 @@ export function importDatabaseBackup(file: File, options: DatabaseImportOptions)
   body.set("file", file);
   body.set("mode", options.mode);
   body.set("groups", JSON.stringify(options.groups));
-  body.set("recipe_ids", JSON.stringify(options.recipe_ids));
 
   return request<DatabaseImportResult>("/database/import", {
     method: "POST",

@@ -70,9 +70,15 @@ Abweichende Ports lassen sich mit `FOOD_TEST_API_URL`,
 
 `npm run test:database-ui` prueft echte Datei-Uploads auf Desktop- und Handybreite:
 Auswahlpflicht, Bestaetigung abbrechen, nur Gewicht ersetzen, Profildaten zuordnen,
-unveraenderte andere Bereiche, dieselbe Datei erneut auswaehlen, einzelne Rezepte
-hinzufuegen und Rezeptdateien erkennen. Die API-Fixture verwendet ausschliesslich
-eigens erzeugte temporaere SQLite-Dateien.
+unveraenderte andere Bereiche und die Trennung vom eigenen Rezeptimport-Dialog.
+Rezeptdateien werden im allgemeinen Dialog abgewiesen und unter Gerichte geladen.
+Der Test prueft ausserdem das dezente Aktionsmenue, Export, Tastaturbedienung,
+Duplizieren mit sofortiger Bearbeitung, Fehler und Wiederholung sowie Aenderungen
+an einer Variante ohne Aenderung des Originals. Eine Sammlung mit ueber 500
+Rezepten prueft, dass neue Kopien auch jenseits einer API-Seite sichtbar bleiben.
+Normale Nutzer sehen die
+Duplizierfunktion; Rezeptimport und -export bleiben Administratoren vorbehalten.
+Die API-Fixture verwendet ausschliesslich eigens erzeugte temporaere SQLite-Dateien.
 
 1. Im Backend: `python -m uvicorn database_ui_fixture:app --app-dir tests --host 127.0.0.1 --port 8022`
 2. Im Frontend: `npm run dev -- --port 5182 --strictPort` mit der Standard-API-Basis.

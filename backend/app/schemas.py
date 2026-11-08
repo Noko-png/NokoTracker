@@ -1263,16 +1263,27 @@ class DatabaseImportGroup(BaseModel):
     rows: int
 
 
-class DatabaseRecipePreview(BaseModel):
+class RecipeImportItem(BaseModel):
     id: int
     name: str
 
 
 class DatabaseImportPreview(BaseModel):
     filename: str
-    recipe_bundle: bool = False
     groups: list[DatabaseImportGroup]
-    recipes: list[DatabaseRecipePreview]
+    warnings: list[str] = Field(default_factory=list)
+
+
+class RecipeImportPreview(BaseModel):
+    filename: str
+    recipes: list[RecipeImportItem]
+    warnings: list[str] = Field(default_factory=list)
+
+
+class RecipeImportResult(BaseModel):
+    filename: str
+    imported_count: int
+    message: str
     warnings: list[str] = Field(default_factory=list)
 
 

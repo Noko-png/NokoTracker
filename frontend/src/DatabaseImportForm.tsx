@@ -15,7 +15,6 @@ export function DatabaseImportForm({ file, busy, onFileChange, onSubmit }: {
   const [error, setError] = useState("");
   const [mode, setMode] = useState<DatabaseImportOptions["mode"]>("selected");
   const [groups, setGroups] = useState<string[]>([]);
-  const [recipeIds, setRecipeIds] = useState<number[]>([]);
 
   useEffect(() => {
     let cancelled = false;
@@ -23,7 +22,6 @@ export function DatabaseImportForm({ file, busy, onFileChange, onSubmit }: {
     setPreviewFile(null);
     setError("");
     setGroups([]);
-    setRecipeIds([]);
     setMode("selected");
     setLoading(Boolean(file));
     if (!file && fileInput.current) fileInput.current.value = "";
@@ -32,10 +30,6 @@ export function DatabaseImportForm({ file, busy, onFileChange, onSubmit }: {
         if (cancelled) return;
         setPreview(result);
         setPreviewFile(file);
-        if (result.recipe_bundle) {
-          setMode("recipes");
-          setRecipeIds(result.recipes.map(recipe => recipe.id));
-        }
       }).catch(reason => {
         if (!cancelled) setError(reason instanceof Error ? reason.message : "Datei konnte nicht geprueft werden.");
       }).finally(() => { if (!cancelled) setLoading(false); });
@@ -44,14 +38,14 @@ export function DatabaseImportForm({ file, busy, onFileChange, onSubmit }: {
   }, [file]);
 
   const ready = preview && previewFile === file && !loading && !busy;
-  const hasSelection = mode === "full" || (mode === "selected" ? groups.length > 0 : recipeIds.length > 0);
+  const hasSelection = mode === "full" || groups.length > 0;
 
   return <form className="settings-import-form compact" onSubmit={event => {
     if (!ready || !hasSelection) { event.preventDefault(); return; }
-    onSubmit(event, { mode, groups, recipe_ids: recipeIds });
+    onSubmit(event, { mode, groups });
   }}>
     <label className="file-field">
-      <span>Datenbank oder Rezeptdatei hochladen</span>
+      <span>Datenbanksicherung hochladen</span>
       <input ref={fileInput} accept=".db,.sqlite,.sqlite3" disabled={busy} onChange={event => onFileChange(event.target.files?.[0] ?? null)} type="file" />
       <strong>{file?.name ?? "Keine Datei ausgewaehlt"}</strong>
     </label>
@@ -61,9 +55,8 @@ export function DatabaseImportForm({ file, busy, onFileChange, onSubmit }: {
       <label className="field">
         <span>Importmodus</span>
         <select disabled={busy} value={mode} onChange={event => setMode(event.target.value as DatabaseImportOptions["mode"])}>
-          {!preview.recipe_bundle && <option value="selected">Ausgewaehlte Datenbereiche ersetzen</option>}
-          <option value="recipes">Einzelne Rezepte hinzufuegen</option>
-          {!preview.recipe_bundle && <option value="full">Gesamte Datenbank ersetzen</option>}
+          <option value="selected">Ausgewaehlte Datenbereiche ersetzen</option>
+          <option value="full">Gesamte Datenbank ersetzen</option>
         </select>
       </label>
       {mode === "selected" && <>
@@ -77,23 +70,12 @@ export function DatabaseImportForm({ file, busy, onFileChange, onSubmit }: {
         </fieldset>
         {groups.includes("meals") && !groups.includes("inventory") && <p className="database-import-hint">Ohne Vorrat koennen importierte Bestandsabbuchungen nicht automatisch rueckgaengig gemacht werden.</p>}
       </>}
-      {mode === "recipes" && <>
-        <p className="database-import-hint">Ausgewaehlte Rezepte werden als neue Rezepte hinzugefuegt. Gleichnamige Rezepte bleiben erhalten. Vorhandene Zutaten werden anhand von Name und Marke zugeordnet, fehlende Zutaten samt Einheiten und Naehrwerten ergaenzt.</p>
-        <fieldset className="database-import-selection" disabled={busy}>
-          <legend>Rezepte auswaehlen</legend>
-          {preview.recipes.length === 0 && <p>Diese Datei enthaelt keine Rezepte.</p>}
-          {preview.recipes.map(recipe => <label key={recipe.id}>
-            <input type="checkbox" checked={recipeIds.includes(recipe.id)} onChange={event => setRecipeIds(current => event.target.checked ? [...current, recipe.id] : current.filter(id => id !== recipe.id))} />
-            <span>{recipe.name}</span>
-          </label>)}
-        </fieldset>
-      </>}
       {mode === "full" && <p className="database-import-hint">Alle Daten werden durch die Datei ersetzt. Vorhandene HA-Zuordnungen bleiben fuer gleichnamige Profile erhalten.</p>}
       {preview.warnings.map(warning => <p className="database-import-hint" key={warning}>{warning}</p>)}
     </>}
-    <button className={`button ${mode === "recipes" ? "primary" : "danger"} full`} disabled={!ready || !hasSelection} type="submit">
+    <button className="button danger full" disabled={!ready || !hasSelection} type="submit">
       <Upload size={16} />
-      {busy ? "Import laeuft …" : mode === "recipes" ? "Ausgewaehlte Rezepte hinzufuegen" : mode === "selected" ? "Ausgewaehlte Bereiche ersetzen" : "Gesamte Datenbank ersetzen"}
+      {busy ? "Import laeuft …" : mode === "selected" ? "Ausgewaehlte Bereiche ersetzen" : "Gesamte Datenbank ersetzen"}
     </button>
     <p className="database-import-hint">Vor jedem Import wird automatisch eine Sicherung erstellt.</p>
   </form>;

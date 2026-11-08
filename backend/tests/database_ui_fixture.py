@@ -16,6 +16,7 @@ from sqlalchemy.orm import Session
 from app import models
 from app.database import Base, DATABASE_LOCK, engine
 from app.main import app
+from app.routers import recipes
 
 source_path = root / "source.db"
 source_engine = create_engine("sqlite:///" + source_path.as_posix())
@@ -40,17 +41,32 @@ def reset_database():
         Base.metadata.create_all(engine)
         with Session(engine) as db:
             db.add(models.User(id=42, username="Test"))
-            db.add(models.Food(id=7, name="Vorhandene Zutat"))
-            db.add(models.Recipe(id=7, name="Vorhandenes Rezept"))
+            db.add(models.Food(id=7, name="Vorhandene Zutat", calories_per_100g=200))
+            recipe = models.Recipe(
+                id=7, name="Vorhandenes Rezept", emoji="🥘", servings=2.5, tags=["Original"],
+                instructions="Vorbereiten.\n\nKochen.", description="Originalbeschreibung",
+                prep_time_minutes=10, cook_time_minutes=20, created_by_user_id=42,
+            )
+            db.add(recipe)
             db.flush()
+            db.add(models.RecipeIngredient(recipe_id=7, food_id=7, quantity=125.25, unit="g", notes="Fein schneiden"))
             db.add(models.WeightEntry(user_id=42, weight_kg=99))
             db.commit()
+            recipes.sync_recipe_as_food(db, recipe)
     return {"fixture": "database-transfer-disposable"}
 
 
 @app.get("/__database_test__/source")
 def source_database():
     return FileResponse(source_path, media_type="application/vnd.sqlite3")
+
+
+@app.post("/__database_test__/many-recipes")
+def many_recipes():
+    with DATABASE_LOCK, Session(engine) as db:
+        db.add_all(models.Recipe(name=f"ZZ Testrezept {number}") for number in range(500))
+        db.commit()
+    return {"recipes": 501}
 
 
 reset_database()

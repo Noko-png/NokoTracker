@@ -3201,7 +3201,8 @@ th {
 
 .recipe-head {
   display: flex;
-  align-items: start;
+  flex-direction: column;
+  align-items: stretch;
   justify-content: space-between;
   gap: 10px;
 }
@@ -3246,6 +3247,88 @@ th {
   gap: 8px;
   flex-wrap: wrap;
   justify-content: flex-end;
+}
+
+.recipe-summary {
+  min-width: 0;
+  width: 100%;
+}
+
+.recipe-card-heading {
+  display: flex;
+  align-items: start;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.recipe-card-heading h3 {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.recipe-more {
+  position: relative;
+  flex: 0 0 auto;
+}
+
+.recipe-more-button {
+  color: var(--muted);
+  background: transparent;
+  border-color: transparent;
+}
+
+.recipe-more-menu {
+  position: absolute;
+  z-index: 30;
+  top: calc(100% + 4px);
+  right: 0;
+  min-width: 170px;
+  padding: 6px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--surface);
+  box-shadow: var(--shadow);
+}
+
+.recipe-more-menu button {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  min-height: 40px;
+  padding: 8px 10px;
+  border: 0;
+  border-radius: 6px;
+  color: var(--text);
+  background: transparent;
+  text-align: left;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.recipe-more-menu button:hover,
+.recipe-more-menu button:focus-visible {
+  background: var(--surface-soft);
+}
+
+.recipe-import-dialog {
+  display: grid;
+  gap: 16px;
+  width: min(600px, 100%);
+  max-height: calc(100dvh - 36px);
+  overflow-y: auto;
+}
+
+.recipe-import-backdrop {
+  z-index: 50;
+}
+
+.recipe-import-dialog h2 {
+  margin: 0;
+}
+
+.recipe-transfer-error {
+  color: var(--danger, #b91c1c);
 }
 
 .prepare-panel {

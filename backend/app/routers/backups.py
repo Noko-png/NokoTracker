@@ -239,11 +239,11 @@ async def preview_database(file: UploadFile = File(...)):
         except ValueError as exc:
             raise HTTPException(422, str(exc)) from exc
         with closing(sqlite3.connect(f"{path.resolve().as_uri()}?mode=ro", uri=True)) as source:
+            if is_recipe_export(source):
+                raise HTTPException(422, "Rezeptdateien bitte unter Gerichte > Rezepte importieren laden.")
             return schemas.DatabaseImportPreview(
                 filename=filename,
-                recipe_bundle=is_recipe_export(source),
                 groups=[schemas.DatabaseImportGroup(key=key, label=label, rows=sum(counts.get(table, 0) for table in tables)) for key, (label, tables) in DATA_GROUPS.items()],
-                recipes=[schemas.DatabaseRecipePreview(id=row[0], name=row[1]) for row in source.execute("SELECT id,name FROM recipes ORDER BY name,id")],
                 warnings=warnings,
             )
     return await read_database_upload(file, inspect)
@@ -262,46 +262,18 @@ def parse_selection(raw: str, item_type):
 @router.post("/import", response_model=schemas.DatabaseImportResult)
 async def import_database(
     file: UploadFile = File(...),
-    mode: Annotated[Literal["full", "selected", "recipes"], Form()] = "full",
+    mode: Annotated[Literal["full", "selected"], Form()] = "full",
     groups: Annotated[str, Form()] = "[]",
-    recipe_ids: Annotated[str, Form()] = "[]",
 ):
     selected_groups = parse_selection(groups, str)
-    selected_recipes = parse_selection(recipe_ids, int)
-    if mode not in {"full", "selected", "recipes"}:
+    if mode not in {"full", "selected"}:
         raise HTTPException(422, "Unbekannter Importmodus.")
     if mode == "selected" and (not selected_groups or set(selected_groups) - DATA_GROUPS.keys()):
         raise HTTPException(422, "Bitte gueltige Datenbereiche zum Ersetzen auswaehlen.")
-    if mode == "recipes" and (not selected_recipes or any(value <= 0 for value in selected_recipes)):
-        raise HTTPException(422, "Bitte mindestens ein Rezept auswaehlen.")
     db_path = sqlite_database_path()
     return await read_database_upload(file, lambda path, filename: restore_database(
-        path, db_path, filename, mode=mode, groups=selected_groups, recipe_ids=selected_recipes,
+        path, db_path, filename, mode=mode, groups=selected_groups,
     ))
-
-
-@router.get("/recipes/{recipe_id}/export")
-def export_recipe(recipe_id: int):
-    db_path = sqlite_database_path()
-    with tempfile.NamedTemporaryFile(delete=False, suffix=".db") as handle:
-        path = Path(handle.name)
-    temporary_engine = create_engine("sqlite:///" + path.as_posix())
-    try:
-        models.Base.metadata.create_all(temporary_engine)
-        temporary_engine.dispose()
-        with DATABASE_LOCK, closing(sqlite3.connect(f"{db_path.as_uri()}?mode=ro", uri=True)) as source, closing(sqlite3.connect(path)) as target:
-            transfer = DataTransfer(source, target, recipe_only=True)
-            transfer.add_recipes([recipe_id])
-            target.execute("CREATE TABLE noko_recipe_export (version INTEGER NOT NULL)")
-            target.execute("INSERT INTO noko_recipe_export VALUES (1)")
-            target.commit()
-    except (ValueError, sqlite3.DatabaseError) as exc:
-        path.unlink(missing_ok=True)
-        raise HTTPException(422, "Rezept konnte nicht exportiert werden: " + str(exc)) from exc
-    finally:
-        temporary_engine.dispose()
-    return FileResponse(path, filename=f"noko-rezept-{recipe_id}.db", media_type="application/vnd.sqlite3",
-                        background=BackgroundTask(lambda: path.unlink(missing_ok=True)))
 
 
 def restore_database(upload_path: Path, db_path: Path, filename: str, *, mode="full", groups=None, recipe_ids=None):

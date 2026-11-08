@@ -18,7 +18,7 @@ from sqlalchemy.pool import StaticPool
 from app import models
 from app.database import Base, get_db
 from app import security
-from app.routers import users, weight, training, meals, calendar, nutrition, backups, imports, dashboard, storage_locations
+from app.routers import users, weight, training, meals, calendar, nutrition, backups, imports, dashboard, storage_locations, recipes, recipe_transfers
 from app.services.receipt_import_service import decode_pdf_text
 
 
@@ -78,7 +78,8 @@ class SecurityTest(unittest.TestCase):
         self.app = FastAPI()
         for router in [users.router, weight.router, training.plans_router, training.exercises_router,
                        training.sessions_router, meals.router, calendar.router, calendar.groups_router,
-                       nutrition.router, backups.router, imports.router, dashboard.router, storage_locations.router]:
+                       nutrition.router, backups.router, imports.router, dashboard.router, storage_locations.router,
+                       recipe_transfers.router, recipes.router]:
             self.app.include_router(router)
         security.install_security(self.app)
 
@@ -163,7 +164,8 @@ class SecurityTest(unittest.TestCase):
         for method, path, body in [
             ("POST", "/users", {"username": "C"}), ("DELETE", "/users/2", None),
             ("POST", "/database/import", None), ("GET", "/database/export", None),
-            ("POST", "/database/preview", None), ("GET", "/database/recipes/1/export", None),
+            ("POST", "/database/preview", None), ("GET", "/recipes/1/export", None),
+            ("POST", "/recipes/import", None), ("POST", "/recipes/import/preview", None),
             ("POST", "/imports/grocy-csv/upload", None),
             ("PATCH", "/users/1", {"home_assistant_user_id": "ha-attacker"}),
         ]:
@@ -180,6 +182,19 @@ class SecurityTest(unittest.TestCase):
         self.assertEqual(self.call("GET", "/users", identity="new")[0], 403)
         with patch.dict(os.environ, {"NOKO_ADMIN_USERNAME": ""}):
             self.assertFalse(self.call("GET", "/session", identity="admin")[1]["is_admin"])
+
+    def test_regular_user_can_duplicate_shared_recipe_in_own_name(self):
+        with Session(self.engine) as db:
+            source = models.Recipe(name="Shared recipe", created_by_user_id=2)
+            db.add(source)
+            db.commit()
+            source_id = source.id
+        status, copy = self.call("POST", f"/recipes/{source_id}/duplicate")
+        self.assertEqual(status, 201, copy)
+        self.assertNotEqual(copy["id"], source_id)
+        self.assertEqual(copy["created_by_user_id"], 1)
+        with Session(self.engine) as db:
+            self.assertEqual(db.get(models.Recipe, source_id).created_by_user_id, 2)
 
     def test_shared_calendar_and_private_tasks(self):
         self.assertEqual({row["id"] for row in self.call("GET", "/calendar/events")[1]}, {1, 2})

@@ -18,6 +18,6 @@ Ab Version 3.1.9 in der Add-on-Konfiguration unter `admin_username` den exakten 
 
 Die SQLite-Datenbank wird persistent unter `/data/noko_tracker.db` im Add-on gespeichert und ist damit in Home-Assistant-Backups enthalten.
 
-Unter **Einstellungen > Import und Export** koennen Administratoren nach dem Hochladen einzelne Datenbereiche ersetzen (z. B. nur Gewichtsdaten), ausgewaehlte Rezepte hinzufuegen oder die ganze Datenbank wiederherstellen. Unter **Gerichte > Exportieren** koennen Rezepte einzeln samt Zutaten geteilt werden. Vor jedem Import wird die bisherige Datenbank automatisch gesichert. Details zur Auswahl und zu Verknuepfungen stehen in der Dokumentation.
+Unter **Einstellungen > Import und Export** koennen Administratoren nach dem Hochladen einzelne Datenbereiche ersetzen (z. B. nur Gewichtsdaten) oder die ganze Datenbank wiederherstellen. Der separate Rezeptimport ist direkt unter **Gerichte > Rezepte importieren** erreichbar. Im Drei-Punkte-Menue jedes Rezepts koennen Rezepte exportiert oder dupliziert werden. Eine Kopie wird sofort zum Bearbeiten geoeffnet, um beispielsweise eine v2 zu erstellen. Vor jedem Import wird die bisherige Datenbank automatisch gesichert. Details zur Auswahl und zu Verknuepfungen stehen in der Dokumentation.
 
 Grocy-Daten koennen in den Einstellungen als CSV-Dateien oder ZIP-Archiv direkt ueber den Browser hochgeladen werden.

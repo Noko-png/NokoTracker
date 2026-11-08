@@ -1,5 +1,13 @@
 # Changelog
 
+## 3.1.18
+
+- Rezeptimport und -export vom allgemeinen Datenbanktransfer getrennt. Gerichte besitzt einen eigenen Importdialog fuer Rezeptdateien und einzelne Rezepte aus Sicherungen; der allgemeine Dialog bleibt fuer das Ersetzen von Datenbereichen oder der gesamten Datenbank.
+- Der Rezeptexport befindet sich dezent im Drei-Punkte-Menue neben dem Rezeptnamen.
+- Neue Aktion Duplizieren: Erstellt eine eindeutig benannte aktive Kopie samt Zutaten, Anleitung, Beschreibung, Bild, Tags, Portionen und Zeiten und oeffnet sie sofort zum Bearbeiten.
+- Kopien besitzen eigene Zutatenzeilen und ein eigenes Produkt fuer zubereitete Portionen. Bestehende Zutaten-Lebensmittel werden geteilt; Originalrezept, Mahlzeiten und Bestand bleiben unveraendert. Die Duplizierung erfolgt in einer Transaktion und ist auch fuer normale Nutzer verfuegbar.
+- Regressionstests pruefen unabhaengige Varianten, wiederholte Kopien, Fehler und Ruecknahme, Berechtigungen sowie die getrennten Importdialoge und das Aktionsmenue auf Desktop und Handy.
+
 ## 3.1.17
 
 - Einzelne Rezepte unter Gerichte mit Zutaten, Naehrwerten, EANs, Einheiten, Umrechnungen und Bild exportieren. Aus Rezeptdateien oder vollstaendigen Sicherungen koennen einzelne Rezepte hinzugefuegt werden, ohne bestehende Rezepte oder die Datenbank zu ersetzen.
