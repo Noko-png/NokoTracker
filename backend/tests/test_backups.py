@@ -386,6 +386,94 @@ class BackupTest(unittest.TestCase):
             self.assertEqual(food.expiry_days, 14)
             self.assertEqual(food.barcodes, ["0012345678905", "4012345678901"])
 
+    def source_with_training_calendar(self):
+        source = self.source_with_data()
+        self.execute(source, """
+            UPDATE calendar_events SET recurrence_frequency='cycle', cycle_training_days=2,
+                cycle_rest_days=1, training_plan_id=1 WHERE id=1;
+            INSERT INTO calendar_event_shifts (id,event_id,occurrence_start_at,days)
+                VALUES (1,1,'2026-10-29 06:00:00.000000',1);
+            UPDATE training_sessions SET calendar_event_id=1,
+                calendar_occurrence_start_at='2026-10-28 06:00:00.000000' WHERE id=1;
+        """)
+        return source
+
+    def test_full_import_preserves_training_calendar_and_inserted_rest_days(self):
+        source = self.source_with_training_calendar()
+        expected = self.table_rows(source)
+        self.upload(source.read_bytes())
+        self.assertEqual(self.table_rows(self.target), expected)
+
+    def test_training_calendar_partial_import_remaps_entire_linked_history(self):
+        source = self.source_with_training_calendar()
+        self.seed_all_tables(self.engine)
+        self.upload(source.read_bytes(), mode="selected", groups='["training","calendar"]')
+        with Session(self.engine) as db:
+            event = db.query(models.CalendarEvent).filter_by(title="Serie").one()
+            plan = db.query(models.TrainingPlan).one()
+            session = db.query(models.TrainingSession).one()
+            shift = db.query(models.CalendarEventShift).one()
+            self.assertNotEqual(event.id, 1)
+            self.assertNotEqual(plan.id, 1)
+            self.assertEqual(event.training_plan_id, plan.id)
+            self.assertEqual(session.plan_id, plan.id)
+            self.assertEqual(session.calendar_event_id, event.id)
+            self.assertEqual(shift.event_id, event.id)
+            self.assertEqual(session.calendar_occurrence_start_at, datetime(2026, 10, 28, 6))
+            self.assertEqual(shift.occurrence_start_at, datetime(2026, 10, 29, 6))
+            self.assertEqual((event.cycle_training_days, event.cycle_rest_days), (2, 1))
+            self.assertEqual(len(plan.exercises), 1)
+
+    def test_linked_training_calendar_requires_both_groups_without_changing_current_data(self):
+        source = self.source_with_training_calendar()
+        self.matching_profile()
+        for group in ("training", "calendar"):
+            with self.subTest(group=group):
+                before = self.target.read_bytes()
+                with self.assertRaises(HTTPException) as caught:
+                    self.upload(source.read_bytes(), mode="selected", groups=json.dumps([group]))
+                self.assertEqual(caught.exception.status_code, 422)
+                self.assertIn("beide Datenbereiche", caught.exception.detail)
+                self.assertEqual(self.target.read_bytes(), before)
+
+    def test_existing_training_calendar_cannot_be_broken_by_single_group_import(self):
+        linked = self.source_with_training_calendar()
+        self.upload(linked.read_bytes())
+        empty = self.root / "empty-training-calendar.db"
+        self.create_database(empty)
+        for group in ("training", "calendar"):
+            with self.subTest(group=group):
+                before = self.target.read_bytes()
+                with self.assertRaises(HTTPException) as caught:
+                    self.upload(empty.read_bytes(), mode="selected", groups=json.dumps([group]))
+                self.assertEqual(caught.exception.status_code, 422)
+                self.assertEqual(self.target.read_bytes(), before)
+
+    def test_older_calendar_backup_restores_without_training_links_or_pauses(self):
+        source = self.source_with_data()
+        with closing(sqlite3.connect(source)) as connection:
+            connection.execute("DROP TABLE calendar_event_shifts")
+            for table, omitted in backups.CALENDAR_OPTIONAL_COLUMNS.items():
+                columns = [row for row in connection.execute(f'PRAGMA table_info("{table}")') if row[1] not in omitted]
+                definition = ", ".join(f'"{row[1]}" {row[2]}' + (" PRIMARY KEY" if row[5] else "") for row in columns)
+                names = ", ".join(f'"{row[1]}"' for row in columns)
+                connection.execute(f'CREATE TABLE "legacy_{table}" ({definition})')
+                connection.execute(f'INSERT INTO "legacy_{table}" SELECT {names} FROM "{table}"')
+                connection.execute(f'DROP TABLE "{table}"')
+                connection.execute(f'ALTER TABLE "legacy_{table}" RENAME TO "{table}"')
+            connection.commit()
+        for mode, options in (("full", {}), ("selected", {"groups": '["training","calendar"]'})):
+            with self.subTest(mode=mode):
+                self.upload(source.read_bytes(), mode=mode, **options)
+                with Session(self.engine) as db:
+                    event = db.query(models.CalendarEvent).filter_by(title="Serie").one()
+                    session = db.query(models.TrainingSession).one()
+                    self.assertEqual((event.cycle_training_days, event.cycle_rest_days), (2, 1))
+                    self.assertIsNone(event.training_plan_id)
+                    self.assertIsNone(session.calendar_event_id)
+                    self.assertIsNone(session.calendar_occurrence_start_at)
+                    self.assertEqual(db.query(models.CalendarEventShift).count(), 0)
+
     def test_older_backup_without_booking_tables_still_imports(self):
         source = self.root / "legacy.db"
         source_engine = self.create_database(source)
@@ -425,7 +513,8 @@ class BackupTest(unittest.TestCase):
         finally:
             asyncio.run(response.background())
         self.assertEqual(set(result.imported_tables), set(Base.metadata.tables))
-        self.assertTrue(all(count > 0 for count in result.imported_tables.values()))
+        self.assertTrue(all(count > 0 for table, count in result.imported_tables.items()
+                            if table not in backups.CALENDAR_OPTIONAL_TABLES))
         self.assertEqual(result.training_rows, 4)
         self.assertEqual(result.warnings, [])
         self.assertEqual(self.snapshot(self.target), expected)

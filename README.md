@@ -84,6 +84,16 @@ Ballaststoffe und Zucker werden in Gramm je 100 g gespeichert, Koffein optional 
 
 Die neuen Werte sind in Datenbanksicherungen enthalten. Bestehende Installationen werden beim Start ergaenzt; aeltere Sicherungen bleiben importierbar und erhalten fuer Ballaststoffe/Zucker den Standardwert 0 sowie ein leeres Koffeinfeld.
 
+## Dynamische Trainingsserien im Kalender
+
+Unter **Kalender > Erstellen > Trainingsserie** einen Trainingsplan, Startdatum und Uhrzeit waehlen. Die Wiederholung **Trainingsrhythmus** erlaubt beispielsweise **2 Trainingstage, 1 Pausentag**. Die Serie laeuft unabhaengig von Wochentagen weiter; Vorschau und optionales Enddatum helfen bei der Planung. Ein vorhandener Trainingsplan mit Uebungen laesst sich unter **Stammdaten > Training** anlegen.
+
+**Training** zeigt die naechsten offenen Termine und bietet ebenfalls **Trainingsserie planen**. Mit **Skip / 1 Tag Pause** wird vor dem ausgewaehlten Training ein zusaetzlicher Pausentag eingefuegt. Dieses Training und alle folgenden Termine derselben Serie verschieben sich um einen Tag. Fuer eine weitere Pause erneut skippen. Die zuletzt eingefuegte Pause kann mit **Rueckgaengig** zurueckgenommen werden. Andere Kalendertermine bleiben erhalten.
+
+**Training starten** oeffnet den verknuepften Plan mit seinen Uebungen und dem Termin als Datum. Nach dem Speichern der Saetze wird genau dieser Kalendertermin als **Absolviert** angezeigt. Eine Einheit kann nur einmal mit demselben Termin verknuepft werden. Bereits protokollierte Trainings werden durch Skip oder Ruecknahme nicht verschoben. Bei Bedarf die Verknuepfung im Trainingsformular loesen, um eine unabhaengige Einheit zu erfassen.
+
+Titel und Notizen bestehender Serien bleiben bearbeitbar. Sobald eine Serie zusaetzliche Pausen oder protokollierte Trainings hat, benoetigt eine Aenderung des Rhythmus oder Startdatums eine neue Serie. Sicherungen enthalten Trainingsverknuepfungen und Pausentage; aeltere Sicherungen bleiben importierbar. Bei verknuepften Daten muessen **Training** und **Kalender/ToDos** beim Teilimport gemeinsam ausgewaehlt werden.
+
 ## Test Health dashboard
 
 Ab 3.1.16 koennen Administratoren unter **Test Health dashboard** die Health-Connect-Sensoren der Home-Assistant-Companion-App testweise abrufen. Auf dem Handy sowohl die Leserechte in Health Connect als auch die einzelnen Sensoren unter **Einstellungen > Companion App > Sensoren verwalten > Health Connect** aktivieren. Danach die App synchronisieren und das Dashboard oeffnen. Schritte, Puls/Ruhepuls und Schlafdauer werden mit Quelle, Einheit und HA-Aktualisierungszeit angezeigt. Umbenannte Sensoren koennen per Sensor-ID ausgewaehlt werden.

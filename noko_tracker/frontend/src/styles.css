@@ -5819,6 +5819,123 @@ th {
   gap: 6px;
 }
 
+.training-schedule-panel {
+  margin-bottom: 20px;
+}
+
+.training-schedule-hint {
+  margin: 0 0 16px;
+  color: var(--muted);
+  font-size: 0.9rem;
+}
+
+.training-upcoming-list,
+.training-pause-history {
+  display: grid;
+  gap: 10px;
+}
+
+.training-upcoming-item,
+.training-pause-row,
+.training-calendar-link {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 12px;
+  padding: 14px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--surface-soft);
+  min-width: 0;
+}
+
+.training-upcoming-item > div:first-child {
+  display: grid;
+  gap: 3px;
+}
+
+.training-upcoming-item strong,
+.training-pause-row strong {
+  overflow-wrap: anywhere;
+}
+
+.training-upcoming-item span,
+.training-pause-row small {
+  color: var(--muted);
+  font-size: 0.85rem;
+}
+
+.training-occurrence-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.agenda-item .training-occurrence-actions {
+  margin-top: 10px;
+}
+
+.training-occurrence-actions .button {
+  font-size: 0.83rem;
+  min-height: 40px;
+}
+
+.training-occurrence-completed,
+.agenda-item .training-plan-label {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 6px;
+  color: var(--green);
+  font-size: 0.85rem;
+}
+
+.training-pause-history {
+  margin-top: 14px;
+}
+
+.training-pause-row > span {
+  flex: 1;
+  min-width: 140px;
+  display: grid;
+  gap: 3px;
+  font-size: 0.85rem;
+}
+
+.training-pause-row > svg,
+.training-calendar-link > svg {
+  color: var(--primary);
+  flex-shrink: 0;
+}
+
+.training-calendar-link {
+  margin-bottom: 16px;
+}
+
+.training-calendar-link > span {
+  flex: 1;
+  min-width: 180px;
+  font-size: 0.88rem;
+}
+
+@media (max-width: 600px) {
+  .training-schedule-panel .section-header,
+  .training-upcoming-item {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .agenda-item:has(.training-plan-label) {
+    grid-template-columns: 24px minmax(0, 1fr);
+  }
+
+  .agenda-item:has(.training-plan-label) .agenda-actions {
+    grid-column: 2;
+    justify-content: flex-end;
+  }
+}
+
 .calendar-sidebar,
 .calendar-group-list {
   display: grid;
@@ -8015,6 +8132,11 @@ th {
 
   .selected-day {
     display: none;
+  }
+
+  .selected-day:has(.training-plan-label),
+  .selected-day:has(.training-pause-history) {
+    display: block;
   }
 
   .recipe-head {

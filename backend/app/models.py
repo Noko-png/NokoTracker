@@ -112,6 +112,9 @@ class CalendarEvent(TimestampMixin, Base):
     recurrence_frequency = Column(String(32), default="none", nullable=False, index=True)
     recurrence_interval = Column(Integer, default=1, nullable=False)
     recurrence_until = Column(DateTime(timezone=True), nullable=True, index=True)
+    cycle_training_days = Column(Integer, default=2, server_default="2", nullable=False)
+    cycle_rest_days = Column(Integer, default=1, server_default="1", nullable=False)
+    training_plan_id = Column(Integer, ForeignKey("training_plans.id", ondelete="SET NULL"), nullable=True, index=True)
     user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=True, index=True)
     group_id = Column(
         Integer,
@@ -122,6 +125,12 @@ class CalendarEvent(TimestampMixin, Base):
 
     user = relationship("User", back_populates="calendar_events")
     group = relationship("CalendarGroup", back_populates="calendar_events")
+    training_plan = relationship("TrainingPlan", back_populates="calendar_events")
+    shifts = relationship(
+        "CalendarEventShift", back_populates="event", cascade="all, delete-orphan",
+        order_by="CalendarEventShift.id",
+    )
+    training_sessions = relationship("TrainingSession", back_populates="calendar_event")
     exclusions = relationship(
         "CalendarEventExclusion",
         back_populates="event",
@@ -131,6 +140,8 @@ class CalendarEvent(TimestampMixin, Base):
 
     __table_args__ = (
         CheckConstraint("recurrence_interval >= 1", name="ck_calendar_recurrence_interval_positive"),
+        CheckConstraint("cycle_training_days BETWEEN 1 AND 31", name="ck_calendar_cycle_training_days"),
+        CheckConstraint("cycle_rest_days BETWEEN 1 AND 31", name="ck_calendar_cycle_rest_days"),
     )
 
 
@@ -155,6 +166,18 @@ class CalendarEventExclusion(Base):
             name="uq_calendar_event_exclusion_occurrence",
         ),
     )
+
+
+class CalendarEventShift(Base):
+    __tablename__ = "calendar_event_shifts"
+
+    id = Column(Integer, primary_key=True, index=True)
+    event_id = Column(Integer, ForeignKey("calendar_events.id", ondelete="CASCADE"), nullable=False, index=True)
+    occurrence_start_at = Column(DateTime(timezone=True), nullable=False)
+    days = Column(Integer, default=1, nullable=False)
+    event = relationship("CalendarEvent", back_populates="shifts")
+
+    __table_args__ = (CheckConstraint("days >= 1", name="ck_calendar_shift_days_positive"),)
 
 
 class Food(TimestampMixin, Base):
@@ -505,6 +528,7 @@ class TrainingPlan(TimestampMixin, Base):
     user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=True, index=True)
 
     user = relationship("User", back_populates="training_plans")
+    calendar_events = relationship("CalendarEvent", back_populates="training_plan")
     exercises = relationship(
         "TrainingExercise",
         back_populates="plan",
@@ -551,6 +575,8 @@ class TrainingSession(TimestampMixin, Base):
     id = Column(Integer, primary_key=True, index=True)
     trained_at = Column(DateTime(timezone=True), default=datetime.utcnow, nullable=False, index=True)
     notes = Column(Text, nullable=True)
+    calendar_event_id = Column(Integer, ForeignKey("calendar_events.id", ondelete="SET NULL"), nullable=True, index=True)
+    calendar_occurrence_start_at = Column(DateTime(timezone=True), nullable=True)
     user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=True, index=True)
     plan_id = Column(
         Integer,
@@ -561,12 +587,15 @@ class TrainingSession(TimestampMixin, Base):
 
     user = relationship("User", back_populates="training_sessions")
     plan = relationship("TrainingPlan", back_populates="sessions")
+    calendar_event = relationship("CalendarEvent", back_populates="training_sessions")
     sets = relationship(
         "TrainingSessionSet",
         back_populates="session",
         cascade="all, delete-orphan",
         order_by="TrainingSessionSet.set_index, TrainingSessionSet.id",
     )
+
+    __table_args__ = (UniqueConstraint("calendar_event_id", "calendar_occurrence_start_at", name="uq_training_calendar_occurrence"),)
 
 
 class TrainingSessionSet(TimestampMixin, Base):

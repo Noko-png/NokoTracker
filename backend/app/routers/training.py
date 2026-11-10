@@ -1,8 +1,10 @@
 from fastapi import APIRouter, Depends, HTTPException, Query, Response, status
 from sqlalchemy.orm import Session, selectinload
+from pydantic import ValidationError
 
 from .. import crud, models, schemas
 from ..database import get_db
+from ..services.calendar_schedule import ensure_occurrence, ensure_training_event
 
 
 plans_router = APIRouter(prefix="/training/plans", tags=["training"])
@@ -58,6 +60,35 @@ def validate_session_sets(
             status_code=422,
             detail=f"Exercises do not belong to this plan: {', '.join(map(str, invalid_ids))}",
         )
+
+
+def validate_calendar_link(db: Session, data: schemas.TrainingSessionBase, session_id: int | None = None):
+    if data.calendar_event_id is None:
+        if data.calendar_occurrence_start_at is not None:
+            raise HTTPException(422, "Zum Kalenderzeitpunkt fehlt der Kalendertermin.")
+        return
+    if data.calendar_occurrence_start_at is None:
+        raise HTTPException(422, "Bitte den Kalenderzeitpunkt des Trainings angeben.")
+    event = db.query(models.CalendarEvent).filter(models.CalendarEvent.id == data.calendar_event_id).first()
+    if event is None:
+        raise HTTPException(404, "Kalendertermin nicht gefunden.")
+    plan = ensure_training_event(db, event)
+    if plan.id != data.plan_id:
+        raise HTTPException(422, "Das Training muss den verknuepften Trainingsplan verwenden.")
+    principal = db.info.get("principal")
+    user_id = data.user_id if data.user_id is not None else (principal.user_id if principal and not principal.is_admin else None)
+    if user_id != event.user_id or user_id != plan.user_id:
+        raise HTTPException(422, "Training und Kalendertermin muessen zum gleichen Profil gehoeren.")
+    target = ensure_occurrence(event, data.calendar_occurrence_start_at)
+    query = db.query(models.TrainingSession).filter(
+        models.TrainingSession.calendar_event_id == event.id,
+        models.TrainingSession.calendar_occurrence_start_at == target,
+    )
+    if session_id is not None:
+        query = query.filter(models.TrainingSession.id != session_id)
+    if query.first():
+        raise HTTPException(409, "Dieses Training wurde bereits protokolliert.")
+    data.calendar_occurrence_start_at = target
 
 
 @plans_router.get("", response_model=list[schemas.TrainingPlanRead])
@@ -185,6 +216,7 @@ def create_training_session(
     get_plan_or_404(db, session_in.plan_id)
     ensure_user_exists(db, session_in.user_id)
     validate_session_sets(db, session_in.plan_id, session_in.sets)
+    validate_calendar_link(db, session_in)
 
     training_session = models.TrainingSession(
         **session_in.model_dump(exclude={"sets"})
@@ -207,16 +239,34 @@ def update_training_session(
     db: Session = Depends(get_db),
 ):
     training_session = get_session_or_404(db, session_id)
-    plan_id = session_in.plan_id or training_session.plan_id
+    merged_data = {name: getattr(training_session, name) for name in schemas.TrainingSessionBase.model_fields}
+    merged_data.update(session_in.model_dump(exclude_unset=True, exclude={"sets"}))
+    if "calendar_event_id" in session_in.model_fields_set and session_in.calendar_event_id is None:
+        merged_data["calendar_occurrence_start_at"] = None
+    try:
+        merged = schemas.TrainingSessionBase.model_validate(merged_data)
+    except ValidationError as exc:
+        raise HTTPException(422, str(exc)) from exc
+    plan_id = merged.plan_id
     get_plan_or_404(db, plan_id)
-    ensure_user_exists(db, session_in.user_id)
+    ensure_user_exists(db, merged.user_id)
+    validate_calendar_link(db, merged, training_session.id)
+
+    # Validate all input before modifying persistent rows; invalid sets must not
+    # leak a partially changed session into a caller's next transaction.
+    if session_in.sets is not None:
+        validate_session_sets(db, plan_id, session_in.sets)
+    elif plan_id != training_session.plan_id:
+        existing_sets = [schemas.TrainingSessionSetCreate.model_validate(row, from_attributes=True) for row in training_session.sets]
+        validate_session_sets(db, plan_id, existing_sets)
 
     update_data = session_in.model_dump(exclude_unset=True, exclude={"sets"})
+    if "calendar_event_id" in update_data or "calendar_occurrence_start_at" in update_data:
+        update_data["calendar_occurrence_start_at"] = merged.calendar_occurrence_start_at
     for field, value in update_data.items():
         setattr(training_session, field, value)
 
     if session_in.sets is not None:
-        validate_session_sets(db, plan_id, session_in.sets)
         training_session.sets.clear()
         db.flush()
         for index, set_in in enumerate(session_in.sets, start=1):

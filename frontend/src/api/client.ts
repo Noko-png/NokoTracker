@@ -451,9 +451,15 @@ export type CalendarEvent = {
     | "weekdays"
     | "weekends"
     | "monthly"
-    | "yearly";
+    | "yearly"
+    | "cycle";
   recurrence_interval: number;
   recurrence_until?: string | null;
+  cycle_training_days?: number;
+  cycle_rest_days?: number;
+  training_plan_id?: number | null;
+  training_plan?: Pick<TrainingPlan, "id" | "name" | "notes" | "user_id"> | null;
+  shifts?: CalendarEventShift[];
   user_id?: number | null;
   group_id?: number | null;
   group?: CalendarGroup | null;
@@ -464,7 +470,7 @@ export type CalendarEvent = {
 
 export type CalendarEventCreate = Omit<
   CalendarEvent,
-  "id" | "created_at" | "updated_at" | "group" | "exclusions"
+  "id" | "created_at" | "updated_at" | "group" | "exclusions" | "training_plan" | "shifts"
 >;
 
 export type CalendarEventUpdate = Partial<CalendarEventCreate>;
@@ -473,6 +479,13 @@ export type CalendarEventExclusion = {
   id: number;
   event_id: number;
   occurrence_start_at: string;
+};
+
+export type CalendarEventShift = {
+  id: number;
+  event_id: number;
+  occurrence_start_at: string;
+  days: number;
 };
 
 export type CalendarGroup = {
@@ -616,6 +629,8 @@ export type TrainingSession = {
   user_id?: number | null;
   user?: User | null;
   plan_id: number;
+  calendar_event_id?: number | null;
+  calendar_occurrence_start_at?: string | null;
   plan: Omit<TrainingPlan, "exercises" | "created_at" | "updated_at">;
   sets: TrainingSessionSet[];
   created_at: string;
@@ -627,6 +642,8 @@ export type TrainingSessionCreate = {
   notes?: string | null;
   user_id?: number | null;
   plan_id: number;
+  calendar_event_id?: number | null;
+  calendar_occurrence_start_at?: string | null;
   sets: TrainingSessionSetCreate[];
 };
 
@@ -1435,6 +1452,19 @@ export function excludeCalendarOccurrence(id: number, occurrenceStartAt: string)
   return request<CalendarEventExclusion>(`/calendar/events/${id}/exclusions`, {
     method: "POST",
     body: { occurrence_start_at: occurrenceStartAt },
+  });
+}
+
+export function skipCalendarOccurrence(id: number, occurrenceStartAt: string) {
+  return request<CalendarEvent>(`/calendar/events/${id}/skip`, {
+    method: "POST",
+    body: { occurrence_start_at: occurrenceStartAt },
+  });
+}
+
+export function undoCalendarShift(id: number, shiftId: number) {
+  return request<CalendarEvent>(`/calendar/events/${id}/shifts/${shiftId}`, {
+    method: "DELETE",
   });
 }
 

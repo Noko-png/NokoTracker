@@ -2,6 +2,7 @@ import { addFoodBarcode, foodBarcodes, foodMatchesSearch, normalizeBarcodes } fr
 import { DatabaseImportForm } from "./DatabaseImportForm";
 import { RecipeActionsMenu } from "./RecipeActionsMenu";
 import { RecipeImportDialog } from "./RecipeImportDialog";
+import { TrainingSchedulePanel, TrainingOccurrenceActions, TrainingPauseHistory, isTrainingOccurrenceCompleted } from "./TrainingSchedulePanel";
 import {
   formatFractionalQuantity,
   normalizeFractionalQuantityValue,
@@ -171,6 +172,8 @@ import {
   increaseInventoryItem,
   lookupFoodByBarcode,
   excludeCalendarOccurrence,
+  skipCalendarOccurrence,
+  undoCalendarShift,
   prepareRecipe,
   previewFoodByBarcode,
   previewReceiptImport,
@@ -400,6 +403,9 @@ type CalendarForm = {
   recurrence_frequency: CalendarEvent["recurrence_frequency"];
   recurrence_interval: string;
   recurrence_until: string;
+  cycle_training_days: string;
+  cycle_rest_days: string;
+  training_plan_id: string;
   location: string;
   description: string;
   group_id: string;
@@ -447,6 +453,8 @@ type TrainingSessionForm = {
   plan_id: string;
   date: string;
   sets: TrainingSetForm[];
+  calendar_event_id?: number | null;
+  calendar_occurrence_start_at?: string | null;
 };
 
 const mealPrepSource = "mealprep";
@@ -568,7 +576,7 @@ const macroMeta: Array<{
   { key: "carbs", label: "Kohlenhydrate", unit: "g", tone: "red" },
 ];
 
-const appVersion = "3.1.18";
+const appVersion = "3.1.19";
 const updateSourceLabel = "main / github.com/Noko-png/NokoTracker";
 
 const emptyNutrition: NutritionDay = {
@@ -779,6 +787,9 @@ function createCalendarForm(date = getLocalDate()): CalendarForm {
     recurrence_frequency: "none",
     recurrence_interval: "1",
     recurrence_until: "",
+    cycle_training_days: "2",
+    cycle_rest_days: "1",
+    training_plan_id: "",
     location: "",
     description: "",
     group_id: "",
@@ -1187,6 +1198,9 @@ function createCalendarFormFromEvent(event: CalendarEvent): CalendarForm {
     location: event.location ?? "",
     description: event.description ?? "",
     group_id: event.group_id ? String(event.group_id) : "",
+    cycle_training_days: String(event.cycle_training_days ?? 2),
+    cycle_rest_days: String(event.cycle_rest_days ?? 1),
+    training_plan_id: event.training_plan_id ? String(event.training_plan_id) : "",
   };
 }
 
@@ -1276,6 +1290,10 @@ function isStoredTrainingSessionForm(value: unknown): value is TrainingSessionFo
   return (
     typeof form.plan_id === "string" &&
     typeof form.date === "string" &&
+    ((form.calendar_event_id == null && form.calendar_occurrence_start_at == null) ||
+      (Number.isInteger(form.calendar_event_id) && Number(form.calendar_event_id) > 0 &&
+        typeof form.calendar_occurrence_start_at === "string" &&
+        Number.isFinite(new Date(form.calendar_occurrence_start_at).getTime()))) &&
     Array.isArray(form.sets) &&
     form.sets.every(
       (set) =>
@@ -1889,6 +1907,8 @@ export default function App() {
     useState<TrainingSessionForm>(
       initialTrainingSessionForm,
     );
+  const [trainingScheduleBusy, setTrainingScheduleBusy] = useState(false);
+  const trainingScheduleBusyRef = useRef(false);
   const trainingSessionFormRef = useRef(trainingSessionForm);
   const trainingDraftKey = session
     ? `${trainingSessionDraftStorageKey}:${session.ha_user_id ?? "local"}:${userId}`
@@ -3359,6 +3379,7 @@ export default function App() {
         ...recurrencePayload(calendarForm),
         user_id: userId,
         group_id: optionalNumber(calendarForm.group_id),
+        training_plan_id: optionalNumber(calendarForm.training_plan_id),
       } satisfies CalendarEventCreate;
       const calendarEvent =
         editingCalendarEventId === null
@@ -3402,6 +3423,58 @@ export default function App() {
         )}:00`,
       ),
     );
+  }
+
+  async function changeTrainingSchedule(action: () => Promise<unknown>) {
+    if (trainingScheduleBusyRef.current) return;
+    trainingScheduleBusyRef.current = true;
+    setTrainingScheduleBusy(true);
+    try {
+      await runAction(action);
+    } finally {
+      trainingScheduleBusyRef.current = false;
+      setTrainingScheduleBusy(false);
+    }
+  }
+
+  function skipTrainingOccurrence(occurrence: CalendarOccurrence) {
+    return changeTrainingSchedule(() => skipCalendarOccurrence(
+      occurrence.event.id,
+      `${getLocalDate(occurrence.occurrenceStartAt)}T${formatTimeInput(occurrence.occurrenceStartAt)}:00`,
+    ));
+  }
+
+  function undoTrainingPause(eventId: number, shiftId: number) {
+    return changeTrainingSchedule(() => undoCalendarShift(eventId, shiftId));
+  }
+
+  function scheduleTrainingPlan(plan?: TrainingPlan) {
+    setEditingCalendarEventId(null);
+    setCalendarDate(getLocalDate());
+    setCalendarForm({
+      ...createCalendarForm(),
+      title: plan?.name ?? "Training",
+      training_plan_id: plan ? String(plan.id) : "",
+      recurrence_frequency: "cycle",
+      start_time: "18:00",
+      end_time: "19:00",
+    });
+    setActivePage("calendar");
+  }
+
+  function startScheduledTraining(occurrence: CalendarOccurrence) {
+    const plan = trainingPlans.find((item) => item.id === occurrence.event.training_plan_id);
+    if (!plan) {
+      setApiError("Der verknüpfte Trainingsplan ist für dieses Profil nicht verfügbar.");
+      return;
+    }
+    setTrainingSessionForm({
+      ...createTrainingSessionFormForPlan(plan),
+      date: occurrence.date,
+      calendar_event_id: occurrence.event.id,
+      calendar_occurrence_start_at: `${getLocalDate(occurrence.occurrenceStartAt)}T${formatTimeInput(occurrence.occurrenceStartAt)}:00`,
+    });
+    setActivePage("training");
   }
 
   async function removeCalendarSeries(event: CalendarEvent) {
@@ -3636,6 +3709,8 @@ export default function App() {
         notes: null,
         user_id: userId,
         sets,
+        calendar_event_id: trainingSessionForm.calendar_event_id ?? null,
+        calendar_occurrence_start_at: trainingSessionForm.calendar_occurrence_start_at ?? null,
       });
       const plan = trainingPlans.find((item) => item.id === planId);
       setTrainingSessionForm(createTrainingSessionFormForPlan(plan));
@@ -4156,6 +4231,12 @@ export default function App() {
             onViewChange={setCalendarView}
             selectedDate={calendarDate}
             view={calendarView}
+            trainingPlans={trainingPlans}
+            trainingSessions={trainingSessions}
+            trainingScheduleBusy={trainingScheduleBusy}
+            onStartTraining={startScheduledTraining}
+            onSkipTraining={skipTrainingOccurrence}
+            onUndoTrainingPause={undoTrainingPause}
           />
         )}
 
@@ -4366,6 +4447,18 @@ export default function App() {
         )}
 
         {activePage === "training" && (
+          <>
+          <TrainingSchedulePanel
+            events={calendarVisibleEvents}
+            groups={calendarGroups}
+            plans={trainingPlans}
+            sessions={trainingSessions}
+            busy={trainingScheduleBusy}
+            onStart={startScheduledTraining}
+            onSkip={skipTrainingOccurrence}
+            onUndo={undoTrainingPause}
+            onSchedule={scheduleTrainingPlan}
+          />
           <TrainingPage
             onDeleteSession={removeTrainingSession}
             onSessionFormChange={setTrainingSessionForm}
@@ -4374,6 +4467,7 @@ export default function App() {
             sessionForm={trainingSessionForm}
             sessions={trainingSessions}
           />
+          </>
         )}
 
         {activePage === "shopping" && (
@@ -5309,6 +5403,11 @@ function TrainingPage({
       <section className="training-layout training-log-layout">
         <div className="training-column wide">
           <Panel className="training-session-panel" title="Trainingseinheit erfassen">
+            {sessionForm.calendar_event_id && <div className="training-calendar-link" role="status">
+              <CalendarDays size={18} />
+              <span>Mit Kalendertermin am {formatDate(getLocalDate(new Date(sessionForm.calendar_occurrence_start_at!)))} verknüpft. Nach dem Speichern wird er als absolviert angezeigt.</span>
+              <button className="button secondary" onClick={() => onSessionFormChange({ ...sessionForm, calendar_event_id: null, calendar_occurrence_start_at: null })} type="button">Verknüpfung lösen</button>
+            </div>}
             <form className="form-grid training-session-form" onSubmit={onSessionSubmit}>
               <label>
                 <span>Trainingsplan</span>
@@ -5685,6 +5784,12 @@ function WeightPage({
 }
 
 function CalendarPage({
+  trainingPlans,
+  trainingSessions,
+  trainingScheduleBusy,
+  onStartTraining,
+  onSkipTraining,
+  onUndoTrainingPause,
   events,
   groups,
   groupForm,
@@ -5710,6 +5815,12 @@ function CalendarPage({
   selectedDate,
   view,
 }: {
+  trainingPlans: TrainingPlan[];
+  trainingSessions: TrainingSession[];
+  trainingScheduleBusy: boolean;
+  onStartTraining: (occurrence: CalendarOccurrence) => void;
+  onSkipTraining: (occurrence: CalendarOccurrence) => void;
+  onUndoTrainingPause: (eventId: number, shiftId: number) => void;
   events: CalendarEvent[];
   groups: CalendarGroup[];
   groupForm: CalendarGroupForm;
@@ -5752,7 +5863,7 @@ function CalendarPage({
     () => setCreateMenuOpen(false),
   );
   const [createPanel, setCreatePanel] = useState<"event" | "group" | null>(
-    null,
+    form.recurrence_frequency === "cycle" ? "event" : null,
   );
   const [calendarGroupsOpen, setCalendarGroupsOpen] = useState(false);
 
@@ -5847,6 +5958,21 @@ function CalendarPage({
     setCreateMenuOpen(false);
   }
 
+  function openTrainingCreatePanel() {
+    onCancelEdit();
+    const plan = trainingPlans[0];
+    onFormChange({
+      ...createCalendarForm(selectedDate),
+      title: plan?.name ?? "Training",
+      training_plan_id: plan ? String(plan.id) : "",
+      recurrence_frequency: "cycle",
+      start_time: "18:00",
+      end_time: "19:00",
+    });
+    setCreatePanel("event");
+    setCreateMenuOpen(false);
+  }
+
   function closeCreatePanel() {
     if (createPanel === "event") {
       onCancelEdit();
@@ -5881,12 +6007,12 @@ function CalendarPage({
     return (
       <span
         className={`calendar-chip ${occurrence.event.entry_type} ${
-          occurrence.event.is_completed ? "completed" : ""
+          occurrence.event.is_completed || isTrainingOccurrenceCompleted(occurrence, trainingSessions) ? "completed" : ""
         }`}
         key={occurrence.key}
         style={{ borderLeftColor: occurrenceColor(occurrence) }}
       >
-        {occurrence.event.title}
+        {isTrainingOccurrenceCompleted(occurrence, trainingSessions) ? "✓ " : ""}{occurrence.event.title}
       </span>
     );
   }
@@ -6610,6 +6736,11 @@ function CalendarPage({
                     {occurrence.event.description && (
                       <p>{occurrence.event.description}</p>
                     )}
+                    {occurrence.event.training_plan_id && <>
+                      <span className="training-plan-label"><Dumbbell size={14} />{occurrence.event.training_plan?.name ?? "Trainingsplan"}</span>
+                      <TrainingOccurrenceActions occurrence={occurrence} sessions={trainingSessions}
+                        busy={trainingScheduleBusy} onStart={onStartTraining} onSkip={onSkipTraining} />
+                    </>}
                   </div>
                   <div className="agenda-actions">
                     <button
@@ -6647,6 +6778,7 @@ function CalendarPage({
               ))
             )}
           </div>
+          <TrainingPauseHistory events={events} selectedDate={selectedDate} busy={trainingScheduleBusy} onUndo={onUndoTrainingPause} />
         </div>
       </section>
 
@@ -6696,6 +6828,10 @@ function CalendarPage({
               <button onClick={openEventCreatePanel} type="button">
                 <CalendarDays size={16} />
                 Termin
+              </button>
+              <button onClick={openTrainingCreatePanel} type="button">
+                <Dumbbell size={16} />
+                Trainingsserie
               </button>
               <button onClick={openGroupCreatePanel} type="button">
                 <Plus size={16} />
@@ -6796,8 +6932,23 @@ function CalendarPage({
               </label>
               <CalendarRecurrenceFields
                 form={form}
+                shifts={events.find((event) => event.id === editingEventId)?.shifts}
                 onChange={(change) => onFormChange({ ...form, ...change })}
               />
+              <label>
+                <span>Verknüpfter Trainingsplan</span>
+                <select value={form.training_plan_id} required={form.recurrence_frequency === "cycle"} onChange={(event) => {
+                  const plan = trainingPlans.find((item) => String(item.id) === event.target.value);
+                  onFormChange({ ...form, training_plan_id: event.target.value,
+                    title: !form.title || form.title === "Training" ? plan?.name ?? form.title : form.title,
+                  });
+                }}>
+                  <option value="">{form.recurrence_frequency === "cycle" ? "Trainingsplan wählen" : "Ohne Trainingsplan"}</option>
+                  {trainingPlans.map((plan) => <option value={plan.id} key={plan.id}>{plan.name}</option>)}
+                </select>
+                <small>{trainingPlans.length ? "Öffne den Plan direkt aus dem Termin. Gespeicherte Einheiten erscheinen als absolviert." : "Lege einen Trainingsplan unter Stammdaten → Training an."}</small>
+              </label>
+              {editingEventId !== null && <TrainingPauseHistory events={events.filter((event) => event.id === editingEventId)} busy={trainingScheduleBusy} onUndo={onUndoTrainingPause} />}
               <label>
                 <span>Notizen</span>
                 <textarea

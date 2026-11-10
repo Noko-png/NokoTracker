@@ -124,12 +124,24 @@ def migrate_sqlite_calendar_schema() -> None:
         ),
         "recurrence_until": "ALTER TABLE calendar_events ADD COLUMN recurrence_until DATETIME",
         "group_id": "ALTER TABLE calendar_events ADD COLUMN group_id INTEGER",
+        "cycle_training_days": "ALTER TABLE calendar_events ADD COLUMN cycle_training_days INTEGER NOT NULL DEFAULT 2",
+        "cycle_rest_days": "ALTER TABLE calendar_events ADD COLUMN cycle_rest_days INTEGER NOT NULL DEFAULT 1",
+        "training_plan_id": "ALTER TABLE calendar_events ADD COLUMN training_plan_id INTEGER REFERENCES training_plans(id) ON DELETE SET NULL",
     }
 
     with engine.begin() as connection:
         for column_name, statement in migrations.items():
             if column_name not in columns:
                 connection.execute(text(statement))
+
+    if "training_sessions" in table_names:
+        session_columns = {column["name"] for column in inspector.get_columns("training_sessions")}
+        with engine.begin() as connection:
+            if "calendar_event_id" not in session_columns:
+                connection.execute(text("ALTER TABLE training_sessions ADD COLUMN calendar_event_id INTEGER REFERENCES calendar_events(id) ON DELETE SET NULL"))
+            if "calendar_occurrence_start_at" not in session_columns:
+                connection.execute(text("ALTER TABLE training_sessions ADD COLUMN calendar_occurrence_start_at DATETIME"))
+            connection.execute(text("CREATE UNIQUE INDEX IF NOT EXISTS uq_training_calendar_occurrence ON training_sessions(calendar_event_id, calendar_occurrence_start_at)"))
 
     if "calendar_groups" in table_names:
         group_columns = {
@@ -902,7 +914,7 @@ ensure_default_user()
 app = FastAPI(
     title="Heim-ERP Backend",
     description="Backend API fuer ein privates Heim-ERP mit Kalender, Vorrat, Rezepten, Mahlzeiten und Einkaufsliste.",
-    version="3.1.18",
+    version="3.1.19",
 )
 
 app.add_middleware(

@@ -117,7 +117,7 @@ function groupedRecurrenceMatchesDate(
 
 export type CalendarRecurrence = Pick<CalendarEvent,
   "start_at" | "recurrence_frequency" | "recurrence_interval" | "recurrence_until"
->;
+> & Pick<CalendarEvent, "cycle_training_days" | "cycle_rest_days" | "shifts">;
 
 export function* getRecurrenceStarts(
   rule: CalendarRecurrence,
@@ -127,12 +127,30 @@ export function* getRecurrenceStarts(
   const base = new Date(rule.start_at);
   const frequency = rule.recurrence_frequency ?? "none";
   const interval = rule.recurrence_interval;
+  const trainingDays = rule.cycle_training_days ?? 2;
+  const restDays = rule.cycle_rest_days ?? 1;
   const until = rule.recurrence_until ? new Date(rule.recurrence_until) : rangeEnd;
   if (!Number.isFinite(base.getTime()) || !Number.isFinite(until.getTime()) ||
       !Number.isInteger(interval) || interval < 1 || limit < 1) return;
+  if (frequency === "cycle" &&
+      (!Number.isInteger(trainingDays) || trainingDays < 1 || trainingDays > 31 ||
+       !Number.isInteger(restDays) || restDays < 1 || restDays > 31)) return;
+  const shifts = frequency === "cycle"
+    ? [...(rule.shifts ?? [])].sort((a, b) => a.id - b.id)
+    : [];
   let emitted = 0;
   for (let index = 0; ; index += 1) {
-    const start = recurrenceDate(base, frequency, interval, index);
+    let start = frequency === "cycle"
+      ? addDays(base, Math.floor(index / trainingDays) * (trainingDays + restDays) + index % trainingDays)
+      : recurrenceDate(base, frequency, interval, index);
+    // Each pause was inserted at an actual occurrence in the then-current schedule.
+    // Replay them in insertion order, using calendar days to preserve local time.
+    for (const shift of shifts) {
+      if (Number.isInteger(shift.days) && shift.days > 0 &&
+          start >= new Date(shift.occurrence_start_at)) {
+        start = addDays(start, shift.days);
+      }
+    }
     if (!Number.isFinite(start.getTime()) || start > rangeEnd || start > until) return;
     if (groupedRecurrenceMatchesDate(base, start, frequency, interval)) {
       yield start;
@@ -147,21 +165,34 @@ export type CalendarRecurrenceForm = {
   recurrence_frequency: CalendarEvent["recurrence_frequency"];
   recurrence_interval: string;
   recurrence_until: string;
+  cycle_training_days?: string;
+  cycle_rest_days?: string;
 };
 
 export function recurrenceUnit(frequency: CalendarEvent["recurrence_frequency"]) {
-  if (frequency === "daily") return "Tage";
+  if (frequency === "daily" || frequency === "cycle") return "Tage";
   if (frequency === "monthly") return "Monate";
   if (frequency === "yearly") return "Jahre";
   return "Wochen";
 }
 
-export function recurrenceFormRule(form: CalendarRecurrenceForm): CalendarRecurrence {
+export function recurrenceFormRule(
+  form: CalendarRecurrenceForm,
+  shifts?: CalendarEvent["shifts"],
+): CalendarRecurrence {
   return {
     start_at: `${form.date}T00:00:00`,
     recurrence_frequency: form.recurrence_frequency,
-    recurrence_interval: Number(form.recurrence_interval),
+    recurrence_interval: form.recurrence_frequency === "cycle" ? 1 : Number(form.recurrence_interval),
     recurrence_until: form.recurrence_until ? `${form.recurrence_until}T23:59:59` : null,
+    cycle_training_days: Number(form.cycle_training_days ?? "2"),
+    cycle_rest_days: Number(form.cycle_rest_days ?? "1"),
+    // Form previews show calendar dates at midnight, so pause anchors use the
+    // same time of day; otherwise an afternoon pause would miss its own date.
+    ...(shifts?.length ? { shifts: shifts.map((shift) => ({
+      ...shift,
+      occurrence_start_at: `${getLocalDate(new Date(shift.occurrence_start_at))}T00:00:00`,
+    })) } : {}),
   };
 }
 
@@ -171,6 +202,11 @@ export function recurrenceFormError(form: CalendarRecurrenceForm): string | null
   if (!Number.isFinite(new Date(rule.start_at).getTime())) return "Bitte ein Startdatum wählen.";
   if (!Number.isInteger(rule.recurrence_interval) || rule.recurrence_interval < 1 || rule.recurrence_interval > 365) {
     return "Bitte einen Abstand von 1 bis 365 in ganzen Zahlen eingeben.";
+  }
+  if (form.recurrence_frequency === "cycle" &&
+      [rule.cycle_training_days, rule.cycle_rest_days].some((days) =>
+        !Number.isInteger(days) || (days ?? 0) < 1 || (days ?? 0) > 31)) {
+    return "Bitte Trainings- und Pausentage von 1 bis 31 in ganzen Zahlen eingeben.";
   }
   if (form.recurrence_until) {
     if (form.recurrence_until < form.date) return "Das Serienende darf nicht vor dem Startdatum liegen.";
@@ -186,9 +222,14 @@ export function recurrencePayload(form: CalendarRecurrenceForm) {
   if (error) throw new Error(error);
   return {
     recurrence_frequency: form.recurrence_frequency,
-    recurrence_interval: form.recurrence_frequency === "none" ? 1 : Number(form.recurrence_interval),
+    recurrence_interval: form.recurrence_frequency === "none" || form.recurrence_frequency === "cycle"
+      ? 1 : Number(form.recurrence_interval),
     recurrence_until: form.recurrence_frequency !== "none" && form.recurrence_until
       ? `${form.recurrence_until}T23:59:59` : null,
+    ...(form.recurrence_frequency === "cycle" ? {
+      cycle_training_days: Number(form.cycle_training_days ?? "2"),
+      cycle_rest_days: Number(form.cycle_rest_days ?? "1"),
+    } : {}),
   };
 }
 
@@ -199,6 +240,11 @@ export function recurrenceDescription(form: CalendarRecurrenceForm) {
   const every = `Alle ${interval} ${recurrenceUnit(form.recurrence_frequency)}`;
   const weekday = date.toLocaleDateString("de-DE", { weekday: "long" });
   switch (form.recurrence_frequency) {
+    case "cycle": {
+      const training = Number(form.cycle_training_days ?? "2");
+      const rest = Number(form.cycle_rest_days ?? "1");
+      return `${training} ${training === 1 ? "Tag Training" : "Tage Training"}, ${rest} ${rest === 1 ? "Tag Pause" : "Tage Pause"} – fortlaufend.`;
+    }
     case "daily": return interval === 1 ? "Jeden Tag." : `${every}.`;
     case "weekly": return interval === 1 ? `Jede Woche am ${weekday}.` : `${every} am ${weekday}.`;
     case "weekdays": return `${interval === 1 ? "Jede Woche" : every} von Montag bis Freitag.`;

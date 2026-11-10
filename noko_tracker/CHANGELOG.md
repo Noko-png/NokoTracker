@@ -1,5 +1,13 @@
 # Changelog
 
+## 3.1.19
+
+- Dynamische Trainingsserien: Trainingstage und Pausentage frei als Rhythmus festlegen, etwa 2 Tage Training und 1 Tag Pause, mit Vorschau und optionalem Serienende.
+- Trainingsplaene direkt mit Kalenderterminen verknuepfen. Kalender und Trainingsseite oeffnen die passende Einheit samt Uebungen; gespeicherte Saetze markieren genau diesen Termin als absolviert.
+- Skip fuegt einen zusaetzlichen Pausentag ein und verschiebt das anstehende Training samt Folgeeinheiten um einen Tag. Wiederholtes Skippen und Ruecknahme der letzten Pause werden unterstuetzt.
+- Bereits protokollierte Trainings bleiben vor Verschiebungen geschuetzt. Pausentage und Trainingsverknuepfungen sind in Datenbanksicherungen enthalten; bestehende Installationen werden automatisch erweitert und alte Sicherungen bleiben kompatibel.
+- Tests pruefen Rhythmus, Zeitumstellung, mehrfache Pausen, Ruecknahme, Trainingshistorie, Profilzuordnung und Import/Export.
+
 ## 3.1.18
 
 - Rezeptimport und -export vom allgemeinen Datenbanktransfer getrennt. Gerichte besitzt einen eigenen Importdialog fuer Rezeptdateien und einzelne Rezepte aus Sicherungen; der allgemeine Dialog bleibt fuer das Ersetzen von Datenbereichen oder der gesamten Datenbank.

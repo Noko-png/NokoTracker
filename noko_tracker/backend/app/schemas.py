@@ -231,6 +231,17 @@ class CalendarEventExclusionRead(ORMBase):
     occurrence_start_at: datetime
 
 
+class CalendarEventShiftRead(CalendarEventExclusionRead):
+    days: int
+
+
+class CalendarTrainingPlanSummary(ORMBase):
+    id: int
+    name: str
+    notes: Optional[str] = None
+    user_id: Optional[int] = None
+
+
 class CalendarEventBase(BaseModel):
     title: str = Field(..., min_length=1, max_length=200)
     description: Optional[str] = None
@@ -248,9 +259,13 @@ class CalendarEventBase(BaseModel):
         "weekends",
         "monthly",
         "yearly",
+        "cycle",
     ] = "none"
     recurrence_interval: int = Field(1, ge=1, le=365)
     recurrence_until: Optional[datetime] = None
+    cycle_training_days: int = Field(2, ge=1, le=31)
+    cycle_rest_days: int = Field(1, ge=1, le=31)
+    training_plan_id: Optional[int] = None
     user_id: Optional[int] = None
     group_id: Optional[int] = None
 
@@ -285,10 +300,14 @@ class CalendarEventUpdate(BaseModel):
             "weekends",
             "monthly",
             "yearly",
+            "cycle",
         ]
     ] = None
     recurrence_interval: Optional[int] = Field(None, ge=1, le=365)
     recurrence_until: Optional[datetime] = None
+    cycle_training_days: Optional[int] = Field(None, ge=1, le=31)
+    cycle_rest_days: Optional[int] = Field(None, ge=1, le=31)
+    training_plan_id: Optional[int] = None
     user_id: Optional[int] = None
     group_id: Optional[int] = None
 
@@ -312,6 +331,8 @@ class CalendarEventRead(CalendarEventBase, ORMBase):
     user: Optional[UserSummary] = None
     group: Optional[CalendarGroupSummary] = None
     exclusions: list[CalendarEventExclusionRead] = Field(default_factory=list)
+    shifts: list[CalendarEventShiftRead] = Field(default_factory=list)
+    training_plan: Optional[CalendarTrainingPlanSummary] = None
 
 
 class FoodConversionBase(BaseModel):
@@ -1065,6 +1086,8 @@ class TrainingSessionBase(BaseModel):
     notes: Optional[str] = None
     user_id: Optional[int] = None
     plan_id: int
+    calendar_event_id: Optional[int] = None
+    calendar_occurrence_start_at: Optional[datetime] = None
 
 
 class TrainingSessionCreate(TrainingSessionBase):
@@ -1076,6 +1099,8 @@ class TrainingSessionUpdate(BaseModel):
     notes: Optional[str] = None
     user_id: Optional[int] = None
     plan_id: Optional[int] = None
+    calendar_event_id: Optional[int] = None
+    calendar_occurrence_start_at: Optional[datetime] = None
     sets: Optional[list[TrainingSessionSetCreate]] = None
 
 

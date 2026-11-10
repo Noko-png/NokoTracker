@@ -11,7 +11,7 @@ from .. import models, schemas
 DATA_GROUPS = {
     "weight": ("Gewichtsdaten", {"weight_entries"}),
     "training": ("Training", {"training_plans", "training_exercises", "training_sessions", "training_session_sets"}),
-    "calendar": ("Kalender und ToDos", {"calendar_groups", "calendar_events", "calendar_event_exclusions"}),
+    "calendar": ("Kalender und ToDos", {"calendar_groups", "calendar_events", "calendar_event_exclusions", "calendar_event_shifts"}),
     "recipes": ("Rezepte", {"recipes", "recipe_ingredients"}),
     "foods": ("Lebensmittel und Stammdaten", {"foods", "food_conversions", "food_barcodes", "product_groups", "product_units", "storage_locations"}),
     "inventory": ("Vorrat und Belegnachweise", {"inventory_items", "receipt_bookings"}),
@@ -80,6 +80,15 @@ class DataTransfer:
 
     def replace_groups(self, groups: list[str]):
         self.selected = set().union(*(DATA_GROUPS[group][1] for group in groups))
+        if ("training" in groups) != ("calendar" in groups):
+            # A linked calendar and its completed workouts form one history.
+            # Importing a plan as an implicit dependency would lose its exercises;
+            # importing a session's event would lose its pauses and exclusions.
+            for connection in (self.source, self.target):
+                for table, column in (("calendar_events", "training_plan_id"), ("training_sessions", "calendar_event_id")):
+                    columns = {row[1] for row in connection.execute(f'PRAGMA table_info("{table}")')}
+                    if column in columns and connection.execute(f'SELECT 1 FROM "{table}" WHERE "{column}" IS NOT NULL LIMIT 1').fetchone():
+                        raise ValueError("Training und Kalender sind miteinander verknuepft. Bitte beide Datenbereiche gemeinsam auswaehlen.")
         if "inventory" in groups and "meals" not in groups and self.target.execute("SELECT 1 FROM meal_inventory_bookings LIMIT 1").fetchone():
             raise ValueError("Der Vorrat ist mit bestehenden Mahlzeitenbuchungen verbunden. Bitte Mahlzeiten ebenfalls auswaehlen.")
         if "meals" in groups and "inventory" not in groups:

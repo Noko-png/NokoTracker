@@ -1,4 +1,5 @@
 import { useId } from "react";
+import type { CalendarEvent } from "./api/client";
 import {
   type CalendarRecurrenceForm,
   addDays,
@@ -16,8 +17,9 @@ const formatDate = (date: Date) => date.toLocaleDateString("de-DE", {
   weekday: "short", day: "2-digit", month: "2-digit", year: "numeric",
 });
 
-export function CalendarRecurrenceFields({ form, onChange }: {
+export function CalendarRecurrenceFields({ form, shifts, onChange }: {
   form: CalendarRecurrenceForm;
+  shifts?: CalendarEvent["shifts"];
   onChange: (change: Partial<CalendarRecurrenceForm>) => void;
 }) {
   const hintId = useId();
@@ -29,7 +31,7 @@ export function CalendarRecurrenceFields({ form, onChange }: {
   const grouped = frequency === "weekdays" || frequency === "weekends";
   const unit = recurrenceUnit(frequency);
   const preview = repeating && !error
-    ? [...getRecurrenceStarts(recurrenceFormRule(form), new Date(9999, 11, 31), 6)]
+    ? [...getRecurrenceStarts(recurrenceFormRule(form, shifts), new Date(9999, 11, 31), 6)]
     : [];
 
   return (
@@ -49,6 +51,7 @@ export function CalendarRecurrenceFields({ form, onChange }: {
         >
           <option value="none">Keine – einmaliger Termin</option>
           <option value="daily">Täglich</option>
+          <option value="cycle">Trainingsrhythmus – Training und Pause</option>
           <option value="weekly">Wöchentlich – am gleichen Wochentag</option>
           <option value="weekdays">Montag bis Freitag</option>
           <option value="weekends">Samstag und Sonntag</option>
@@ -58,7 +61,38 @@ export function CalendarRecurrenceFields({ form, onChange }: {
       </label>
       {repeating && (
         <>
-          <label>
+          {frequency === "cycle" ? (
+            <>
+              <label>
+                <span>Trainingstage hintereinander</span>
+                <input
+                  aria-describedby={hintId}
+                  inputMode="numeric"
+                  min="1"
+                  max="31"
+                  step="1"
+                  required
+                  type="number"
+                  value={form.cycle_training_days ?? "2"}
+                  onChange={(event) => onChange({ cycle_training_days: event.target.value })}
+                />
+              </label>
+              <label>
+                <span>Pausentage danach</span>
+                <input
+                  aria-describedby={hintId}
+                  inputMode="numeric"
+                  min="1"
+                  max="31"
+                  step="1"
+                  required
+                  type="number"
+                  value={form.cycle_rest_days ?? "1"}
+                  onChange={(event) => onChange({ cycle_rest_days: event.target.value })}
+                />
+              </label>
+            </>
+          ) : <label>
             <span>Wiederholen alle</span>
             <span className="calendar-recurrence-interval">
               <input
@@ -77,7 +111,7 @@ export function CalendarRecurrenceFields({ form, onChange }: {
                 ? { Tage: "Tag", Wochen: "Woche", Monate: "Monat", Jahre: "Jahr" }[unit]
                 : unit}</span>
             </span>
-          </label>
+          </label>}
           <label>
             <span>Wiederholen bis (optional)</span>
             <input
@@ -92,6 +126,12 @@ export function CalendarRecurrenceFields({ form, onChange }: {
             {error ? <p className="calendar-recurrence-error" role="alert">{error}</p> : (
               <>
                 <strong>{recurrenceDescription(form)}</strong>
+                {frequency === "cycle" && (
+                  <p>Der Rhythmus beginnt mit dem ersten Trainingstag. Mit „Heute pausieren“ verschiebst du diesen und alle folgenden Trainingstage um einen Tag.</p>
+                )}
+                {frequency === "cycle" && !!shifts?.length && (
+                  <p>Die eingefügten zusätzlichen Pausentage sind in der Vorschau berücksichtigt.</p>
+                )}
                 {grouped && validDate && Number(form.recurrence_interval) > 1 && (
                   <p>
                     Startwoche: {formatDate(calendarWeekStart(start))} bis {formatDate(addDays(calendarWeekStart(start), 6))}.

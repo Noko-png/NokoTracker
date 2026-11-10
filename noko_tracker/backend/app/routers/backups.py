@@ -31,6 +31,12 @@ EXPECTED_TABLES = set(models.Base.metadata.tables)
 BOOKING_TABLES = {"meal_inventory_bookings", "receipt_bookings"}
 # Added in 3.1.15; older backups use the defaults from the current schema.
 FOOD_NUTRIENT_COLUMNS = {"fiber_per_100g", "sugar_per_100g", "caffeine_mg_per_100g"}
+# Older calendar backups contain neither training links nor inserted rest days.
+CALENDAR_OPTIONAL_TABLES = {"calendar_event_shifts"}
+CALENDAR_OPTIONAL_COLUMNS = {
+    "calendar_events": {"cycle_training_days", "cycle_rest_days", "training_plan_id"},
+    "training_sessions": {"calendar_event_id", "calendar_occurrence_start_at"},
+}
 MAX_SQLITE_VALUE_BYTES = 12 * 1024 * 1024
 
 TRAINING_TABLES = {
@@ -105,7 +111,7 @@ def validate_sqlite_database(path: Path) -> tuple[dict[str, int], list[str]]:
                     "SELECT name FROM sqlite_master WHERE type = 'table'"
                 )
             }
-            missing_tables = sorted(EXPECTED_TABLES - table_names - BOOKING_TABLES - {"food_barcodes"})
+            missing_tables = sorted(EXPECTED_TABLES - table_names - BOOKING_TABLES - CALENDAR_OPTIONAL_TABLES - {"food_barcodes"})
             if missing_tables:
                 raise ValueError(
                     "Die Datenbank ist unvollstaendig oder nicht kompatibel. Fehlende Tabellen: "
@@ -119,6 +125,7 @@ def validate_sqlite_database(path: Path) -> tuple[dict[str, int], list[str]]:
                     row[1] for row in connection.execute(f'PRAGMA table_info("{table.name}")')
                 }
                 optional_columns = {"home_assistant_user_id"} if table.name == "users" else set()
+                optional_columns |= CALENDAR_OPTIONAL_COLUMNS.get(table.name, set())
                 if table.name == "foods":
                     optional_columns |= FOOD_NUTRIENT_COLUMNS
                 missing_columns = sorted(set(table.columns.keys()) - columns - optional_columns)
@@ -139,6 +146,9 @@ def validate_sqlite_database(path: Path) -> tuple[dict[str, int], list[str]]:
                 for foreign_key in table.foreign_keys:
                     parent = foreign_key.column
                     child = foreign_key.parent
+                    columns = {row[1] for row in connection.execute(f'PRAGMA table_info("{table.name}")')}
+                    if child.name not in columns:
+                        continue
                     invalid_reference = connection.execute(
                         f'SELECT 1 FROM "{table.name}" AS child '
                         f'LEFT JOIN "{parent.table.name}" AS parent '
