@@ -13,6 +13,7 @@ from .database import DATABASE_URL, SessionLocal, engine
 from .security import install_security, migrate_security_schema
 from .routers import (
     backups,
+    database_reset,
     calendar,
     dashboard,
     foods,
@@ -964,6 +965,7 @@ app.include_router(nutrition.router)
 app.include_router(shopping.router)
 app.include_router(imports.router)
 app.include_router(backups.router)
+app.include_router(database_reset.router)
 app.include_router(dashboard.router)
 app.include_router(weight.router)
 app.include_router(training.plans_router)
