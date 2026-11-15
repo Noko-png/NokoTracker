@@ -5,6 +5,8 @@ export type CalendarOccurrence = {
   date: string;
   event: CalendarEvent;
   occurrenceStartAt: Date;
+  trainingPlanId: number | null;
+  trainingPlanName: string | null;
   startAt: Date;
   endAt: Date | null;
 };
@@ -12,6 +14,8 @@ export type CalendarOccurrence = {
 type EventInterval = {
   event: CalendarEvent;
   occurrenceStartAt: Date;
+  trainingPlanId: number | null;
+  trainingPlanName: string | null;
   startAt: Date;
   endAt: Date;
 };
@@ -283,6 +287,11 @@ function occurrenceEnd(event: CalendarEvent, start: Date) {
   return end > start ? end : new Date(start.getTime() + 60 * 1000);
 }
 
+export function getCalendarTrainingPlanIds(event: Pick<CalendarEvent, "training_plan_id" | "training_plan_ids">): number[] {
+  if (event.training_plan_ids?.length) return event.training_plan_ids;
+  return event.training_plan_id == null ? [] : [event.training_plan_id];
+}
+
 function expandEvents(events: CalendarEvent[], rangeStart: Date, rangeEnd: Date) {
   const intervals: EventInterval[] = [];
   for (const event of events) {
@@ -292,7 +301,17 @@ function expandEvents(events: CalendarEvent[], rangeStart: Date, rangeEnd: Date)
     const excludedStarts = new Set(
       (event.exclusions ?? []).map((item) => new Date(item.occurrence_start_at).getTime()),
     );
+    const planIds = getCalendarTrainingPlanIds(event);
+    const planNames = new Map(event.training_plans?.map((plan) => [plan.id, plan.name]));
+    if (event.training_plan && !planNames.has(event.training_plan.id)) {
+      planNames.set(event.training_plan.id, event.training_plan.name);
+    }
+    let slotIndex = 0;
     for (const start of getRecurrenceStarts(event, rangeEnd)) {
+      // Rotation belongs to the original slot, even if a pause shifts it or a
+      // range filter or calendar exclusion hides it.
+      const trainingPlanId = planIds.length ? planIds[slotIndex % planIds.length] : null;
+      slotIndex += 1;
       const end = occurrenceEnd(event, start);
       if (
         end > rangeStart &&
@@ -301,6 +320,8 @@ function expandEvents(events: CalendarEvent[], rangeStart: Date, rangeEnd: Date)
         intervals.push({
           event,
           occurrenceStartAt: new Date(start),
+          trainingPlanId,
+          trainingPlanName: trainingPlanId === null ? null : planNames.get(trainingPlanId) ?? null,
           startAt: event.all_day ? startOfDay(start) : new Date(start),
           endAt: end,
         });
@@ -391,6 +412,8 @@ export function getCalendarOccurrences(
           date,
           event: target.event,
           occurrenceStartAt: target.occurrenceStartAt,
+          trainingPlanId: target.trainingPlanId,
+          trainingPlanName: target.trainingPlanName,
           startAt: segmentStart,
           endAt: unchangedOpenEnd
             ? null

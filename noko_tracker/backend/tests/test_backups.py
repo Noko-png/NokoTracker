@@ -398,14 +398,26 @@ class BackupTest(unittest.TestCase):
         """)
         return source
 
-    def test_full_import_preserves_training_calendar_and_inserted_rest_days(self):
+    def source_with_training_rotation(self):
+        source = self.source_with_training_calendar()
+        self.execute(source, """
+            INSERT INTO training_plans (id,name,user_id,created_at,updated_at)
+                SELECT 2,'Plan B',user_id,created_at,updated_at FROM training_plans WHERE id=1;
+            INSERT INTO calendar_event_training_plans (id,event_id,plan_id,position)
+                VALUES (8,1,1,0),(2,1,2,1),(4,1,1,2);
+        """)
+        return source
+
+    def test_legacy_single_plan_backup_preserves_training_calendar_and_rest_days(self):
         source = self.source_with_training_calendar()
         expected = self.table_rows(source)
+        self.execute(source, "DROP TABLE calendar_event_training_plans")
         self.upload(source.read_bytes())
         self.assertEqual(self.table_rows(self.target), expected)
 
     def test_training_calendar_partial_import_remaps_entire_linked_history(self):
         source = self.source_with_training_calendar()
+        self.execute(source, "DROP TABLE calendar_event_training_plans")
         self.seed_all_tables(self.engine)
         self.upload(source.read_bytes(), mode="selected", groups='["training","calendar"]')
         with Session(self.engine) as db:
@@ -423,6 +435,44 @@ class BackupTest(unittest.TestCase):
             self.assertEqual(shift.occurrence_start_at, datetime(2026, 10, 29, 6))
             self.assertEqual((event.cycle_training_days, event.cycle_rest_days), (2, 1))
             self.assertEqual(len(plan.exercises), 1)
+
+    def test_training_rotation_import_preserves_order_and_repeated_plans(self):
+        source = self.source_with_training_rotation()
+        for mode, options in (("full", {}), ("selected", {"groups": '["training","calendar"]'})):
+            with self.subTest(mode=mode):
+                result = self.upload(source.read_bytes(), mode=mode, **options)
+                self.assertEqual(result.imported_tables["calendar_event_training_plans"], 3)
+                with closing(sqlite3.connect(self.target)) as connection:
+                    rotation = connection.execute("""
+                        SELECT link.position, event.id, event.training_plan_id, plan.id, plan.name
+                        FROM calendar_event_training_plans AS link
+                        JOIN calendar_events AS event ON event.id=link.event_id
+                        JOIN training_plans AS plan ON plan.id=link.plan_id
+                        ORDER BY link.position
+                    """).fetchall()
+                    self.assertEqual([(row[0], row[4]) for row in rotation], [(0, "Plan"), (1, "Plan B"), (2, "Plan")])
+                    self.assertEqual(rotation[0][2], rotation[0][3])
+                    self.assertEqual(rotation[0][3], rotation[2][3])
+                    if mode == "selected":
+                        self.assertNotEqual(rotation[0][1], 1)
+                        self.assertNotEqual(rotation[0][3], 1)
+                        self.assertNotEqual(rotation[1][3], 2)
+
+    def test_rotation_rows_alone_require_both_groups(self):
+        source = self.source_with_training_rotation()
+        self.execute(source, """
+            UPDATE calendar_events SET training_plan_id=NULL;
+            UPDATE training_sessions SET calendar_event_id=NULL, calendar_occurrence_start_at=NULL;
+        """)
+        self.matching_profile()
+        before = self.target.read_bytes()
+        for group in ("training", "calendar"):
+            with self.subTest(group=group):
+                with self.assertRaises(HTTPException) as caught:
+                    self.upload(source.read_bytes(), mode="selected", groups=json.dumps([group]))
+                self.assertEqual(caught.exception.status_code, 422)
+                self.assertIn("beide Datenbereiche", caught.exception.detail)
+                self.assertEqual(self.target.read_bytes(), before)
 
     def test_linked_training_calendar_requires_both_groups_without_changing_current_data(self):
         source = self.source_with_training_calendar()
@@ -452,7 +502,8 @@ class BackupTest(unittest.TestCase):
     def test_older_calendar_backup_restores_without_training_links_or_pauses(self):
         source = self.source_with_data()
         with closing(sqlite3.connect(source)) as connection:
-            connection.execute("DROP TABLE calendar_event_shifts")
+            for table in backups.CALENDAR_OPTIONAL_TABLES:
+                connection.execute(f'DROP TABLE "{table}"')
             for table, omitted in backups.CALENDAR_OPTIONAL_COLUMNS.items():
                 columns = [row for row in connection.execute(f'PRAGMA table_info("{table}")') if row[1] not in omitted]
                 definition = ", ".join(f'"{row[1]}" {row[2]}' + (" PRIMARY KEY" if row[5] else "") for row in columns)

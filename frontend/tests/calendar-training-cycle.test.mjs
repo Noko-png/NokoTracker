@@ -60,11 +60,54 @@ test("calendar exclusions refer to shifted training dates", () => {
   const event = {
     ...cycle({ shifts: [shift(1, "2026-11-10")] }),
     id: 1, title: "Training", entry_type: "event", all_day: false,
+    training_plan_id: 10, training_plan: { id: 10, name: "Ganzkörper" },
     exclusions: [{ occurrence_start_at: "2026-11-11T18:00:00" }],
   };
   assert.deepEqual(getCalendarOccurrences([event], new Date("2026-11-09T00:00:00"),
-    new Date("2026-11-14T23:59:59")).map((item) => item.date), [
-    "2026-11-09", "2026-11-13", "2026-11-14",
+    new Date("2026-11-14T23:59:59")).map((item) => [item.date, item.trainingPlanId, item.trainingPlanName]), [
+    ["2026-11-09", 10, "Ganzkörper"], ["2026-11-13", 10, "Ganzkörper"], ["2026-11-14", 10, "Ganzkörper"],
+  ]);
+});
+
+test("a pause shifts the ordered training plans without restarting the rotation", () => {
+  const event = {
+    ...cycle(), id: 1, title: "Training", entry_type: "event", all_day: false,
+    training_plan_ids: [10, 20, 30, 10],
+    training_plans: [{ id: 10, name: "A" }, { id: 20, name: "B" }, { id: 30, name: "C" }, { id: 10, name: "A" }],
+  };
+  const from = new Date("2026-11-09T00:00:00");
+  const until = new Date("2026-11-17T23:59:59");
+  const dateAndPlan = (item) => [item.date, item.trainingPlanId, item.trainingPlanName];
+
+  assert.deepEqual(getCalendarOccurrences([event], from, until).map(dateAndPlan), [
+    ["2026-11-09", 10, "A"], ["2026-11-10", 20, "B"], ["2026-11-12", 30, "C"],
+    ["2026-11-13", 10, "A"], ["2026-11-15", 10, "A"], ["2026-11-16", 20, "B"],
+  ]);
+  const shifted = { ...event, shifts: [shift(1, "2026-11-10")] };
+  assert.deepEqual(getCalendarOccurrences([shifted], from, until).map(dateAndPlan), [
+    ["2026-11-09", 10, "A"], ["2026-11-11", 20, "B"], ["2026-11-13", 30, "C"],
+    ["2026-11-14", 10, "A"], ["2026-11-16", 10, "A"], ["2026-11-17", 20, "B"],
+  ]);
+});
+
+test("hidden slots and split appointments retain their original plan assignment", () => {
+  const event = {
+    ...cycle({ shifts: [shift(1, "2026-11-10")] }),
+    id: 1, group_id: 1, title: "Training", entry_type: "event", all_day: false,
+    end_at: "2026-11-09T21:00:00", training_plan_ids: [10, 20, 30],
+    exclusions: [{ occurrence_start_at: "2026-11-11T18:00:00" }],
+  };
+  const blocker = {
+    ...cycle({ recurrence_frequency: "none", start_at: "2026-11-13T19:00:00" }),
+    id: 2, group_id: 2, title: "Blockiert", entry_type: "event", all_day: false,
+    end_at: "2026-11-13T20:00:00",
+  };
+  const occurrences = getCalendarOccurrences([event, blocker], new Date("2026-11-11T00:00:00"),
+    new Date("2026-11-14T23:59:59"), [{ id: 2, suppresses_group_ids: [1] }]);
+  assert.deepEqual(occurrences.filter((item) => item.event.id === event.id).map((item) => [
+    item.date, item.trainingPlanId, item.startAt.getHours(), item.occurrenceStartAt.getHours(),
+  ]), [
+    ["2026-11-13", 30, 18, 18], ["2026-11-13", 30, 20, 18], ["2026-11-14", 10, 18, 18],
   ]);
 });
 

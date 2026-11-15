@@ -6,7 +6,13 @@ from datetime import timedelta
 
 from .. import crud, models, schemas
 from ..database import get_db
-from ..services.calendar_schedule import ensure_occurrence, ensure_training_event, ensure_no_completed_from, local_time
+from ..services.calendar_schedule import (
+    ensure_logged_plans_preserved,
+    ensure_no_completed_from,
+    ensure_occurrence,
+    ensure_training_event,
+    local_time,
+)
 
 
 router = APIRouter(prefix="/calendar/events", tags=["calendar"])
@@ -48,21 +54,34 @@ def get_group_or_404(db: Session, group_id: int) -> models.CalendarGroup:
     return group
 
 
-def validate_training_link(db: Session, event_in: schemas.CalendarEventBase) -> None:
-    if event_in.training_plan_id is None:
+def validate_training_links(db: Session, event_in: schemas.CalendarEventBase, plan_ids: list[int]) -> None:
+    if not plan_ids:
         return
-    plan = db.query(models.TrainingPlan).filter(models.TrainingPlan.id == event_in.training_plan_id).first()
-    if plan is None:
-        raise HTTPException(404, "Trainingsplan nicht gefunden.")
     if event_in.entry_type != "event":
         raise HTTPException(422, "Nur Kalendertermine koennen mit Trainingsplaenen verknuepft werden.")
-    if event_in.user_id != plan.user_id:
+    if len(plan_ids) > 1 and event_in.recurrence_frequency == "none":
+        raise HTTPException(422, "Mehrere Trainingspläne brauchen eine Terminserie.")
+    plans = db.query(models.TrainingPlan).filter(models.TrainingPlan.id.in_(set(plan_ids))).all()
+    if len(plans) != len(set(plan_ids)):
+        raise HTTPException(404, "Trainingsplan nicht gefunden.")
+    if any(plan.user_id != event_in.user_id for plan in plans):
         raise HTTPException(422, "Kalendertermin und Trainingsplan muessen zum gleichen Profil gehoeren.")
+
+
+def training_plan_links(plan_ids: list[int]) -> list[models.CalendarEventTrainingPlan]:
+    # Single-plan events keep using the legacy column so old rows and clients
+    # don't need to be migrated.
+    if len(plan_ids) <= 1:
+        return []
+    return [
+        models.CalendarEventTrainingPlan(plan_id=plan_id, position=position)
+        for position, plan_id in enumerate(plan_ids)
+    ]
 
 
 SCHEDULE_FIELDS = {
     "start_at", "end_at", "all_day", "entry_type", "recurrence_frequency", "recurrence_interval",
-    "recurrence_until", "cycle_training_days", "cycle_rest_days", "training_plan_id", "user_id",
+    "recurrence_until", "cycle_training_days", "cycle_rest_days", "user_id",
 }
 
 
@@ -70,9 +89,18 @@ SCHEDULE_FIELDS = {
 def create_event(event_in: schemas.CalendarEventCreate, db: Session = Depends(get_db)):
     ensure_user_exists(db, event_in.user_id)
     ensure_group_exists(db, event_in.group_id)
-    validate_training_link(db, event_in)
+    plan_ids = event_in.training_plan_ids
+    if plan_ids is None:
+        plan_ids = [event_in.training_plan_id] if event_in.training_plan_id is not None else []
+    validate_training_links(db, event_in, plan_ids)
+    data = event_in.model_dump(exclude={"training_plan_ids"})
+    data["training_plan_id"] = plan_ids[0] if plan_ids else None
+    event = models.CalendarEvent(**data, training_plan_links=training_plan_links(plan_ids))
     try:
-        return crud.create(db, models.CalendarEvent, event_in)
+        db.add(event)
+        db.commit()
+        db.refresh(event)
+        return event
     except IntegrityError as exc:
         db.rollback()
         raise HTTPException(status_code=409, detail="Calendar event could not be created") from exc
@@ -99,20 +127,43 @@ def update_event(
     db: Session = Depends(get_db),
 ):
     event = get_event_or_404(db, event_id)
+    if event.training_plan_id is not None:
+        ensure_training_event(db, event)
+    current_plan_ids = event.training_plan_ids
+    changes = event_in.model_dump(exclude_unset=True, exclude={"training_plan_ids"})
+    plan_ids = event_in.training_plan_ids
+    if plan_ids is None:
+        if "training_plan_id" in changes and event_in.training_plan_id != event.training_plan_id:
+            plan_ids = [event_in.training_plan_id] if event_in.training_plan_id is not None else []
+        else:
+            plan_ids = current_plan_ids
+    changes["training_plan_id"] = plan_ids[0] if plan_ids else None
     data = {name: getattr(event, name) for name in schemas.CalendarEventBase.model_fields}
-    data.update(event_in.model_dump(exclude_unset=True))
+    data.update(changes)
     try:
         merged = schemas.CalendarEventBase.model_validate(data)
     except ValidationError as exc:
         raise HTTPException(422, str(exc)) from exc
     ensure_user_exists(db, merged.user_id)
     ensure_group_exists(db, merged.group_id)
-    validate_training_link(db, merged)
+    validate_training_links(db, merged, plan_ids)
     schedule_changed = any(getattr(event, name) != getattr(merged, name) for name in SCHEDULE_FIELDS)
     if schedule_changed and (event.shifts or event.training_sessions):
         raise HTTPException(409, "Diese Serie hat Pausentage oder protokollierte Trainings. Fuer einen neuen Rhythmus bitte eine neue Serie anlegen.")
+    rotation_changed = plan_ids != current_plan_ids
+    if rotation_changed:
+        ensure_logged_plans_preserved(event, plan_ids)
     try:
-        return crud.update(db, event, event_in)
+        if rotation_changed:
+            if event.training_plan_links:
+                event.training_plan_links.clear()
+                db.flush()
+            event.training_plan_links = training_plan_links(plan_ids)
+        for name, value in changes.items():
+            setattr(event, name, value)
+        db.commit()
+        db.refresh(event)
+        return event
     except IntegrityError as exc:
         db.rollback()
         raise HTTPException(status_code=409, detail="Calendar event could not be updated") from exc

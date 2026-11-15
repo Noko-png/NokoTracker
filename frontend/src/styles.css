@@ -6354,6 +6354,53 @@ th {
   border-top: 1px solid var(--line);
 }
 
+.calendar-training-plans {
+  display: grid;
+  gap: 10px;
+  min-width: 0;
+  margin: 0;
+  padding: 10px 12px 12px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+}
+
+.calendar-training-plans legend {
+  padding: 0 4px;
+  font-size: 0.85rem;
+  font-weight: 600;
+}
+
+.calendar-training-plan-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: end;
+  gap: 6px;
+}
+
+.calendar-training-plan-row label {
+  flex: 1 1 130px;
+  min-width: 0;
+}
+
+.calendar-training-plan-row select {
+  width: 100%;
+  min-width: 0;
+}
+
+.calendar-training-plan-actions {
+  display: flex;
+  gap: 4px;
+}
+
+.calendar-training-plans > button {
+  justify-self: start;
+}
+
+.calendar-training-plans small {
+  color: var(--muted);
+  font-size: 0.8rem;
+}
+
 .calendar-recurrence select,
 .calendar-recurrence input {
   min-width: 0;
@@ -6412,6 +6459,10 @@ th {
   padding: 5px 7px;
   border-radius: 6px;
   background: var(--surface);
+}
+
+.calendar-preview-plan {
+  display: block;
 }
 
 .calendar-recurrence-preview .calendar-recurrence-error {

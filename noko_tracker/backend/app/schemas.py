@@ -279,7 +279,7 @@ class CalendarEventBase(BaseModel):
 
 
 class CalendarEventCreate(CalendarEventBase):
-    pass
+    training_plan_ids: Optional[list[int]] = Field(None, max_length=31)
 
 
 class CalendarEventUpdate(BaseModel):
@@ -308,6 +308,7 @@ class CalendarEventUpdate(BaseModel):
     cycle_training_days: Optional[int] = Field(None, ge=1, le=31)
     cycle_rest_days: Optional[int] = Field(None, ge=1, le=31)
     training_plan_id: Optional[int] = None
+    training_plan_ids: Optional[list[int]] = Field(None, max_length=31)
     user_id: Optional[int] = None
     group_id: Optional[int] = None
 
@@ -333,6 +334,8 @@ class CalendarEventRead(CalendarEventBase, ORMBase):
     exclusions: list[CalendarEventExclusionRead] = Field(default_factory=list)
     shifts: list[CalendarEventShiftRead] = Field(default_factory=list)
     training_plan: Optional[CalendarTrainingPlanSummary] = None
+    training_plan_ids: list[int] = Field(default_factory=list)
+    training_plans: list[CalendarTrainingPlanSummary] = Field(default_factory=list)
 
 
 class FoodConversionBase(BaseModel):

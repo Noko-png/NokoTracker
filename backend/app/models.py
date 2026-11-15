@@ -126,6 +126,13 @@ class CalendarEvent(TimestampMixin, Base):
     user = relationship("User", back_populates="calendar_events")
     group = relationship("CalendarGroup", back_populates="calendar_events")
     training_plan = relationship("TrainingPlan", back_populates="calendar_events")
+    training_plan_links = relationship(
+        "CalendarEventTrainingPlan",
+        back_populates="event",
+        cascade="all, delete-orphan",
+        order_by="CalendarEventTrainingPlan.position",
+        lazy="selectin",
+    )
     shifts = relationship(
         "CalendarEventShift", back_populates="event", cascade="all, delete-orphan",
         order_by="CalendarEventShift.id",
@@ -142,6 +149,34 @@ class CalendarEvent(TimestampMixin, Base):
         CheckConstraint("recurrence_interval >= 1", name="ck_calendar_recurrence_interval_positive"),
         CheckConstraint("cycle_training_days BETWEEN 1 AND 31", name="ck_calendar_cycle_training_days"),
         CheckConstraint("cycle_rest_days BETWEEN 1 AND 31", name="ck_calendar_cycle_rest_days"),
+    )
+
+    @property
+    def training_plan_ids(self):
+        if self.training_plan_links:
+            return [link.plan_id for link in self.training_plan_links]
+        return [self.training_plan_id] if self.training_plan_id is not None else []
+
+    @property
+    def training_plans(self):
+        if self.training_plan_links:
+            return [link.plan for link in self.training_plan_links if link.plan is not None]
+        return [self.training_plan] if self.training_plan is not None else []
+
+
+class CalendarEventTrainingPlan(Base):
+    __tablename__ = "calendar_event_training_plans"
+
+    id = Column(Integer, primary_key=True)
+    event_id = Column(Integer, ForeignKey("calendar_events.id", ondelete="CASCADE"), nullable=False, index=True)
+    plan_id = Column(Integer, ForeignKey("training_plans.id", ondelete="RESTRICT"), nullable=False, index=True)
+    position = Column(Integer, nullable=False)
+    event = relationship("CalendarEvent", back_populates="training_plan_links")
+    plan = relationship("TrainingPlan", lazy="selectin")
+
+    __table_args__ = (
+        UniqueConstraint("event_id", "position", name="uq_calendar_event_training_plan_position"),
+        CheckConstraint("position BETWEEN 0 AND 30", name="ck_calendar_event_training_plan_position"),
     )
 
 

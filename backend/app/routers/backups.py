@@ -31,8 +31,8 @@ EXPECTED_TABLES = set(models.Base.metadata.tables)
 BOOKING_TABLES = {"meal_inventory_bookings", "receipt_bookings"}
 # Added in 3.1.15; older backups use the defaults from the current schema.
 FOOD_NUTRIENT_COLUMNS = {"fiber_per_100g", "sugar_per_100g", "caffeine_mg_per_100g"}
-# Older calendar backups contain neither training links nor inserted rest days.
-CALENDAR_OPTIONAL_TABLES = {"calendar_event_shifts"}
+# Older backups may lack inserted rest days or ordered training plans.
+CALENDAR_OPTIONAL_TABLES = {"calendar_event_shifts", "calendar_event_training_plans"}
 CALENDAR_OPTIONAL_COLUMNS = {
     "calendar_events": {"cycle_training_days", "cycle_rest_days", "training_plan_id"},
     "training_sessions": {"calendar_event_id", "calendar_occurrence_start_at"},

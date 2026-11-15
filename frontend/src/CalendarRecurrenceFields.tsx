@@ -17,9 +17,10 @@ const formatDate = (date: Date) => date.toLocaleDateString("de-DE", {
   weekday: "short", day: "2-digit", month: "2-digit", year: "numeric",
 });
 
-export function CalendarRecurrenceFields({ form, shifts, onChange }: {
+export function CalendarRecurrenceFields({ form, shifts, planNames = [], onChange }: {
   form: CalendarRecurrenceForm;
   shifts?: CalendarEvent["shifts"];
+  planNames?: Array<string | undefined>;
   onChange: (change: Partial<CalendarRecurrenceForm>) => void;
 }) {
   const hintId = useId();
@@ -127,7 +128,7 @@ export function CalendarRecurrenceFields({ form, shifts, onChange }: {
               <>
                 <strong>{recurrenceDescription(form)}</strong>
                 {frequency === "cycle" && (
-                  <p>Der Rhythmus beginnt mit dem ersten Trainingstag. Mit „Heute pausieren“ verschiebst du diesen und alle folgenden Trainingstage um einen Tag.</p>
+                  <p>Mit „Skip / 1 Tag Pause“ verschiebst du das ausgewählte Training und die folgenden Trainingstage um einen Tag.</p>
                 )}
                 {frequency === "cycle" && !!shifts?.length && (
                   <p>Die eingefügten zusätzlichen Pausentage sind in der Vorschau berücksichtigt.</p>
@@ -147,7 +148,13 @@ export function CalendarRecurrenceFields({ form, shifts, onChange }: {
                 <p>{form.recurrence_until ? `Bis einschließlich ${formatDate(dateFromLocalValue(form.recurrence_until))}.` : "Ohne Enddatum."}</p>
                 <span className="calendar-recurrence-preview-label">Vorschau ab Startdatum</span>
                 <ol>
-                  {preview.map((date) => <li key={getLocalDate(date)}><time dateTime={getLocalDate(date)}>{formatDate(date)}</time></li>)}
+                  {preview.map((date, index) => {
+                    const planName = planNames.length > 1 ? planNames[index % planNames.length] : undefined;
+                    return <li key={getLocalDate(date)}>
+                      <time dateTime={getLocalDate(date)}>{formatDate(date)}</time>
+                      {planName && <strong className="calendar-preview-plan">{planName}</strong>}
+                    </li>;
+                  })}
                 </ol>
                 <small>Jeweils mit der oben gewählten Uhrzeit und Dauer.</small>
               </>

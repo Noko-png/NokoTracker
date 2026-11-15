@@ -4,7 +4,7 @@ from pydantic import ValidationError
 
 from .. import crud, models, schemas
 from ..database import get_db
-from ..services.calendar_schedule import ensure_occurrence, ensure_training_event
+from ..services.calendar_schedule import ensure_occurrence_slot
 
 
 plans_router = APIRouter(prefix="/training/plans", tags=["training"])
@@ -62,7 +62,12 @@ def validate_session_sets(
         )
 
 
-def validate_calendar_link(db: Session, data: schemas.TrainingSessionBase, session_id: int | None = None):
+def validate_calendar_link(
+    db: Session,
+    data: schemas.TrainingSessionBase,
+    plan: models.TrainingPlan,
+    session_id: int | None = None,
+) -> None:
     if data.calendar_event_id is None:
         if data.calendar_occurrence_start_at is not None:
             raise HTTPException(422, "Zum Kalenderzeitpunkt fehlt der Kalendertermin.")
@@ -72,14 +77,16 @@ def validate_calendar_link(db: Session, data: schemas.TrainingSessionBase, sessi
     event = db.query(models.CalendarEvent).filter(models.CalendarEvent.id == data.calendar_event_id).first()
     if event is None:
         raise HTTPException(404, "Kalendertermin nicht gefunden.")
-    plan = ensure_training_event(db, event)
-    if plan.id != data.plan_id:
-        raise HTTPException(422, "Das Training muss den verknuepften Trainingsplan verwenden.")
     principal = db.info.get("principal")
     user_id = data.user_id if data.user_id is not None else (principal.user_id if principal and not principal.is_admin else None)
     if user_id != event.user_id or user_id != plan.user_id:
         raise HTTPException(422, "Training und Kalendertermin muessen zum gleichen Profil gehoeren.")
-    target = ensure_occurrence(event, data.calendar_occurrence_start_at)
+    plan_ids = event.training_plan_ids
+    if not plan_ids:
+        raise HTTPException(404, "Der verknüpfte Trainingsplan ist nicht verfügbar.")
+    target, slot = ensure_occurrence_slot(event, data.calendar_occurrence_start_at)
+    if plan_ids[slot % len(plan_ids)] != plan.id:
+        raise HTTPException(422, "Das Training muss den für diesen Termin vorgesehenen Plan verwenden.")
     query = db.query(models.TrainingSession).filter(
         models.TrainingSession.calendar_event_id == event.id,
         models.TrainingSession.calendar_occurrence_start_at == target,
@@ -89,6 +96,10 @@ def validate_calendar_link(db: Session, data: schemas.TrainingSessionBase, sessi
     if query.first():
         raise HTTPException(409, "Dieses Training wurde bereits protokolliert.")
     data.calendar_occurrence_start_at = target
+
+
+def plan_in_rotation(db: Session, plan_id: int) -> bool:
+    return db.query(models.CalendarEventTrainingPlan.id).filter_by(plan_id=plan_id).first() is not None
 
 
 @plans_router.get("", response_model=list[schemas.TrainingPlanRead])
@@ -135,12 +146,17 @@ def update_training_plan(
 ):
     plan = get_plan_or_404(db, plan_id)
     ensure_user_exists(db, plan_in.user_id)
+    if "user_id" in plan_in.model_fields_set and plan_in.user_id != plan.user_id:
+        if plan.calendar_events or plan_in_rotation(db, plan.id):
+            raise HTTPException(409, "Ein im Kalender verknüpfter Trainingsplan muss im selben Profil bleiben.")
     return crud.update(db, plan, plan_in)
 
 
 @plans_router.delete("/{plan_id}", status_code=status.HTTP_204_NO_CONTENT)
 def delete_training_plan(plan_id: int, db: Session = Depends(get_db)):
     plan = get_plan_or_404(db, plan_id)
+    if plan_in_rotation(db, plan.id):
+        raise HTTPException(409, "Entferne den Trainingsplan zuerst aus der Kalenderrotation.")
     crud.delete(db, plan)
     return Response(status_code=status.HTTP_204_NO_CONTENT)
 
@@ -213,10 +229,10 @@ def create_training_session(
     session_in: schemas.TrainingSessionCreate,
     db: Session = Depends(get_db),
 ):
-    get_plan_or_404(db, session_in.plan_id)
+    plan = get_plan_or_404(db, session_in.plan_id)
     ensure_user_exists(db, session_in.user_id)
     validate_session_sets(db, session_in.plan_id, session_in.sets)
-    validate_calendar_link(db, session_in)
+    validate_calendar_link(db, session_in, plan)
 
     training_session = models.TrainingSession(
         **session_in.model_dump(exclude={"sets"})
@@ -248,9 +264,9 @@ def update_training_session(
     except ValidationError as exc:
         raise HTTPException(422, str(exc)) from exc
     plan_id = merged.plan_id
-    get_plan_or_404(db, plan_id)
+    plan = get_plan_or_404(db, plan_id)
     ensure_user_exists(db, merged.user_id)
-    validate_calendar_link(db, merged, training_session.id)
+    validate_calendar_link(db, merged, plan, training_session.id)
 
     # Validate all input before modifying persistent rows; invalid sets must not
     # leak a partially changed session into a caller's next transaction.

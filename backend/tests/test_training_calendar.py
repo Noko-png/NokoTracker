@@ -9,7 +9,7 @@ from sqlalchemy.orm import Session
 
 from app import models, schemas
 from app.database import Base
-from app.routers import calendar, training
+from app.routers import calendar, training, users
 from app.security import Principal
 from app.services.calendar_schedule import recurrence_starts
 
@@ -58,6 +58,23 @@ class TrainingCalendarTest(unittest.TestCase):
             sets=[schemas.TrainingSessionSetCreate(exercise_id=self.plan.exercises[0].id, weight_kg=60, reps=10)])
         values.update(overrides)
         return training.create_training_session(schemas.TrainingSessionCreate(**values), self.db)
+
+    def create_plan(self, name, user_id=None):
+        return training.create_training_plan(schemas.TrainingPlanCreate(
+            name=name,
+            user_id=self.user_id if user_id is None else user_id,
+            exercises=[schemas.TrainingExerciseCreate(name=f"Übung {name}")],
+        ), self.db)
+
+    def set_rotation(self, *plans):
+        return calendar.update_event(self.entry.id, schemas.CalendarEventUpdate(
+            training_plan_ids=[plan.id for plan in plans],
+        ), self.db)
+
+    def log_with_plan(self, day, plan):
+        return self.log(day, plan_id=plan.id, sets=[
+            schemas.TrainingSessionSetCreate(exercise_id=plan.exercises[0].id, weight_kg=60, reps=10),
+        ])
 
     def test_cycle_and_repeated_pause_preserve_training_sequence(self):
         self.assertEqual(self.days(), [9, 10, 12, 13, 15, 16, 18, 19])
@@ -185,6 +202,89 @@ class TrainingCalendarTest(unittest.TestCase):
         self.db.refresh(self.entry)
         self.assertIsNone(self.entry.training_plan_id)
 
+    def test_ordered_rotation_and_legacy_primary_are_preserved_in_api(self):
+        second = self.create_plan("Oberkörper")
+        rotation = [self.plan.id, second.id, self.plan.id]
+        entry = calendar.create_event(schemas.CalendarEventCreate(
+            title="Neue Rotation", start_at=self.at(9), recurrence_frequency="weekly",
+            training_plan_ids=rotation, training_plan_id=second.id, user_id=self.user_id,
+        ), self.db)
+        data = schemas.CalendarEventRead.model_validate(entry)
+        self.assertEqual(data.training_plan_ids, rotation)
+        self.assertEqual([plan.id for plan in data.training_plans], rotation)
+        self.assertEqual(data.training_plan_id, self.plan.id)
+        self.assertEqual(data.training_plan.id, self.plan.id)
+
+        calendar.update_event(entry.id, schemas.CalendarEventUpdate(
+            title="Alter Client", training_plan_id=self.plan.id,
+        ), self.db)
+        self.assertEqual(entry.training_plan_ids, rotation)
+        calendar.update_event(entry.id, schemas.CalendarEventUpdate(
+            training_plan_id=second.id,
+        ), self.db)
+        self.assertEqual(entry.training_plan_ids, [second.id])
+        self.assertEqual(entry.training_plan_links, [])
+        calendar.update_event(entry.id, schemas.CalendarEventUpdate(
+            training_plan_ids=[], training_plan_id=second.id,
+        ), self.db)
+        self.assertEqual(entry.training_plan_ids, [])
+        self.assertIsNone(entry.training_plan_id)
+
+    def test_rotation_crosses_rest_day_and_preserves_excluded_and_shifted_slots(self):
+        second = self.create_plan("Oberkörper")
+        third = self.create_plan("Unterkörper")
+        self.set_rotation(self.plan, second, third)
+        calendar.exclude_event_occurrence(self.entry.id, schemas.CalendarEventExclusionRequest(
+            occurrence_start_at=self.at(9),
+        ), self.db)
+        self.skip(10)
+        for day, wrong_plan in ((9, self.plan), (11, self.plan), (13, self.plan), (14, second)):
+            with self.assertRaises(HTTPException):
+                self.log_with_plan(day, wrong_plan)
+        self.assertEqual(self.log_with_plan(11, second).plan_id, second.id)
+        self.assertEqual(self.log_with_plan(13, third).plan_id, third.id)
+        self.assertEqual(self.log_with_plan(14, self.plan).plan_id, self.plan.id)
+
+    def test_edit_keeps_logged_slot_and_can_change_its_neighbors(self):
+        second = self.create_plan("Oberkörper")
+        third = self.create_plan("Unterkörper")
+        self.set_rotation(self.plan, second, third)
+        self.skip(10)
+        logged = self.log_with_plan(11, second)
+
+        self.set_rotation(third, second, self.plan)
+        self.assertEqual(self.entry.training_plan_id, third.id)
+        self.assertEqual(logged.plan_id, second.id)
+        with self.assertRaises(HTTPException) as conflict:
+            self.set_rotation(third, self.plan, second)
+        self.assertEqual(conflict.exception.status_code, 409)
+        self.assertEqual(self.entry.training_plan_ids, [third.id, second.id, self.plan.id])
+        self.assertEqual(self.log_with_plan(13, self.plan).plan_id, self.plan.id)
+
+    def test_rotation_rejects_mixed_profiles_and_foreign_unlink(self):
+        foreign = self.create_plan("Anderes Profil", user_id=self.other_id)
+        with self.assertRaises(HTTPException):
+            self.set_rotation(self.plan, foreign)
+        second = self.create_plan("Oberkörper")
+        self.set_rotation(self.plan, second)
+        self.db.info["principal"] = Principal(self.other_id, False)
+        with self.assertRaises(HTTPException):
+            self.set_rotation()
+        self.db.info.clear()
+        self.assertEqual(self.entry.training_plan_ids, [self.plan.id, second.id])
+
+    def test_rotation_blocks_plan_delete_but_allows_deleting_owning_profile(self):
+        second = self.create_plan("Oberkörper")
+        self.set_rotation(self.plan, second)
+        for plan in (self.plan, second):
+            with self.assertRaises(HTTPException) as conflict:
+                training.delete_training_plan(plan.id, self.db)
+            self.assertEqual(conflict.exception.status_code, 409)
+        users.delete_user(self.user_id, self.db)
+        self.assertEqual(self.db.query(models.CalendarEventTrainingPlan).count(), 0)
+        self.assertEqual(self.db.query(models.CalendarEvent).count(), 0)
+        self.assertEqual(self.db.query(models.TrainingPlan).count(), 0)
+
 
 class TrainingCalendarMigrationTest(unittest.TestCase):
     def test_startup_migrates_existing_database_and_is_repeatable(self):
@@ -215,6 +315,7 @@ with database.SessionLocal() as db:
     assert schemas.CalendarEventRead.model_validate(entry).shifts == []
 inspector = inspect(database.engine)
 assert 'calendar_event_shifts' in inspector.get_table_names()
+assert 'calendar_event_training_plans' in inspector.get_table_names()
 columns = {item['name'] for item in inspector.get_columns('training_sessions')}
 assert {'calendar_event_id','calendar_occurrence_start_at'} <= columns
 assert any(item['name'] == 'uq_training_calendar_occurrence' for item in inspector.get_indexes('training_sessions'))

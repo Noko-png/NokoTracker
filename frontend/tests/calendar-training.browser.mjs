@@ -106,9 +106,18 @@ async function screenshot(name, selector) {
   const { data } = await send("Page.captureScreenshot", { format: "png", ...(clip ? {clip, captureBeyondViewport: true} : {}) });
   await writeFile(join(process.env.TRAINING_TEST_SCREENSHOTS, name), Buffer.from(data, "base64"));
 }
-async function scheduleIsReady(expectedFirstDay) {
-  const formatted = dateFromLocalValue(expectedFirstDay).toLocaleDateString("de-DE", { weekday: "short", day: "2-digit", month: "2-digit" });
-  await waitFor(`document.querySelector('.training-upcoming-item > div span')?.textContent.includes(${JSON.stringify(formatted)}) && !document.querySelector('.training-upcoming-item button[disabled]')`);
+async function scheduleIsReady(expectedSlots) {
+  const expected = expectedSlots.map(([day, plan]) => [
+    dateFromLocalValue(dateAfter(day)).toLocaleDateString("de-DE", { weekday: "short", day: "2-digit", month: "2-digit" }),
+    plan.name,
+  ]);
+  await waitFor(`(() => {
+    const cards = Array.from(document.querySelectorAll('.training-upcoming-item > div span'));
+    const expected = ${JSON.stringify(expected)};
+    return cards.length === expected.length && expected.every(([date, plan], index) =>
+      cards[index].textContent.includes(date) && cards[index].textContent.includes(plan)) &&
+      !document.querySelector('.training-upcoming-item button[disabled]');
+  })()`);
 }
 
 try {
@@ -119,9 +128,13 @@ try {
   for (const width of [1440, 390]) {
     assert.equal((await request("/__calendar_test__/reset", "POST")).fixture, "calendar-create-memory",
       "Refuse to test against a database other than the in-memory fixture");
-    const plan = await request("/training/plans", "POST", {
-      name: "Zweier-Rhythmus", user_id: 1,
+    const planA = await request("/training/plans", "POST", {
+      name: "Unterkörper", user_id: 1,
       exercises: [{ name: "Kniebeuge", position: 0 }],
+    });
+    const planB = await request("/training/plans", "POST", {
+      name: "Oberkörper", user_id: 1,
+      exercises: [{ name: "Bankdrücken", position: 0 }],
     });
     mutations.length = 0;
     browserErrors.length = 0;
@@ -136,21 +149,32 @@ try {
     await fill("form.calendar-form", "Datum", dateAfter(0));
     await fill("form.calendar-form", "Anfang", "18:00");
     await fill("form.calendar-form", "Ende", "19:00");
-    await waitFor(`Array.from((${field("form.calendar-form", "Verknüpfter Trainingsplan")}).options).some(option => option.value === ${JSON.stringify(String(plan.id))})`);
-    await fill("form.calendar-form", "Verknüpfter Trainingsplan", String(plan.id));
+    const planFields = ".calendar-training-plans";
+    await waitFor(`Array.from((${field(planFields, "Trainingsplan 1")}).options).some(option => option.value === ${JSON.stringify(String(planB.id))})`);
+    await fill(planFields, "Trainingsplan 1", String(planB.id));
+    await clickText(planFields, "Plan hinzufügen");
+    await fill(planFields, "Trainingsplan 2", String(planA.id));
     await fill("form.calendar-form", "Trainingstage hintereinander", "2");
     await fill("form.calendar-form", "Pausentage danach", "1");
     assert.deepEqual(await evaluate("Array.from(document.querySelectorAll('.calendar-recurrence-preview time')).map(el => el.dateTime)"),
       [0, 1, 3, 4, 6, 7].map(dateAfter));
+    const previewPlanNames = "Array.from(document.querySelectorAll('.calendar-preview-plan')).map(el => el.textContent)";
+    assert.deepEqual(await evaluate(previewPlanNames), [planB, planA, planB, planA, planB, planA].map((plan) => plan.name));
+    await click(`${planFields} button[aria-label='Plan 2 nach oben verschieben']`);
+    assert.equal(await evaluate(`${field(planFields, "Trainingsplan 1")}.value`), String(planA.id));
+    assert.equal(await evaluate(`${field(planFields, "Trainingsplan 2")}.value`), String(planB.id));
+    assert.deepEqual(await evaluate(previewPlanNames), [planA, planB, planA, planB, planA, planB].map((plan) => plan.name));
     assert.equal(await evaluate("document.documentElement.scrollWidth <= window.innerWidth"), true);
     assert.deepEqual(await evaluate("Array.from(document.querySelectorAll('form.calendar-form input, form.calendar-form select')).filter(el => !el.checkValidity()).map(el => ({value: el.value, message: el.validationMessage, label: el.closest('label')?.innerText}))"), [], "Calendar form must be valid before saving");
-    await screenshot(`frontend-screenshot-training-cycle-form-${width}.png`);
+    await screenshot(`frontend-screenshot-training-rotation-form-${width}.png`, planFields);
     await click("form.calendar-form button[type=submit]");
     await waitFor("!document.querySelector('form.calendar-form')");
     const events = await request("/calendar/events");
     assert.equal(events.length, 1);
     const event = events[0];
-    assert.equal(event.training_plan_id, plan.id);
+    assert.equal(event.training_plan_id, planA.id);
+    assert.deepEqual(event.training_plan_ids, [planA.id, planB.id]);
+    assert.deepEqual(event.training_plans.map((plan) => plan.name), [planA.name, planB.name]);
     assert.equal(event.recurrence_frequency, "cycle");
     assert.equal(event.cycle_training_days, 2);
     assert.equal(event.cycle_rest_days, 1);
@@ -159,49 +183,56 @@ try {
     await waitFor("!!document.querySelector('.selected-day .training-occurrence-actions')");
     assert.equal(await evaluate("document.querySelector('.selected-day .training-occurrence-actions').getBoundingClientRect().width > 0"), true,
       "Calendar quick actions must be visible on mobile as well as desktop");
+    assert.equal(await evaluate("document.querySelector('.selected-day .training-plan-label').textContent"), planA.name);
 
     await clickText(".nav-list", "Training");
-    await scheduleIsReady(dateAfter(0));
+    await scheduleIsReady([[0, planA], [1, planB], [3, planA], [4, planB]]);
     await clickText(".training-upcoming-item:first-child", "Skip / 1 Tag Pause");
-    await scheduleIsReady(dateAfter(1));
+    await scheduleIsReady([[1, planA], [2, planB], [4, planA], [5, planB]]);
     let shifted = await request(`/calendar/events/${event.id}`);
     assert.equal(shifted.shifts.length, 1);
     assert.deepEqual(starts(shifted), [1, 2, 4, 5, 7, 8].map(dateAfter));
     await clickText(".training-upcoming-item:first-child", "Skip / 1 Tag Pause");
-    await scheduleIsReady(dateAfter(2));
+    await scheduleIsReady([[2, planA], [3, planB], [5, planA], [6, planB]]);
     shifted = await request(`/calendar/events/${event.id}`);
     assert.equal(shifted.shifts.length, 2);
     assert.deepEqual(starts(shifted), [2, 3, 5, 6, 8, 9].map(dateAfter));
     assert.equal(await evaluate("document.querySelectorAll('.training-pause-history button').length"), 1,
       "Only the latest inserted pause can be undone");
     await clickText(".training-pause-history", "Rückgängig");
-    await scheduleIsReady(dateAfter(1));
+    await scheduleIsReady([[1, planA], [2, planB], [4, planA], [5, planB]]);
     shifted = await request(`/calendar/events/${event.id}`);
     assert.equal(shifted.shifts.length, 1);
     assert.deepEqual(starts(shifted), [1, 2, 4, 5, 7, 8].map(dateAfter));
     assert.equal(await evaluate("document.documentElement.scrollWidth <= window.innerWidth"), true);
     await evaluate("document.querySelector('.training-schedule-panel').scrollIntoView({block:'start'})");
-    await screenshot(`frontend-screenshot-training-cycle-schedule-${width}.png`);
+    await screenshot(`frontend-screenshot-training-rotation-schedule-${width}.png`);
 
-    await clickText(".training-upcoming-item:first-child", "Training starten");
+    await clickText(".training-upcoming-item:nth-child(2)", "Training starten");
     await waitFor("!!document.querySelector('.training-calendar-link')");
-    assert.equal(await evaluate(`${field("form.training-session-form", "Trainingsplan")}.value`), String(plan.id));
-    assert.equal(await evaluate(`${field("form.training-session-form", "Datum")}.value`), dateAfter(1));
+    assert.equal(await evaluate(`${field("form.training-session-form", "Trainingsplan")}.value`), String(planB.id));
+    assert.equal(await evaluate(`${field("form.training-session-form", "Datum")}.value`), dateAfter(2));
+    assert.equal(await evaluate("document.querySelector('.training-set-title strong').textContent"), planB.exercises[0].name);
     await fill("form.training-session-form", "Wdh.", "8");
     await clickText("form.training-session-form", "Einheit speichern");
     await waitFor("!document.querySelector('.training-calendar-link')");
-    await scheduleIsReady(dateAfter(2));
+    await scheduleIsReady([[1, planA], [4, planA], [5, planB], [7, planA]]);
     const sessions = await request("/training/sessions");
     assert.equal(sessions.length, 1);
     assert.equal(sessions[0].calendar_event_id, event.id);
-    assert.equal(sessions[0].calendar_occurrence_start_at, `${dateAfter(1)}T18:00:00`);
+    assert.equal(sessions[0].calendar_occurrence_start_at, `${dateAfter(2)}T18:00:00`);
+    assert.equal(sessions[0].plan_id, planB.id);
     assert.equal(sessions[0].sets[0].reps, 8);
-    assert.equal(sessions[0].sets[0].exercise_id, plan.exercises[0].id);
+    assert.equal(sessions[0].sets[0].exercise_id, planB.exercises[0].id);
 
     await clickText(".nav-list", "Kalender");
     await clickText(".calendar-view-switch", "Tag");
     await click(".calendar-nav button[title='Naechster Zeitraum']");
+    await waitFor("!!document.querySelector('.selected-day .training-occurrence-actions')");
+    assert.equal(await evaluate("document.querySelector('.selected-day .training-plan-label').textContent"), planA.name);
+    await click(".calendar-nav button[title='Naechster Zeitraum']");
     await waitFor("!!document.querySelector('.selected-day .training-occurrence-completed')");
+    assert.equal(await evaluate("document.querySelector('.selected-day .training-plan-label').textContent"), planB.name);
     assert.equal(await evaluate("document.querySelector('.selected-day .training-occurrence-completed').textContent.trim()"), "Absolviert");
     assert.equal(await evaluate("document.querySelector('.selected-day .training-occurrence-completed').getBoundingClientRect().width > 0"), true,
       "Calendar completion must be visible on mobile as well as desktop");
@@ -209,11 +240,11 @@ try {
       "A completed training offers neither another start nor a skip");
     assert.equal(await evaluate("document.documentElement.scrollWidth <= window.innerWidth"), true);
     await evaluate("document.querySelector('.selected-day').scrollIntoView({block:'start'})");
-    await screenshot(`frontend-screenshot-training-cycle-completed-${width}.png`, ".selected-day");
+    await screenshot(`frontend-screenshot-training-rotation-completed-${width}.png`, ".selected-day");
     assert.equal(mutations.filter((item) => item.url.endsWith("/skip") && item.method === "POST").length, 2);
     assert.equal(mutations.filter((item) => item.url.includes("/shifts/") && item.method === "DELETE").length, 1);
     assert.deepEqual(browserErrors, []);
-    console.log(`PASS ${width}px: linked 2+1 training series, skip twice, undo, log exercise, calendar completion and responsive layout`);
+    console.log(`PASS ${width}px: reorder linked plans, keep rotation through skips and undo, log plan B and verify calendar completion`);
     await send("Page.navigate", { url: "about:blank" });
   }
 } finally {

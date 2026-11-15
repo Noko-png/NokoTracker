@@ -57,13 +57,35 @@ def recurrence_starts(event: models.CalendarEvent, range_end: datetime):
         index += 1
 
 
-def ensure_occurrence(event: models.CalendarEvent, value: datetime) -> datetime:
+def ensure_occurrence_slot(event: models.CalendarEvent, value: datetime) -> tuple[datetime, int]:
     target = local_time(value)
     if any(local_time(item.occurrence_start_at) == target for item in event.exclusions):
         raise HTTPException(409, "Dieser Trainingstermin wurde entfernt.")
-    if target not in recurrence_starts(event, target):
-        raise HTTPException(422, "Der Zeitpunkt gehoert nicht zu dieser Terminserie.")
-    return target
+    for slot, start in enumerate(recurrence_starts(event, target)):
+        if start == target:
+            return target, slot
+    raise HTTPException(422, "Der Zeitpunkt gehoert nicht zu dieser Terminserie.")
+
+
+def ensure_occurrence(event: models.CalendarEvent, value: datetime) -> datetime:
+    return ensure_occurrence_slot(event, value)[0]
+
+
+def ensure_logged_plans_preserved(event: models.CalendarEvent, plan_ids: list[int]) -> None:
+    logged_plans = {
+        local_time(session.calendar_occurrence_start_at): session.plan_id
+        for session in event.training_sessions
+        if session.calendar_occurrence_start_at is not None
+    }
+    if not logged_plans:
+        return
+    if plan_ids:
+        for slot, start in enumerate(recurrence_starts(event, max(logged_plans))):
+            if logged_plans.get(start) == plan_ids[slot % len(plan_ids)]:
+                del logged_plans[start]
+                if not logged_plans:
+                    return
+    raise HTTPException(409, "Bereits protokollierte Termine müssen ihren Trainingsplan behalten.")
 
 
 def ensure_training_event(db: Session, event: models.CalendarEvent) -> models.TrainingPlan:

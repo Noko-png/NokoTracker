@@ -437,7 +437,7 @@ def list_foods(
     query = db.query(models.Food)
     if not include_archived:
         query = query.filter(models.Food.is_archived.is_(False))
-    return query.offset(skip).limit(limit).all()
+    return query.order_by(models.Food.id).offset(skip).limit(limit).all()
 
 
 @router.get("/barcode/{barcode}/preview", response_model=schemas.FoodBarcodePreviewRead)

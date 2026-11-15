@@ -1,3 +1,4 @@
+import { loadAllPages } from "../pagination";
 import { readJsonResponse } from "./response";
 
 const configuredApiBaseUrl = import.meta.env.VITE_API_BASE_URL;
@@ -434,6 +435,8 @@ export type ShoppingListInventoryImportResult = {
   message: string;
 };
 
+export type CalendarTrainingPlan = Pick<TrainingPlan, "id" | "name" | "notes" | "user_id">;
+
 export type CalendarEvent = {
   id: number;
   title: string;
@@ -458,7 +461,9 @@ export type CalendarEvent = {
   cycle_training_days?: number;
   cycle_rest_days?: number;
   training_plan_id?: number | null;
-  training_plan?: Pick<TrainingPlan, "id" | "name" | "notes" | "user_id"> | null;
+  training_plan?: CalendarTrainingPlan | null;
+  training_plan_ids?: number[];
+  training_plans?: CalendarTrainingPlan[];
   shifts?: CalendarEventShift[];
   user_id?: number | null;
   group_id?: number | null;
@@ -470,7 +475,7 @@ export type CalendarEvent = {
 
 export type CalendarEventCreate = Omit<
   CalendarEvent,
-  "id" | "created_at" | "updated_at" | "group" | "exclusions" | "training_plan" | "shifts"
+  "id" | "created_at" | "updated_at" | "group" | "exclusions" | "training_plan" | "training_plans" | "shifts"
 >;
 
 export type CalendarEventUpdate = Partial<CalendarEventCreate>;
@@ -822,7 +827,7 @@ export function getDashboardSummary() {
 }
 
 export function getUsers() {
-  return request<User[]>("/users");
+  return loadAllPages((skip, limit) => request<User[]>(`/users?skip=${skip}&limit=${limit}`));
 }
 
 export function createUser(user: UserCreate) {
@@ -939,7 +944,7 @@ export function deleteProductUnit(id: number) {
 }
 
 export function getFoods() {
-  return request<Food[]>("/foods");
+  return loadAllPages((skip, limit) => request<Food[]>(`/foods?skip=${skip}&limit=${limit}`));
 }
 
 export function lookupFoodByBarcode(barcode: string) {

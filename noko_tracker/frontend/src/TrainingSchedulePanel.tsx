@@ -1,6 +1,6 @@
 import { CalendarDays, CheckCircle2, Dumbbell, Pause, Undo2 } from "lucide-react";
 import type { CalendarEvent, CalendarGroup, TrainingPlan, TrainingSession } from "./api/client";
-import { addDays, dateFromLocalValue, getCalendarOccurrences, getLocalDate, type CalendarOccurrence } from "./calendar";
+import { addDays, dateFromLocalValue, getCalendarOccurrences, getCalendarTrainingPlanIds, getLocalDate, type CalendarOccurrence } from "./calendar";
 
 export function isTrainingOccurrenceCompleted(occurrence: CalendarOccurrence, sessions: TrainingSession[]) {
   return sessions.some((session) => session.calendar_event_id === occurrence.event.id &&
@@ -18,7 +18,7 @@ export function TrainingOccurrenceActions({ occurrence, sessions, busy, onStart,
   occurrence: CalendarOccurrence;
   sessions: TrainingSession[];
 }) {
-  if (!occurrence.event.training_plan_id) return null;
+  if (!occurrence.trainingPlanId) return null;
   if (isTrainingOccurrenceCompleted(occurrence, sessions)) {
     return <div className="training-occurrence-completed"><CheckCircle2 size={16} />Absolviert</div>;
   }
@@ -74,12 +74,12 @@ export function TrainingSchedulePanel({ events, groups, plans, sessions, busy, o
   onSchedule: (plan?: TrainingPlan) => void;
 }) {
   const planIds = new Set(plans.map((plan) => plan.id));
-  const linkedEvents = events.filter((event) => event.training_plan_id && planIds.has(event.training_plan_id));
+  const linkedEvents = events.filter((event) => getCalendarTrainingPlanIds(event).some((id) => planIds.has(id)));
   const today = dateFromLocalValue(getLocalDate());
   const seen = new Set<string>();
   const upcoming = getCalendarOccurrences(events, today, addDays(today, 90), groups)
     .filter((occurrence) => {
-      if (!occurrence.event.training_plan_id || !planIds.has(occurrence.event.training_plan_id) ||
+      if (!occurrence.trainingPlanId || !planIds.has(occurrence.trainingPlanId) ||
           occurrence.date !== getLocalDate(occurrence.occurrenceStartAt) || isTrainingOccurrenceCompleted(occurrence, sessions)) return false;
       const key = `${occurrence.event.id}-${occurrence.occurrenceStartAt.getTime()}`;
       if (seen.has(key)) return false;
@@ -99,7 +99,8 @@ export function TrainingSchedulePanel({ events, groups, plans, sessions, busy, o
       {upcoming.map((occurrence) => <article className="training-upcoming-item" key={occurrence.key}>
         <div><strong>{occurrence.event.title}</strong>
           <span>{occurrence.startAt.toLocaleDateString("de-DE", { weekday: "short", day: "2-digit", month: "2-digit" })}
-            {occurrence.event.all_day ? " · Ganztägig" : ` · ${occurrence.startAt.toLocaleTimeString("de-DE", { hour: "2-digit", minute: "2-digit" })}`}</span>
+            {occurrence.event.all_day ? " · Ganztägig" : ` · ${occurrence.startAt.toLocaleTimeString("de-DE", { hour: "2-digit", minute: "2-digit" })}`}
+            {occurrence.trainingPlanName && occurrence.trainingPlanName !== occurrence.event.title ? ` · ${occurrence.trainingPlanName}` : ""}</span>
         </div>
         <TrainingOccurrenceActions occurrence={occurrence} sessions={sessions} busy={busy} onStart={onStart} onSkip={onSkip} />
       </article>)}

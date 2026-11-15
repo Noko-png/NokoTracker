@@ -11,7 +11,10 @@ from .. import models, schemas
 DATA_GROUPS = {
     "weight": ("Gewichtsdaten", {"weight_entries"}),
     "training": ("Training", {"training_plans", "training_exercises", "training_sessions", "training_session_sets"}),
-    "calendar": ("Kalender und ToDos", {"calendar_groups", "calendar_events", "calendar_event_exclusions", "calendar_event_shifts"}),
+    "calendar": ("Kalender und ToDos", {
+        "calendar_groups", "calendar_events", "calendar_event_exclusions",
+        "calendar_event_shifts", "calendar_event_training_plans",
+    }),
     "recipes": ("Rezepte", {"recipes", "recipe_ingredients"}),
     "foods": ("Lebensmittel und Stammdaten", {"foods", "food_conversions", "food_barcodes", "product_groups", "product_units", "storage_locations"}),
     "inventory": ("Vorrat und Belegnachweise", {"inventory_items", "receipt_bookings"}),
@@ -85,7 +88,11 @@ class DataTransfer:
             # Importing a plan as an implicit dependency would lose its exercises;
             # importing a session's event would lose its pauses and exclusions.
             for connection in (self.source, self.target):
-                for table, column in (("calendar_events", "training_plan_id"), ("training_sessions", "calendar_event_id")):
+                for table, column in (
+                    ("calendar_events", "training_plan_id"),
+                    ("calendar_event_training_plans", "plan_id"),
+                    ("training_sessions", "calendar_event_id"),
+                ):
                     columns = {row[1] for row in connection.execute(f'PRAGMA table_info("{table}")')}
                     if column in columns and connection.execute(f'SELECT 1 FROM "{table}" WHERE "{column}" IS NOT NULL LIMIT 1').fetchone():
                         raise ValueError("Training und Kalender sind miteinander verknuepft. Bitte beide Datenbereiche gemeinsam auswaehlen.")

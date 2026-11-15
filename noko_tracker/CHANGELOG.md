@@ -1,5 +1,13 @@
 # Changelog
 
+## 3.1.20
+
+- Unvollstaendigen Release repariert: Abhaengigkeiten fuer Trainingsplan-Reihenfolgen und Profilauswahl vollstaendig aufgenommen.
+- Trainingsserien unterstuetzen mehrere Plaene in fester Reihenfolge, einschliesslich Speicherung, Historie und Sicherungen.
+- Profilauswahl nach Datenbankimport auf vorhandene Profile abgestimmt; Profile und Lebensmittel vollstaendig ueber alle Ergebnisseiten geladen.
+- Datenbank in den Einstellungen mit zwei Sicherheitsabfragen loeschen (nur Administratoren).
+- Versionsangaben in Add-on, Oberflaeche, API und Docker-Build auf 3.1.20 vereinheitlicht.
+
 ## 3.1.19
 
 - Dynamische Trainingsserien: Trainingstage und Pausentage frei als Rhythmus festlegen, etwa 2 Tage Training und 1 Tag Pause, mit Vorschau und optionalem Serienende.
