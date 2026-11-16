@@ -8,6 +8,8 @@ Dieses Add-on startet ein FastAPI-Backend auf Port `8000` und liefert das gebaut
 | --- | --- |
 | `log_level` | Log-Level fuer den Startprozess. |
 | `admin_username` | Exakter Home-Assistant-Anmeldename des NokoTracker-Administrators, nicht der Anzeigename. Ohne Eintrag gibt es keinen Administrator. |
+| `health_ha_url` | Optionale HTTPS-Basisadresse von Home Assistant, zum Beispiel `https://ha.example.org:8123`. Nur Host und gegebenenfalls Port angeben. |
+| `health_ha_token` | Optionaler langlebiger Home-Assistant-Zugriffstoken fuer das Health-Dashboard. |
 
 ## Einrichtung nach dem Update auf 3.1.9
 
@@ -18,7 +20,7 @@ Dieses Add-on startet ein FastAPI-Backend auf Port `8000` und liefert das gebaut
 
 Gewicht, Training, Mahlzeiten, Mealprep und ToDos sind persoenlich. Bestand, Lebensmittel, Rezepte, Einkaufsliste und Kalendertermine bleiben gemeinsam. Der konfigurierte Administrator verwaltet Profile, Datenbanksicherungen und Grocy-Importe. Kassenzettel koennen weiterhin fuer den gemeinsamen Bestand gebucht werden.
 
-Das Add-on akzeptiert ausschliesslich Verbindungen des HA-Ingress-Supervisors. Direkter Portzugriff ist entfernt. Die HA-Anmeldung ersetzt die bisher wirkungslosen NokoTracker-Passwoerter; vorhandene Passwortwerte werden beim Start entfernt. Seit 3.1.16 benoetigt die Health-Testseite Zugriff auf die HA-Core-API; siehe unten.
+Das Add-on akzeptiert ausschliesslich Verbindungen des HA-Ingress-Supervisors. Browser-HTTPS endet an Home Assistant oder am vorgeschalteten Proxy. Der Supervisor leitet Anfragen intern ueber HTTP weiter. Die HA-Anmeldung ersetzt die bisherigen NokoTracker-Passwoerter. Vorhandene Passwortwerte werden beim Start entfernt. [Home Assistant Ingress](https://developers.home-assistant.io/docs/apps/presentation/#ingress)
 
 ## Startfehler und Administratorname ab 3.1.11
 
@@ -42,9 +44,9 @@ In den Produktstammdaten unter **EAN-Codes (optional)** mit **EAN hinzufuegen** 
 
 Alle EANs eines Produkts nutzen dieselben Naehrwerte, Einheiten und denselben Bestand in Tracker, Rezepten und Einkaufsliste. Varianten mit anderen Naehrwerten oder Mengeneinheiten als eigene Produkte anlegen. Datenbanksicherungen enthalten alle Codes, alte Sicherungen bleiben importierbar. Der Grocy-Import uebernimmt mehrere EANs pro Produkt und meldet Konflikte.
 
-## Test Health dashboard ab 3.1.16
+## Test Health dashboard
 
-1. Das Add-on auf 3.1.16 aktualisieren und starten. Als konfigurierter NokoTracker-Administrator anmelden.
+1. In Home Assistant einen langlebigen Zugriffstoken fuer ein separates Konto ohne Administratorrechte erzeugen. In der Add-on-Konfiguration `health_ha_url` und `health_ha_token` eintragen, das Add-on neu starten und als NokoTracker-Administrator anmelden.
 2. Auf dem Handy in Health Connect pruefen, ob Samsung Health Schritte, Herzfrequenz und Schlaf bereitstellt und Home Assistant diese lesen darf.
 3. In der HA-App unter **Einstellungen > Companion App > Sensoren verwalten > Health Connect** die jeweiligen Sensoren aktivieren. Die Android-Datenfreigabe allein reicht nicht aus.
 4. Samsung Health synchronisieren, die HA-App oeffnen und in NokoTracker **Test Health dashboard** aufrufen. Beim Oeffnen startet die Abfrage; **Daten abrufen** wiederholt sie.
@@ -55,9 +57,9 @@ Die Seite zeigt die letzten HA-Sensorwerte, keinen Echtzeitstream und keine voll
 
 **Zugriff und Berechtigungen:** Die Seite und ihre API sind nur fuer Administratoren freigegeben, da automatisch gefundene Sensoren noch keinem NokoTracker-Profil zugeordnet sind. Normale Nutzer erhalten auch beim direkten API-Aufruf keinen Zugriff. Der User-Schalter wird auf dieser Seite ausgeblendet.
 
-Das Add-on setzt jetzt `homeassistant_api: true`. Der interne `SUPERVISOR_TOKEN` besitzt damit technisch administrative HA-Core-API-Rechte; das ist keine auf Sensoren begrenzte HA-Berechtigung. NokoTracker implementiert ausschliesslich `GET http://supervisor/core/api/states`, filtert die Antwort im Backend und gibt nur die benoetigten Sensorfelder weiter. Beliebige URLs, Schreibaktionen, Weiterleitungen und Umgebungs-Proxys werden nicht verwendet. Der Token gelangt nicht ins Frontend, in Datenbanksicherungen oder ins Git-Repository. Es wird kein weiterer Netzwerkport geoeffnet. Grundlage: [offizielle HA-Dokumentation](https://contributors.home-assistant.io/apps/guides/communication/).
+Ab 3.1.21 ruft NokoTracker die HA-REST-API direkt per HTTPS auf und prueft das TLS-Zertifikat. Die Adresse muss aus dem Add-on-Container erreichbar sein. Die Anwendung laedt den Token aus der lokalen Add-on-Konfiguration und verwendet ihn ausschliesslich fuer `GET /api/states` auf der konfigurierten Adresse. Sie leitet die Anfrage weder ueber Umgebungs-Proxys noch ueber Weiterleitungen um. Der Token erbt die Rechte seines HA-Kontos. Er kann in Sicherungen der Add-on-Konfiguration enthalten sein. [Home Assistant REST-API](https://contributors.home-assistant.io/core/internals/rest-api/)
 
-Bei fehlendem Zugriff das Add-on aktualisieren und neu starten. Ein leerer Fund bei erfolgreicher Verbindung deutet auf deaktivierte oder umbenannte Sensoren hin. Lokal ohne HA-Supervisor wird der fehlende Anschluss angezeigt; es werden keine Beispieldaten als echte Messwerte ausgegeben.
+Ohne HTTPS-Adresse und Token ist das Dashboard deaktiviert. Ein leerer Fund bei erfolgreicher Verbindung kann auf deaktivierte oder umbenannte Sensoren hindeuten.
 
 ## Persistenz
 
@@ -68,6 +70,8 @@ Die Datenbank liegt im Add-on-Datenverzeichnis:
 ```
 
 Unter **Einstellungen > Import und Export** koennen Administratoren SQLite-Dateien herunterladen und hochladen. Nach dem Hochladen zeigt eine Vorschau die enthaltenen Datenbereiche mit Anzahl der Datensaetze. Vor jedem Import wird ein Backup der bisherigen Datenbank im Datenverzeichnis erstellt.
+
+Die Datenbank und Wiederherstellungskopien sind lesbare SQLite-Dateien mit eingeschraenkten Dateirechten unter Linux. Verschluesselung im Ruhezustand erfolgt ueber den Datentraeger des Hosts oder bei Sicherungen ueber den verschluesselten Speicher beziehungsweise die Backup-Verschluesselung von Home Assistant. Direkte SQLite-Downloads enthalten weiterhin personenbezogene Anwendungsdaten.
 
 Seit 3.1.18 behandelt dieser Dialog ausschliesslich Datenbanksicherungen und bietet zwei Importmodi:
 

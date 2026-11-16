@@ -13,6 +13,9 @@ from app import security
 from app.routers import health_connect as health
 from test_security import request
 
+HA_ORIGIN = "https://ha.example:8123"
+STATES_URL = HA_ORIGIN + "/api/states"
+
 
 def sensor(entity_id, state="1234", **attributes):
     return {"entity_id": entity_id, "state": state,
@@ -26,11 +29,12 @@ class HealthConnectTest(unittest.TestCase):
         self.app.include_router(health.router)
         security.install_security(self.app)
         patches = [
-            patch.dict(os.environ, {"NOKO_AUTH_MODE": "ingress", "SUPERVISOR_TOKEN": "private-test-token"}),
+            patch.dict(os.environ, {"NOKO_AUTH_MODE": "ingress"}),
+            patch.object(health, "read_health_credentials", return_value=(HA_ORIGIN, "private-test-token")),
             patch.object(security, "resolve_principal", return_value=security.Principal(None, True)),
             patch.object(health, "fetch_states", return_value=[]),
         ]
-        self.environment, self.principal, self.fetch = [item.start() for item in patches]
+        self.environment, self.credentials, self.principal, self.fetch = [item.start() for item in patches]
         for item in patches:
             self.addCleanup(item.stop)
 
@@ -58,7 +62,7 @@ class HealthConnectTest(unittest.TestCase):
         encoded = json.dumps(result)
         for private in ("secret-note", "blood_glucose", "phone_battery", "private-test-token"):
             self.assertNotIn(private, encoded)
-        self.fetch.assert_called_once_with("private-test-token")
+        self.fetch.assert_called_once_with(HA_ORIGIN, "private-test-token")
 
     def test_unavailable_and_invalid_values_are_not_zero_measurements(self):
         for raw, expected in [("unknown", "unknown"), ("unavailable", "unavailable"),
@@ -91,7 +95,8 @@ class HealthConnectTest(unittest.TestCase):
     def test_empty_and_missing_connection_are_distinguished(self):
         self.assertEqual(self.call()[1]["status"], "empty")
         self.fetch.reset_mock()
-        with patch.dict(os.environ, {"SUPERVISOR_TOKEN": ""}):
+        self.credentials.return_value = HA_ORIGIN, ""
+        with patch.dict(os.environ, {"SUPERVISOR_TOKEN": "old-token"}):
             status, result = self.call()
         self.assertEqual(status, 200)
         self.assertEqual(result["status"], "not_configured")
@@ -107,7 +112,7 @@ class HealthConnectTest(unittest.TestCase):
         self.assertEqual(self.call()[0], 401)
         self.fetch.assert_not_called()
 
-    def test_local_mode_does_not_use_even_an_existing_supervisor_token(self):
+    def test_local_mode_does_not_contact_ha_with_configured_credentials(self):
         with patch.dict(os.environ, {"NOKO_AUTH_MODE": "local"}):
             status, result = self.call(peer="127.0.0.1")
         self.assertEqual(status, 200)
@@ -115,16 +120,25 @@ class HealthConnectTest(unittest.TestCase):
         self.fetch.assert_not_called()
 
 
-class SupervisorTransportTest(unittest.TestCase):
+class HomeAssistantTransportTest(unittest.TestCase):
+    def test_reads_credentials_from_addon_options(self):
+        with patch.object(health, "ADDON_OPTIONS_PATH") as options_path:
+            options_path.read_text.return_value = json.dumps({
+                "health_ha_url": HA_ORIGIN, "health_ha_token": "secret",
+            })
+            self.assertEqual(health.read_health_credentials(), (HA_ORIGIN, "secret"))
+            options_path.read_text.side_effect = FileNotFoundError
+            self.assertEqual(health.read_health_credentials(), ("", ""))
+
     def test_fixed_get_destination_with_token_and_no_proxy_or_redirect(self):
         response = io.BytesIO(b'[{"entity_id": "sensor.example"}]')
         response.headers = Message()
         response.headers["Content-Type"] = "application/json"
         with patch.object(health, "build_opener") as build:
             build.return_value.open.return_value = response
-            self.assertEqual(health.fetch_states("secret"), [{"entity_id": "sensor.example"}])
+            self.assertEqual(health.fetch_states(HA_ORIGIN, "secret"), [{"entity_id": "sensor.example"}])
         args, kwargs = build.return_value.open.call_args
-        self.assertEqual(args[0].full_url, "http://supervisor/core/api/states")
+        self.assertEqual(args[0].full_url, STATES_URL)
         self.assertEqual(args[0].get_method(), "GET")
         self.assertEqual(args[0].get_header("Authorization"), "Bearer secret")
         self.assertEqual(kwargs["timeout"], 8)
@@ -132,17 +146,24 @@ class SupervisorTransportTest(unittest.TestCase):
         self.assertEqual(proxy.proxies, {})
         self.assertIsNone(redirect.redirect_request(None, None, 302, "", {}, "https://evil.example"))
 
+    def test_only_https_origins_are_accepted(self):
+        for address in ("http://ha.example", "https://ha.example/dashboard", "https://ha.example?query"):
+            with self.subTest(address=address), patch.object(health, "build_opener") as build:
+                with self.assertRaises(ValueError):
+                    health.fetch_states(address, "secret")
+                build.assert_not_called()
+
     def test_safe_errors_never_expose_upstream_body_or_credentials(self):
         errors = [URLError("secret"), TimeoutError("secret"),
-                  HTTPError(health.STATES_URL, 401, "secret", {}, io.BytesIO(b"secret")),
-                  HTTPError(health.STATES_URL, 403, "secret", {}, io.BytesIO(b"secret")),
-                  HTTPError(health.STATES_URL, 302, "secret", {}, io.BytesIO(b"secret")),
-                  HTTPError(health.STATES_URL, 500, "secret", {}, io.BytesIO(b"secret"))]
+                  HTTPError(STATES_URL, 401, "secret", {}, io.BytesIO(b"secret")),
+                  HTTPError(STATES_URL, 403, "secret", {}, io.BytesIO(b"secret")),
+                  HTTPError(STATES_URL, 302, "secret", {}, io.BytesIO(b"secret")),
+                  HTTPError(STATES_URL, 500, "secret", {}, io.BytesIO(b"secret"))]
         for error in errors:
             with self.subTest(error=error), patch.object(health, "build_opener") as build:
                 build.return_value.open.side_effect = error
                 with self.assertRaises(HTTPException) as caught:
-                    health.fetch_states("secret")
+                    health.fetch_states(HA_ORIGIN, "secret")
                 self.assertEqual(caught.exception.status_code, 502)
                 self.assertNotIn("secret", caught.exception.detail)
                 self.assertEqual(caught.exception.headers, health.NO_STORE)
@@ -157,5 +178,5 @@ class SupervisorTransportTest(unittest.TestCase):
                 response.headers["Content-Type"] = mime
                 build.return_value.open.return_value = response
                 with self.assertRaises(HTTPException) as caught:
-                    health.fetch_states("secret")
+                    health.fetch_states(HA_ORIGIN, "secret")
                 self.assertEqual(caught.exception.status_code, 502)

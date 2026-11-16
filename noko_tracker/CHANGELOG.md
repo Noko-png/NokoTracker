@@ -1,5 +1,13 @@
 # Changelog
 
+## 3.1.21
+
+- Das Health-Dashboard verwendet einen separaten HA-API-Token ueber HTTPS mit Zertifikatspruefung. Adresse und Token werden optional in der Add-on-Konfiguration gesetzt.
+- EAN-Abrufe sind auf den Open-Food-Facts-Host und eine begrenzte Antwortgroesse beschraenkt. Die Suche haelt beim Netzabruf keine globale Datenbanksperre. Speichern ueber die Barcode-API verwendet POST.
+- Rezeptbilder werden als lokale Dateien hinzugefuegt. Gespeicherte externe URLs werden nicht mehr geladen.
+- Die Add-on-Oberflaeche setzt eine Content Security Policy. Extern geladene API-Dokumentation und die Ausgabe der Datenbank-URL im Startprotokoll wurden entfernt.
+- Datenbank und Grocy-Serverimport verwenden lokale Pfade. SQLite-Sicherungsdateien erhalten unter Linux eingeschraenkte Zugriffsrechte.
+
 ## 3.1.20
 
 - Unvollstaendigen Release repariert: Abhaengigkeiten fuer Trainingsplan-Reihenfolgen und Profilauswahl vollstaendig aufgenommen.

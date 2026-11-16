@@ -3,7 +3,9 @@ import { DatabaseImportForm } from "./DatabaseImportForm";
 import { DatabaseReset } from "./DatabaseReset";
 import { resolveProfileId } from "./profileSelection";
 import { RecipeActionsMenu } from "./RecipeActionsMenu";
+import { RecipeImage, RecipeImageField } from "./RecipeImage";
 import { RecipeImportDialog } from "./RecipeImportDialog";
+import { recipeImageUpdate } from "./recipeImagePath";
 import { TrainingSchedulePanel, TrainingOccurrenceActions, TrainingPauseHistory, isTrainingOccurrenceCompleted } from "./TrainingSchedulePanel";
 import { TrainingSeriesPlans } from "./TrainingSeriesPlans";
 import {
@@ -50,10 +52,12 @@ import {
 } from "lucide-react";
 import type {
   ChangeEvent,
+  Dispatch,
   CSSProperties,
   FormEvent,
   MouseEvent as ReactMouseEvent,
   PointerEvent as ReactPointerEvent,
+  SetStateAction,
   TouchEvent as ReactTouchEvent,
 } from "react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
@@ -517,7 +521,6 @@ type UserSettingsForm = {
 };
 
 type CsvImportForm = {
-  directory: string;
   dryRun: boolean;
 };
 
@@ -580,7 +583,7 @@ const macroMeta: Array<{
   { key: "carbs", label: "Kohlenhydrate", unit: "g", tone: "red" },
 ];
 
-const appVersion = "3.1.20";
+const appVersion = "3.1.21";
 const updateSourceLabel = "main / github.com/Noko-png/NokoTracker";
 
 const emptyNutrition: NutritionDay = {
@@ -826,7 +829,6 @@ const initialUserSettingsForm: UserSettingsForm = {
 };
 
 const initialCsvImportForm: CsvImportForm = {
-  directory: "u:\\Nico\\Desktop\\db",
   dryRun: false,
 };
 
@@ -1680,7 +1682,7 @@ function createRecipePayload(form: RecipeForm) {
     cook_time_minutes: optionalInteger(form.cook_time_minutes),
     description: optionalText(form.description),
     emoji: form.emoji.trim() || defaultRecipeEmoji,
-    image_path: optionalText(form.image_path),
+    image_path: recipeImageUpdate(form.image_path),
     instructions: optionalText(form.instructions),
     name: form.name,
     prep_time_minutes: optionalInteger(form.prep_time_minutes),
@@ -3860,10 +3862,7 @@ export default function App() {
     try {
       setApiError(null);
       setCsvImportRunning(true);
-      const result = await importGrocyCsv(
-        csvImportForm.directory,
-        csvImportForm.dryRun,
-      );
+      const result = await importGrocyCsv(csvImportForm.dryRun);
       setCsvImportResult(result);
       if (!csvImportForm.dryRun) {
         await loadData();
@@ -10772,7 +10771,7 @@ function RecipesPage({
   onRecipesImported: () => Promise<void>;
   transferBusy: boolean;
   transferMessage: string;
-  onFormChange: (value: RecipeForm) => void;
+  onFormChange: Dispatch<SetStateAction<RecipeForm>>;
   onIngredientAmountChange: (
     ingredient: RecipeIngredient,
     quantity: string,
@@ -11109,23 +11108,6 @@ function RecipesPage({
     });
   }
 
-  function handleRecipeImageFile(event: ChangeEvent<HTMLInputElement>) {
-    const file = event.target.files?.[0];
-    if (!file || !file.type.startsWith("image/")) {
-      return;
-    }
-
-    const reader = new FileReader();
-    reader.onload = () => {
-      const imagePath = typeof reader.result === "string" ? reader.result : "";
-      if (imagePath) {
-        onFormChange({ ...form, image_path: imagePath });
-      }
-    };
-    reader.readAsDataURL(file);
-    event.target.value = "";
-  }
-
   if (editorOpen) {
     return (
       <div className="recipe-builder-page">
@@ -11187,42 +11169,11 @@ function RecipesPage({
                 />
               </label>
 
-              <label className="recipe-builder-field">
-                <span>Bild</span>
-                <div className="recipe-image-tools">
-                  <input
-                    accept="image/*"
-                    onChange={handleRecipeImageFile}
-                    type="file"
-                  />
-                  <input
-                    onChange={(event) =>
-                      onFormChange({ ...form, image_path: event.target.value })
-                    }
-                    placeholder="Bild-URL einfuegen"
-                    readOnly={form.image_path.startsWith("data:")}
-                    value={form.image_path.startsWith("data:")
-                      ? "Lokales Bild ausgewaehlt"
-                      : form.image_path}
-                  />
-                </div>
-                <div className="recipe-image-preview">
-                  {form.image_path ? (
-                    <>
-                      <img alt="Rezeptbild Vorschau" src={form.image_path} />
-                      <button
-                        className="button secondary"
-                        onClick={() => onFormChange({ ...form, image_path: "" })}
-                        type="button"
-                      >
-                        Bild entfernen
-                      </button>
-                    </>
-                  ) : (
-                    <span>Keine Bildvorschau</span>
-                  )}
-                </div>
-              </label>
+              <RecipeImageField
+                key={editingRecipeId ?? "new"}
+                onChange={(image_path) => onFormChange((current) => ({ ...current, image_path }))}
+                path={form.image_path}
+              />
 
               <div className="recipe-builder-field-head">
                 <span>Serving Quantity</span>
@@ -11774,11 +11725,11 @@ function RecipesPage({
               const caloriesPerServing = recipeCaloriesById.get(recipe.id) ?? 0;
               return (
                 <article className="recipe-card" key={recipe.id}>
-                  {recipe.image_path && (
-                    <div className="recipe-card-image">
-                      <img alt={`${recipe.name} Bild`} src={recipe.image_path} />
-                    </div>
-                  )}
+                  <RecipeImage
+                    alt={`${recipe.name} Bild`}
+                    className="recipe-card-image"
+                    path={recipe.image_path}
+                  />
                   <div className="recipe-head">
                     <div className="recipe-summary">
                       <div className="recipe-card-heading">
@@ -11883,14 +11834,11 @@ function RecipesPage({
               </button>
             </div>
 
-            {preparingRecipe.image_path && (
-              <div className="prepare-image">
-                <img
-                  alt={`${preparingRecipe.name} Bild`}
-                  src={preparingRecipe.image_path}
-                />
-              </div>
-            )}
+            <RecipeImage
+              alt={`${preparingRecipe.name} Bild`}
+              className="prepare-image"
+              path={preparingRecipe.image_path}
+            />
 
             <section className="prepare-section">
               <h3>Beschreibung</h3>
@@ -14332,14 +14280,6 @@ function SettingsPage({
           </form>
 
           <form className="settings-import-form" onSubmit={onCsvImportSubmit}>
-            <TextInput
-              label="CSV-Ordner"
-              onChange={(directory) =>
-                onCsvImportFormChange({ ...csvImportForm, directory })
-              }
-              required
-              value={csvImportForm.directory}
-            />
             <label className="check-field">
               <input
                 checked={csvImportForm.dryRun}
@@ -14359,7 +14299,7 @@ function SettingsPage({
               type="submit"
             >
               <Database size={16} />
-              {csvImportRunning ? "Import laeuft" : "Import starten"}
+              {csvImportRunning ? "Import laeuft" : "Aus Serverordner importieren"}
             </button>
           </form>
 

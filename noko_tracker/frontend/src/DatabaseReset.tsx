@@ -1,6 +1,5 @@
 import { useState } from "react";
-import { API_BASE_URL } from "./api/client";
-import { readJsonResponse } from "./api/response";
+import { resetDatabase } from "./api/client";
 import { confirmDatabaseReset } from "./databaseResetConfirmation";
 
 export function DatabaseReset({ busy, onBusyChange }: { busy: boolean; onBusyChange: (busy: boolean) => void }) {
@@ -11,13 +10,7 @@ export function DatabaseReset({ busy, onBusyChange }: { busy: boolean; onBusyCha
     onBusyChange(true);
     setError(null);
     try {
-      const base = API_BASE_URL.replace(/\/+$/, "");
-      const path = !base || base === "." ? "database/reset" : `${base}/database/reset`;
-      await readJsonResponse(await fetch(path, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ confirmation: "ALLE DATEN LOESCHEN" }),
-      }));
+      await resetDatabase();
       window.location.reload();
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : "Datenbank konnte nicht gelöscht werden.");

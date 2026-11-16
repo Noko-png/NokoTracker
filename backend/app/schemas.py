@@ -1,9 +1,9 @@
 import math
 import re
 from datetime import date, datetime
-from typing import Literal, Optional
+from typing import Annotated, Literal, Optional
 
-from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
+from pydantic import AfterValidator, BaseModel, ConfigDict, Field, field_validator, model_validator
 
 
 SIMPLE_FRACTION_RE = re.compile(
@@ -743,6 +743,20 @@ class RecipeIngredientRead(RecipeIngredientBase, ORMBase):
     food: FoodSummary
 
 
+RECIPE_IMAGE_DATA_URL = re.compile(
+    r"data:image/[a-z0-9][a-z0-9.+-]*;base64,[a-z0-9+/]+={0,2}", re.IGNORECASE | re.ASCII,
+)
+
+
+def validate_local_recipe_image(value: str) -> str:
+    if not RECIPE_IMAGE_DATA_URL.fullmatch(value) or (len(value) - value.find(",") - 1) % 4:
+        raise ValueError("Rezeptbilder müssen als lokale Bilddatei hochgeladen werden.")
+    return value
+
+
+LocalRecipeImage = Annotated[str, AfterValidator(validate_local_recipe_image)]
+
+
 def normalize_recipe_tags(value):
     if value is None:
         return []
@@ -794,6 +808,7 @@ class RecipeBase(BaseModel):
 
 
 class RecipeCreate(RecipeBase):
+    image_path: LocalRecipeImage | None = None
     ingredients: list[RecipeIngredientCreateForRecipe] = Field(default_factory=list)
 
 
@@ -803,7 +818,7 @@ class RecipeUpdate(BaseModel):
     description: Optional[str] = None
     instructions: Optional[str] = None
     tags: Optional[list[str]] = None
-    image_path: Optional[str] = None
+    image_path: LocalRecipeImage | None = None
     servings: Optional[float] = Field(None, gt=0)
     prep_time_minutes: Optional[int] = Field(None, ge=0)
     cook_time_minutes: Optional[int] = Field(None, ge=0)
@@ -1274,7 +1289,7 @@ class DayNutritionRead(BaseModel):
 
 
 class CsvImportRequest(BaseModel):
-    directory: str = Field(r"u:\Nico\Desktop\db", min_length=1)
+    directory: str | None = Field(None, min_length=1)
     dry_run: bool = False
 
 

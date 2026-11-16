@@ -1,9 +1,9 @@
 import json
 import math
 import re
-from urllib.error import HTTPError, URLError
+from contextlib import closing, contextmanager
+from http.client import HTTPException as HTTPClientError, HTTPSConnection
 from urllib.parse import quote
-from urllib.request import Request, urlopen
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Response, status
 from sqlalchemy.exc import IntegrityError
@@ -15,13 +15,12 @@ from ..services import barcode_service
 
 
 router = APIRouter(prefix="/foods", tags=["foods"])
+barcode_db_session = contextmanager(get_db)
 
 OPEN_FOOD_FACTS_USER_AGENT = "HeimERP/0.1 (local calorie tracker)"
 OPEN_FOOD_FACTS_TIMEOUT_SECONDS = 6
-OPEN_FOOD_FACTS_PRODUCT_URLS = (
-    "https://world.openfoodfacts.org/api/v3.6/product/{barcode}.json",
-    "https://world.openfoodfacts.org/api/v2/product/{barcode}.json",
-)
+OPEN_FOOD_FACTS_MAX_RESPONSE_BYTES = 2 * 1024 * 1024
+OPEN_FOOD_FACTS_HOST = "world.openfoodfacts.org"
 
 
 def get_food_or_404(db: Session, food_id: int) -> models.Food:
@@ -89,7 +88,7 @@ def number_from_open_food_facts(value) -> float | None:
             value = value.strip().replace(",", ".")
         number = float(value)
         return max(number, 0.0) if math.isfinite(number) else None
-    except (TypeError, ValueError):
+    except (TypeError, ValueError, OverflowError):
         return None
 
 
@@ -141,7 +140,7 @@ def product_has_nutrition(product: dict) -> bool:
     return product_nutrition_score(product) > 0
 
 
-def food_has_nutrition(food: models.Food) -> bool:
+def food_has_nutrition(food: models.Food | models.InventoryItem) -> bool:
     return any(
         (getattr(food, field) or 0) > 0
         for field in (
@@ -154,7 +153,7 @@ def food_has_nutrition(food: models.Food) -> bool:
 
 
 def parse_serving_size(value: str | None) -> tuple[float, str]:
-    if not value:
+    if not isinstance(value, str) or not value:
         return 100.0, "g"
     match = re.search(r"(\d+(?:[.,]\d+)?)\s*([a-zA-Z]+)?", value)
     if not match:
@@ -216,20 +215,32 @@ def ensure_food_for_inventory_item(
 def open_food_facts_product(barcode: str) -> dict | None:
     best_product: dict | None = None
     best_score = -1
-    barcode_path = quote(barcode)
+    barcode_path = quote(barcode, safe="")
 
-    for url_template in OPEN_FOOD_FACTS_PRODUCT_URLS:
-        url = url_template.format(barcode=barcode_path)
-        request = Request(url, headers={"User-Agent": OPEN_FOOD_FACTS_USER_AGENT})
+    for version in ("v3.6", "v2"):
         try:
-            with urlopen(request, timeout=OPEN_FOOD_FACTS_TIMEOUT_SECONDS) as response:
-                payload = json.loads(response.read().decode("utf-8"))
-        except HTTPError as exc:
-            if exc.code == 404:
-                continue
-            raise HTTPException(status_code=502, detail="EAN-Suche ist momentan nicht erreichbar. Bitte erneut versuchen oder das Lebensmittel manuell anlegen.") from exc
-        except (TimeoutError, URLError, json.JSONDecodeError) as exc:
-            raise HTTPException(status_code=502, detail="EAN-Suche ist momentan nicht erreichbar. Bitte erneut versuchen oder das Lebensmittel manuell anlegen.") from exc
+            # Connect directly with certificate verification. Redirects are treated as errors.
+            with closing(HTTPSConnection(OPEN_FOOD_FACTS_HOST, timeout=OPEN_FOOD_FACTS_TIMEOUT_SECONDS)) as connection:
+                connection.request(
+                    "GET", f"/api/{version}/product/{barcode_path}.json",
+                    headers={"User-Agent": OPEN_FOOD_FACTS_USER_AGENT, "Accept": "application/json"},
+                )
+                with connection.getresponse() as response:
+                    if response.status == 404:
+                        continue
+                    if response.status != 200:
+                        raise ValueError("Unexpected Open Food Facts status")
+                    raw = response.read(OPEN_FOOD_FACTS_MAX_RESPONSE_BYTES + 1)
+            if len(raw) > OPEN_FOOD_FACTS_MAX_RESPONSE_BYTES:
+                raise ValueError("Open Food Facts response is too large")
+            payload = json.loads(raw.decode("utf-8"))
+            if not isinstance(payload, dict):
+                raise ValueError("Expected a JSON object from Open Food Facts")
+        except (OSError, HTTPClientError, ValueError, RecursionError) as exc:
+            raise HTTPException(
+                status_code=502,
+                detail="EAN-Suche ist momentan nicht erreichbar. Bitte erneut versuchen oder das Lebensmittel manuell anlegen.",
+            ) from exc
 
         product = payload.get("product")
         if not isinstance(product, dict):
@@ -326,19 +337,13 @@ def upsert_food_from_open_food_facts(
     return food
 
 
-def refresh_food_from_open_food_facts(
-    db: Session,
-    barcode: str,
-) -> models.Food | None:
+def fetch_barcode_product(barcode: str) -> tuple[dict | None, HTTPException | None]:
     try:
-        product = open_food_facts_product(barcode)
+        return open_food_facts_product(barcode), None
     except HTTPException as exc:
-        if exc.status_code == 502:
-            return None
-        raise
-    if product is None:
-        return None
-    return upsert_food_from_open_food_facts(db, barcode, product)
+        if exc.status_code != 502:
+            raise
+        return None, exc
 
 
 def food_barcode_preview_from_food(
@@ -393,18 +398,50 @@ def food_barcode_preview_from_open_food_facts(
     }
 
 
-def barcode_lookup_response(
+def inventory_item_by_barcode(db: Session, barcode: str) -> models.InventoryItem | None:
+    return (
+        db.query(models.InventoryItem)
+        .filter(models.InventoryItem.barcode == barcode)
+        .order_by(models.InventoryItem.id)
+        .first()
+    )
+
+
+def local_barcode_match(db: Session, barcode: str) -> tuple[models.Food | None, models.InventoryItem | None]:
+    food = barcode_service.find_food(db, barcode)
+    return food, None if food is not None else inventory_item_by_barcode(db, barcode)
+
+
+def save_barcode_lookup(
+    db: Session,
     barcode: str,
-    source: str,
-    food: models.Food,
-    inventory_items: list[models.InventoryItem],
-) -> dict:
-    return {
-        "barcode": barcode,
-        "source": source,
-        "food": food,
-        "inventory_items": inventory_items,
-    }
+    food: models.Food | None,
+    item: models.InventoryItem | None,
+    product: dict | None = None,
+) -> schemas.FoodBarcodeLookupRead:
+    source = "local_food"
+    if food is not None:
+        barcode_service.append_barcodes(db, food, [barcode])
+    elif item is not None:
+        food = ensure_food_for_inventory_item(db, item)
+        source = "local_inventory"
+
+    if product is not None and (food is None or not food_has_nutrition(food)):
+        food = upsert_food_from_open_food_facts(db, barcode, product)
+        source = "open_food_facts"
+    if food is None:
+        raise HTTPException(status_code=404, detail="Zu diesem EAN-Code wurde kein Lebensmittel gefunden. Bitte den Code pruefen oder das Lebensmittel manuell anlegen.")
+
+    db.commit()
+    inventory_items = (
+        db.query(models.InventoryItem)
+        .filter(models.InventoryItem.food_id == food.id)
+        .order_by(models.InventoryItem.id)
+        .all()
+    )
+    return schemas.FoodBarcodeLookupRead.model_validate({
+        "barcode": barcode, "source": source, "food": food, "inventory_items": inventory_items,
+    })
 
 
 @router.post("", response_model=schemas.FoodRead, status_code=status.HTTP_201_CREATED)
@@ -441,110 +478,49 @@ def list_foods(
 
 
 @router.get("/barcode/{barcode}/preview", response_model=schemas.FoodBarcodePreviewRead)
-def preview_food_by_barcode(barcode: str, db: Session = Depends(get_db)):
+def preview_food_by_barcode(barcode: str):
     normalized_barcode = normalize_barcode(barcode)
-    local_food = barcode_service.find_food(db, normalized_barcode)
-    if local_food is not None and food_has_nutrition(local_food):
-        return food_barcode_preview_from_food(
-            normalized_barcode,
-            "local_food",
-            local_food,
-        )
+    with barcode_db_session() as db:
+        local_food = barcode_service.find_food(db, normalized_barcode)
+        if local_food is not None and food_has_nutrition(local_food):
+            return food_barcode_preview_from_food(normalized_barcode, "local_food", local_food)
 
-    product = open_food_facts_product(normalized_barcode)
-    if product is not None and product_has_nutrition(product):
-        return food_barcode_preview_from_open_food_facts(normalized_barcode, product)
-
-    if local_food is not None:
-        return food_barcode_preview_from_food(
-            normalized_barcode,
-            "local_food",
-            local_food,
-        )
-
-    inventory_item = (
-        db.query(models.InventoryItem)
-        .filter(models.InventoryItem.barcode == normalized_barcode)
-        .order_by(models.InventoryItem.id)
-        .first()
-    )
-    if inventory_item is not None:
-        return food_barcode_preview_from_inventory_item(
-            normalized_barcode,
-            inventory_item,
-        )
+    product, lookup_error = fetch_barcode_product(normalized_barcode)
+    with barcode_db_session() as db:
+        local_food = barcode_service.find_food(db, normalized_barcode)
+        if local_food is not None and food_has_nutrition(local_food):
+            return food_barcode_preview_from_food(normalized_barcode, "local_food", local_food)
+        if lookup_error is not None:
+            raise lookup_error
+        if product is not None and product_has_nutrition(product):
+            return food_barcode_preview_from_open_food_facts(normalized_barcode, product)
+        if local_food is not None:
+            return food_barcode_preview_from_food(normalized_barcode, "local_food", local_food)
+        item = inventory_item_by_barcode(db, normalized_barcode)
+        if item is not None:
+            return food_barcode_preview_from_inventory_item(normalized_barcode, item)
 
     if product is None:
         raise HTTPException(status_code=404, detail="Zu diesem EAN-Code wurde kein Lebensmittel gefunden. Bitte den Code pruefen oder das Lebensmittel manuell anlegen.")
     return food_barcode_preview_from_open_food_facts(normalized_barcode, product)
 
 
-@router.get("/barcode/{barcode}", response_model=schemas.FoodBarcodeLookupRead)
-def lookup_food_by_barcode(barcode: str, db: Session = Depends(get_db)):
+@router.post("/barcode/{barcode}", response_model=schemas.FoodBarcodeLookupRead)
+def lookup_food_by_barcode(barcode: str) -> schemas.FoodBarcodeLookupRead:
     normalized_barcode = normalize_barcode(barcode)
-    local_food = barcode_service.find_food(db, normalized_barcode)
-    matching_inventory = (
-        db.query(models.InventoryItem)
-        .filter(models.InventoryItem.barcode == normalized_barcode)
-        .order_by(models.InventoryItem.id)
-        .all()
-    )
-    if local_food is not None:
-        source = "local_food"
-        barcode_service.append_barcodes(db, local_food, [normalized_barcode])
-        if not food_has_nutrition(local_food):
-            refreshed_food = refresh_food_from_open_food_facts(db, normalized_barcode)
-            if refreshed_food is not None:
-                local_food = refreshed_food
-                source = "open_food_facts"
-        db.commit()
-        matching_inventory = (
-            db.query(models.InventoryItem)
-            .filter(models.InventoryItem.food_id == local_food.id)
-            .order_by(models.InventoryItem.id)
-            .all()
-        )
-        return barcode_lookup_response(
-            normalized_barcode,
-            source,
-            local_food,
-            matching_inventory,
-        )
+    with barcode_db_session() as db:
+        food, item = local_barcode_match(db, normalized_barcode)
+        candidate = (item.food or item) if item is not None else food
+        if candidate is not None and food_has_nutrition(candidate):
+            return save_barcode_lookup(db, normalized_barcode, food, item)
 
-    if matching_inventory:
-        food = ensure_food_for_inventory_item(db, matching_inventory[0])
-        source = "local_inventory"
-        if not food_has_nutrition(food):
-            refreshed_food = refresh_food_from_open_food_facts(db, normalized_barcode)
-            if refreshed_food is not None:
-                food = refreshed_food
-                source = "open_food_facts"
-        db.commit()
-        db.refresh(food)
-        matching_inventory = db.query(models.InventoryItem).filter(
-            models.InventoryItem.food_id == food.id,
-        ).order_by(models.InventoryItem.id).all()
-        return barcode_lookup_response(
-            normalized_barcode,
-            source,
-            food,
-            matching_inventory,
-        )
-
-    product = open_food_facts_product(normalized_barcode)
-    if product is None:
-        raise HTTPException(status_code=404, detail="Zu diesem EAN-Code wurde kein Lebensmittel gefunden. Bitte den Code pruefen oder das Lebensmittel manuell anlegen.")
-
-    food = upsert_food_from_open_food_facts(db, normalized_barcode, product)
-    db.commit()
-    db.refresh(food)
-    return barcode_lookup_response(
-        normalized_barcode,
-        "open_food_facts",
-        food,
-        db.query(models.InventoryItem).filter(models.InventoryItem.food_id == food.id)
-        .order_by(models.InventoryItem.id).all(),
-    )
+    product, lookup_error = fetch_barcode_product(normalized_barcode)
+    # Another request or a database restore may have changed the local match during the fetch.
+    with barcode_db_session() as db:
+        food, item = local_barcode_match(db, normalized_barcode)
+        if lookup_error is not None and food is None and item is None:
+            raise lookup_error
+        return save_barcode_lookup(db, normalized_barcode, food, item, product)
 
 
 @router.get("/{food_id}", response_model=schemas.FoodRead)

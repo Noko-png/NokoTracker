@@ -1,12 +1,13 @@
 import unittest
-from unittest.mock import patch
+from contextlib import contextmanager, nullcontext
+from unittest.mock import MagicMock, patch
 
 from fastapi import HTTPException
 from sqlalchemy import create_engine, event
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, sessionmaker
 
-from app import models as m, schemas as s
-from app.database import Base
+from app import database, models as m, schemas as s
+from app.database import Base, get_db
 from app.routers import foods, inventory, meals, recipes, shopping
 
 
@@ -26,6 +27,9 @@ class BarcodeTest(unittest.TestCase):
         offline = patch.object(foods, "open_food_facts_product", return_value=None)
         offline.start()
         self.addCleanup(offline.stop)
+        session = patch.object(foods, "barcode_db_session", return_value=nullcontext(self.db))
+        session.start()
+        self.addCleanup(session.stop)
 
     def food(self, **values):
         return foods.create_food(s.FoodCreate(**{
@@ -55,7 +59,7 @@ class BarcodeTest(unittest.TestCase):
         Base.metadata.create_all(self.engine)
         food = self.db.query(m.Food).one()
         self.assertEqual(s.FoodRead.model_validate(food).barcodes, [A])
-        self.assertEqual(foods.lookup_food_by_barcode(A, self.db)["food"].id, food.id)
+        self.assertEqual(foods.lookup_food_by_barcode(A).food.id, food.id)
         foods.update_food(food.id, s.FoodUpdate(barcodes=[A, B]), self.db)
         self.assertEqual(food.barcodes, [A, B])
 
@@ -75,10 +79,10 @@ class BarcodeTest(unittest.TestCase):
         unrelated = self.food(barcodes=[C])
         self.stock(unrelated, C)
         for code in (A, B):
-            result = foods.lookup_food_by_barcode(code, self.db)
-            self.assertEqual(result["food"].id, food.id)
-            self.assertEqual({item.id for item in result["inventory_items"]}, {item.id for item in lots})
-            preview = foods.preview_food_by_barcode(code, self.db)
+            result = foods.lookup_food_by_barcode(code)
+            self.assertEqual(result.food.id, food.id)
+            self.assertEqual({item.id for item in result.inventory_items}, {item.id for item in lots})
+            preview = foods.preview_food_by_barcode(code)
             self.assertEqual(preview["name"], food.name)
             self.assertEqual(preview["barcode"], code)
         self.assertEqual(self.db.query(m.Food).count(), 2)
@@ -91,7 +95,7 @@ class BarcodeTest(unittest.TestCase):
         self.assertEqual(item.food_id, food.id)
         self.assertEqual(item.quantity, 100)
         with self.assertRaises(HTTPException) as caught:
-            foods.lookup_food_by_barcode(B, self.db)
+            foods.lookup_food_by_barcode(B)
         self.assertEqual(caught.exception.status_code, 404)
         foods.update_food(food.id, s.FoodUpdate(barcodes=[]), self.db)
         self.assertEqual(food.barcodes, [])
@@ -124,13 +128,13 @@ class BarcodeTest(unittest.TestCase):
         self.db.add(duplicate)
         self.db.commit()
         with self.assertRaises(HTTPException) as caught:
-            foods.lookup_food_by_barcode(B, self.db)
+            foods.lookup_food_by_barcode(B)
         self.assertEqual(caught.exception.status_code, 409)
         self.db.delete(duplicate)
         food.is_archived = True
         self.db.commit()
         with self.assertRaises(HTTPException) as caught:
-            foods.lookup_food_by_barcode(A, self.db)
+            foods.lookup_food_by_barcode(A)
         self.assertEqual(caught.exception.status_code, 409)
 
     def test_inventory_adds_alias_and_keeps_primary_and_stock_identity(self):
@@ -141,7 +145,7 @@ class BarcodeTest(unittest.TestCase):
         self.assertEqual(food.barcode, A)
         self.assertEqual(food.barcodes, [A, B, C])
         self.assertEqual(item.barcode, C)
-        self.assertEqual(foods.lookup_food_by_barcode(C, self.db)["inventory_items"][0].id, item.id)
+        self.assertEqual(foods.lookup_food_by_barcode(C).inventory_items[0].id, item.id)
         other = self.food(barcodes=[])
         with self.assertRaises(HTTPException) as caught:
             inventory.create_inventory_item(s.InventoryItemCreate(
@@ -156,7 +160,7 @@ class BarcodeTest(unittest.TestCase):
         self.db.commit()
         food = self.food()
         self.assertEqual(orphan.food_id, food.id)
-        self.assertEqual(foods.lookup_food_by_barcode(A, self.db)["inventory_items"][0].id, orphan.id)
+        self.assertEqual(foods.lookup_food_by_barcode(A).inventory_items[0].id, orphan.id)
 
     def test_external_lookup_adds_alias_without_losing_primary_or_other_lots(self):
         food = self.food(brand="Marke")
@@ -164,11 +168,11 @@ class BarcodeTest(unittest.TestCase):
         with patch.object(foods, "open_food_facts_product", return_value={
             "product_name": food.name, "brands": "Marke", "nutriments": {"energy-kcal_100g": 200},
         }):
-            result = foods.lookup_food_by_barcode(C, self.db)
-        self.assertEqual(result["food"].id, food.id)
+            result = foods.lookup_food_by_barcode(C)
+        self.assertEqual(result.food.id, food.id)
         self.assertEqual(food.barcodes, [A, B, C])
         self.assertEqual(food.barcode, A)
-        self.assertEqual([lot.id for lot in result["inventory_items"]], [item.id])
+        self.assertEqual([lot.id for lot in result.inventory_items], [item.id])
 
     def test_ean_creates_complete_master_data_without_stock_or_meal(self):
         product = {
@@ -181,16 +185,16 @@ class BarcodeTest(unittest.TestCase):
             },
         }
         with patch.object(foods, "open_food_facts_product", return_value=product) as lookup:
-            result = foods.lookup_food_by_barcode(A, self.db)
-            created = s.FoodRead.model_validate(result["food"])
+            result = foods.lookup_food_by_barcode(A)
+            created = result.food
             self.assertEqual((created.name, created.brand, created.category), ("Haferdrink", "Testmarke", "Getraenke"))
             self.assertEqual((created.serving_size, created.serving_unit), (250, "ml"))
             self.assertEqual((created.calories_per_100g, created.protein_per_100g, created.fat_per_100g, created.carbs_per_100g), (46, 1.1, 1.5, 6.8))
             self.assertEqual(created.barcodes, [A])
             self.assertEqual((created.fiber_per_100g, created.sugar_per_100g, created.caffeine_mg_per_100g), (0.75, 4.2, 32))
             self.assertIsNotNone(self.db.get(m.ProductUnit, created.product_unit_id))
-            repeated = foods.lookup_food_by_barcode(A, self.db)
-            self.assertEqual(repeated["food"].id, created.id)
+            repeated = foods.lookup_food_by_barcode(A)
+            self.assertEqual(repeated.food.id, created.id)
             lookup.assert_called_once_with(A)
         self.assertEqual(self.db.query(m.Food).count(), 1)
         self.assertEqual(self.db.query(m.InventoryItem).count(), 0)
@@ -201,7 +205,7 @@ class BarcodeTest(unittest.TestCase):
     def test_ean_preview_preserves_optional_values_and_refresh_keeps_missing_values(self):
         product = {"product_name": "Test", "nutriments": {"fiber_100g": 1.25, "sugars_100g": 0}}
         with patch.object(foods, "open_food_facts_product", return_value=product):
-            preview = s.FoodBarcodePreviewRead(**foods.preview_food_by_barcode(C, self.db))
+            preview = s.FoodBarcodePreviewRead(**foods.preview_food_by_barcode(C))
         self.assertEqual((preview.fiber_per_100g, preview.sugar_per_100g, preview.caffeine_mg_per_100g), (1.25, 0, None))
         food = self.food(fiber_per_100g=2.5, sugar_per_100g=6.25, caffeine_mg_per_100g=32)
         foods.upsert_food_from_open_food_facts(self.db, A, {"product_name": food.name})
@@ -221,20 +225,45 @@ class BarcodeTest(unittest.TestCase):
 
     def test_missing_ean_and_network_failure_create_no_product(self):
         with self.assertRaises(HTTPException) as caught:
-            foods.lookup_food_by_barcode(A, self.db)
+            foods.lookup_food_by_barcode(A)
         self.assertEqual(caught.exception.status_code, 404)
         self.assertIn("manuell", caught.exception.detail)
         with patch.object(foods, "open_food_facts_product", side_effect=HTTPException(502, "offline")):
             with self.assertRaises(HTTPException) as caught:
-                foods.lookup_food_by_barcode(A, self.db)
+                foods.lookup_food_by_barcode(A)
             self.assertEqual(caught.exception.status_code, 502)
         self.assertEqual(self.db.query(m.Food).count(), 0)
         self.assertEqual(self.db.query(m.FoodBarcode).count(), 0)
 
+    def test_external_lookup_rechecks_local_data_without_holding_database_lock(self):
+        for barcode, lookup in ((A, foods.lookup_food_by_barcode), (B, foods.preview_food_by_barcode)):
+            with self.subTest(barcode=barcode):
+                def upstream(code):
+                    self.assertFalse(database.DATABASE_LOCK.locked())
+                    self.assertEqual(code, barcode)
+                    with contextmanager(get_db)() as db:
+                        foods.create_food(s.FoodCreate(
+                            name=f"Lokales Produkt {code}", barcode=code, calories_per_100g=100,
+                        ), db)
+                    return {"product_name": "Externe Antwort", "nutriments": {"energy-kcal_100g": 60}}
+
+                with (
+                    patch.object(database, "SessionLocal", sessionmaker(bind=self.engine, autoflush=False)),
+                    patch.object(foods, "barcode_db_session", contextmanager(get_db)),
+                    patch.object(foods, "open_food_facts_product", side_effect=upstream),
+                ):
+                    result = lookup(barcode)
+                local_food = self.db.query(m.Food).filter_by(barcode=barcode).one()
+                self.assertEqual(local_food.name, f"Lokales Produkt {barcode}")
+                if isinstance(result, s.FoodBarcodeLookupRead):
+                    self.assertEqual((result.source, result.food.id), ("local_food", local_food.id))
+                else:
+                    self.assertEqual((result["source"], result["name"]), ("local_food", local_food.name))
+
     def test_tracker_and_cooking_consume_shared_stock_across_codes(self):
         food = self.food()
         first, second = self.stock(food, A), self.stock(food, B)
-        scanned = foods.lookup_food_by_barcode(B, self.db)["food"]
+        scanned = foods.lookup_food_by_barcode(B).food
         meal = meals.create_meal_log(s.MealLogCreate(
             food_id=scanned.id, quantity=150, unit="g", deduct_inventory=True, booking_key="multi-ean-meal-01",
         ), self.db)
@@ -254,7 +283,7 @@ class BarcodeTest(unittest.TestCase):
     def test_shopping_merges_alias_selections_and_replenishes_same_food(self):
         food = self.food()
         for code in (A, B):
-            scanned = foods.lookup_food_by_barcode(code, self.db)["food"]
+            scanned = foods.lookup_food_by_barcode(code).food
             shopping.create_shopping_item(s.ShoppingListItemCreate(
                 name=scanned.name, food_id=scanned.id, quantity=100, unit="g",
             ), self.db)
@@ -262,7 +291,49 @@ class BarcodeTest(unittest.TestCase):
         result = shopping.import_shopping_list_to_inventory(db=self.db)
         item = result["created_inventory_items"][0]
         self.assertEqual((item.food_id, item.quantity), (food.id, 200))
-        self.assertEqual(foods.lookup_food_by_barcode(B, self.db)["inventory_items"][0].id, item.id)
+        self.assertEqual(foods.lookup_food_by_barcode(B).inventory_items[0].id, item.id)
+
+
+class OpenFoodFactsTransportTest(unittest.TestCase):
+    def test_missing_v3_product_falls_back_to_v2(self):
+        missing, existing = MagicMock(), MagicMock()
+        missing.__enter__.return_value.status = 404
+        existing_response = existing.__enter__.return_value
+        existing_response.status = 200
+        existing_response.read.return_value = b'{"product": {"product_name": "Test"}}'
+        with patch.object(foods, "HTTPSConnection") as https:
+            connection = https.return_value
+            connection.getresponse.side_effect = [missing, existing]
+            self.assertEqual(foods.open_food_facts_product(A), {"product_name": "Test"})
+        request_paths = [request.args[1] for request in connection.request.call_args_list]
+        self.assertEqual(request_paths, [f"/api/v3.6/product/{A}.json", f"/api/v2/product/{A}.json"])
+
+    def test_redirect_does_not_start_another_connection(self):
+        with patch.object(foods, "HTTPSConnection") as https:
+            response = https.return_value.getresponse.return_value.__enter__.return_value
+            response.status = 302
+            with self.assertRaises(HTTPException) as caught:
+                foods.open_food_facts_product(A)
+        self.assertEqual(caught.exception.status_code, 502)
+        https.assert_called_once_with("world.openfoodfacts.org", timeout=foods.OPEN_FOOD_FACTS_TIMEOUT_SECONDS)
+        method, path = https.return_value.request.call_args.args
+        self.assertEqual((method, path), ("GET", f"/api/v3.6/product/{A}.json"))
+        response.read.assert_not_called()
+
+    def test_response_size_and_invalid_json_are_reported_as_upstream_errors(self):
+        for body in (b" " * 65, b"\xff", b"[]"):
+            with (
+                self.subTest(body=body),
+                patch.object(foods, "OPEN_FOOD_FACTS_MAX_RESPONSE_BYTES", 64),
+                patch.object(foods, "HTTPSConnection") as https,
+            ):
+                response = https.return_value.getresponse.return_value.__enter__.return_value
+                response.status = 200
+                response.read.return_value = body
+                with self.assertRaises(HTTPException) as caught:
+                    foods.open_food_facts_product(A)
+                self.assertEqual(caught.exception.status_code, 502)
+                response.read.assert_called_once_with(65)
 
 
 if __name__ == "__main__":

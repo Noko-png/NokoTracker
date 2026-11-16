@@ -13,13 +13,12 @@ from typing import Annotated, Literal
 
 from fastapi import APIRouter, File, Form, HTTPException, UploadFile
 from fastapi.responses import FileResponse
-from sqlalchemy.engine import make_url
 from starlette.background import BackgroundTask
 from starlette.concurrency import run_in_threadpool
 from sqlalchemy import create_engine
 
 from .. import models, schemas
-from ..database import DATABASE_URL, DATABASE_LOCK, engine
+from ..database import DATABASE_PATH, DATABASE_LOCK, engine, prepare_private_sqlite_file
 from ..upload_limits import MAX_DATABASE_BYTES, copy_upload
 from ..services.database_transfer import DATA_GROUPS, DataTransfer
 
@@ -48,26 +47,17 @@ TRAINING_TABLES = {
 
 
 def sqlite_database_path() -> Path:
-    url = make_url(DATABASE_URL)
-    if not url.drivername.startswith("sqlite"):
-        raise HTTPException(
-            status_code=400,
-            detail="Datenbank-Import und -Export wird aktuell nur fuer SQLite unterstuetzt.",
-        )
-    if not url.database or url.database == ":memory:":
+    if DATABASE_PATH is None:
         raise HTTPException(
             status_code=400,
             detail="Diese SQLite-Datenbank liegt nicht als Datei vor.",
         )
-
-    path = Path(url.database)
-    if not path.is_absolute():
-        path = Path.cwd() / path
-    return path.resolve()
+    return DATABASE_PATH
 
 
 def backup_sqlite_database(source_path: Path, target_path: Path) -> None:
     target_path.parent.mkdir(parents=True, exist_ok=True)
+    prepare_private_sqlite_file(target_path)
     source = sqlite3.connect(str(source_path))
     try:
         target = sqlite3.connect(str(target_path))
@@ -214,6 +204,7 @@ def export_database():
         temp_path,
         filename=f"noko-tracker-{timestamp}.db",
         media_type="application/vnd.sqlite3",
+        headers={"Cache-Control": "no-store, private"},
         background=BackgroundTask(lambda: temp_path.unlink(missing_ok=True)),
     )
 
@@ -297,6 +288,7 @@ def restore_database(upload_path: Path, db_path: Path, filename: str, *, mode="f
     clean_engine = None
     try:
         db_path.parent.mkdir(parents=True, exist_ok=True)
+        prepare_private_sqlite_file(clean_path)
         clean_engine = create_engine("sqlite:///" + clean_path.as_posix())
         models.Base.metadata.create_all(clean_engine)
         clean_engine.dispose()

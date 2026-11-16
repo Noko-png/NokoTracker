@@ -10,6 +10,8 @@ from pathlib import Path
 SMOKE_TEST = r'''
 import asyncio
 import json
+import os
+from pathlib import Path
 from sqlalchemy import create_engine
 from sqlalchemy.pool import StaticPool
 from app import database
@@ -27,9 +29,12 @@ with database.engine.begin() as connection:
     for column in ("fiber_per_100g", "sugar_per_100g", "caffeine_mg_per_100g"):
         connection.exec_driver_sql("ALTER TABLE foods DROP COLUMN " + column)
 from app.main import app
+from app.routers import health_connect
 from app.main import migrate_sqlite_food_schema, drop_sqlite_obsolete_nutrition_columns
 from app import schemas
 from app.routers.foods import create_food
+
+health_connect.ADDON_OPTIONS_PATH = Path(os.environ["NOKO_STATIC_DIR"]) / "test-options.json"
 with database.SessionLocal() as db:
     legacy = db.query(models.Food).filter_by(name="Legacy food").one()
     assert (legacy.fiber_per_100g, legacy.sugar_per_100g, legacy.caffeine_mg_per_100g, legacy.calories_per_100g) == (0, 0, None, 123)
@@ -46,19 +51,24 @@ with database.SessionLocal() as db:
     legacy = db.query(models.Food).filter_by(name="Legacy food").one()
     assert (legacy.fiber_per_100g, legacy.sugar_per_100g, legacy.caffeine_mg_per_100g, legacy.calories_per_100g) == (4.25, 12.6, 32.5, 123)
 
-async def request(path, *, accept="application/json", username="owner", peer="172.30.32.2", authenticated=True):
+async def request(path, *, method="GET", accept="application/json", username="owner", peer="172.30.32.2", authenticated=True):
     headers = {"host": "localhost", "accept": accept, "x-ingress-path": "/api/hassio_ingress/test-session/"}
     if authenticated:
         headers.update({"x-remote-user-id": "test-ha-user", "x-remote-user-name": username, "x-remote-user-display-name": "owner"})
     scope = {
         "type": "http", "asgi": {"version": "3.0", "spec_version": "2.4"},
-        "http_version": "1.1", "method": "GET", "scheme": "http",
+        "http_version": "1.1", "method": method, "scheme": "http",
         "path": path, "raw_path": path.encode(), "query_string": b"", "root_path": "",
         "headers": [(k.encode(), v.encode()) for k, v in headers.items()],
         "client": (peer, 12345), "server": ("localhost", 8000),
     }
     sent = []
+    request_delivered = False
     async def receive():
+        nonlocal request_delivered
+        if not request_delivered:
+            request_delivered = True
+            return {"type": "http.request", "body": b"", "more_body": False}
         await asyncio.Event().wait()
     async def send(message):
         sent.append(message)
@@ -74,12 +84,20 @@ async def main():
         session = json.loads(body)
         assert session["is_admin"] and session["ha_username"] == "owner"
     for code in ("0012345678905", "4012345678901"):
-        status, headers, body = await request("/foods/barcode/" + code)
+        assert (await request("/foods/barcode/" + code))[0] in (404, 405)
+        preview_status, _, preview_body = await request("/foods/barcode/" + code + "/preview")
+        assert preview_status == 200 and json.loads(preview_body)["source"] == "local_food"
+        status, headers, body = await request("/foods/barcode/" + code, method="POST")
         assert status == 200 and b"application/json" in headers[b"content-type"], (status, body[:200])
         assert json.loads(body)["food"]["barcodes"] == ["0012345678905", "4012345678901"]
     status, headers, body = await request("/", accept="text/html")
     assert status == 200 and b"<!doctype html>" in body.lower()
     assert headers.get(b"cache-control") == b"no-store"
+    assert b"frame-ancestors 'self'" in headers[b"content-security-policy"]
+    assert headers.get(b"referrer-policy") == b"no-referrer"
+    assert (await request("/index.html", accept="text/html"))[1][b"content-security-policy"] == headers[b"content-security-policy"]
+    for path in ("/openapi.json", "/docs", "/redoc"):
+        assert (await request(path))[0] == 404
     status, _, body = await request("/assets/test.js", accept="*/*")
     assert status == 200 and b"static asset" in body
     status, headers, body = await request("/missing-api-endpoint")
@@ -111,7 +129,6 @@ class IngressFrontendTest(unittest.TestCase):
             environment = {
                 **os.environ, "DATABASE_URL": "sqlite://", "NOKO_STATIC_DIR": str(root),
                 "NOKO_AUTH_MODE": "ingress", "NOKO_ADMIN_USERNAME": "owner",
-                "SUPERVISOR_TOKEN": "",
             }
             result = subprocess.run(
                 [sys.executable, "-c", SMOKE_TEST], cwd=addon_backend, env=environment,

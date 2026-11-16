@@ -20,6 +20,7 @@ vor jedem Fall zurueck. Die Fixture darf nur als separater Testserver laufen.
 1. Aus dem Backend-Verzeichnis die Fixture starten:
 
    ```powershell
+   $env:NOKO_LOCAL_FRONTEND_PORT = "5175"
    python -m uvicorn calendar_ui_fixture:app --app-dir tests --host 127.0.0.1 --port 8015
    ```
 
@@ -45,6 +46,7 @@ vor jedem Fall zurueck. Die Fixture darf nur als separater Testserver laufen.
 
 Abweichende lokale Ports lassen sich mit `CALENDAR_TEST_API_URL`,
 `CALENDAR_TEST_FRONTEND_URL` und `CALENDAR_TEST_CDP_URL` setzen.
+Die Backend-Fixture muss mit `NOKO_LOCAL_FRONTEND_PORT` auf den Port des verwendeten Frontends eingestellt sein. Fuer den Trainingstest ist das standardmaessig 5177.
 `CALENDAR_TEST_SCREENSHOTS` kann auf ein vorhandenes Ausgabeverzeichnis zeigen.
 Die Testserver und die separate Chrome-Instanz anschliessend beenden.
 
@@ -80,7 +82,7 @@ Normale Nutzer sehen die
 Duplizierfunktion; Rezeptimport und -export bleiben Administratoren vorbehalten.
 Die API-Fixture verwendet ausschliesslich eigens erzeugte temporaere SQLite-Dateien.
 
-1. Im Backend: `python -m uvicorn database_ui_fixture:app --app-dir tests --host 127.0.0.1 --port 8022`
+1. Im Backend `NOKO_LOCAL_FRONTEND_PORT` auf `5182` setzen und `python -m uvicorn database_ui_fixture:app --app-dir tests --host 127.0.0.1 --port 8022` starten.
 2. Im Frontend: `npm run dev -- --port 5182 --strictPort` mit der Standard-API-Basis.
 3. Einen separaten Headless-Chrome wie oben mit Port `9232` und eigenem Profil starten.
 4. Im Frontend: `npm run test:database-ui`

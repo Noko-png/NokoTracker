@@ -7,10 +7,10 @@ FastAPI-Backend fuer ein privates Heim-ERP mit SQLite, SQLAlchemy und Pydantic.
 ```powershell
 cd backend
 pip install -r requirements.txt
-uvicorn app.main:app --reload
+uvicorn app.main:app --reload --host 127.0.0.1 --no-proxy-headers
 ```
 
-Die API-Dokumentation ist danach unter http://127.0.0.1:8000/docs erreichbar.
+Das OpenAPI-Schema ist danach unter http://127.0.0.1:8000/openapi.json erreichbar.
 
 Der lokale Entwicklungsmodus akzeptiert nur Loopback-Verbindungen und lokale Browser-Origins. Er ist ausschliesslich fuer den eigenen Entwicklungsrechner gedacht. Das HA-Add-on aktiviert stattdessen `NOKO_AUTH_MODE=ingress`, deaktiviert Uvicorn-Proxy-Header und prueft die reale Supervisor-Adresse vor Auswertung der HA-Identitaet. Einrichtung und Profilzuordnung stehen in `noko_tracker/DOCS.md`.
 

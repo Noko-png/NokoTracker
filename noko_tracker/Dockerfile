@@ -11,7 +11,7 @@ RUN VITE_API_BASE_URL=./ npm run build
 FROM ghcr.io/home-assistant/base:latest
 
 ARG BUILD_ARCH=amd64
-ARG BUILD_VERSION=3.1.20
+ARG BUILD_VERSION=3.1.21
 
 LABEL \
     io.hass.version="${BUILD_VERSION}" \
@@ -28,6 +28,8 @@ COPY backend/requirements.txt /tmp/requirements.txt
 
 RUN \
     apk add --no-cache \
+        ca-certificates \
+        jq \
         libffi \
         libstdc++ \
         openssl \

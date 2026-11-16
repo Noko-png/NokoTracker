@@ -3693,10 +3693,8 @@ th {
   text-align: center;
 }
 
-.recipe-image-tools {
-  display: grid;
-  grid-template-columns: minmax(180px, 0.8fr) minmax(0, 1.2fr);
-  gap: 10px;
+.recipe-image-unavailable {
+  color: var(--muted);
 }
 
 .recipe-image-preview {
@@ -3705,7 +3703,8 @@ th {
   min-height: 220px;
 }
 
-.recipe-image-preview span {
+.recipe-image-preview span,
+.recipe-image-preview .recipe-image-unavailable {
   color: var(--muted);
   text-align: center;
 }
@@ -7461,7 +7460,6 @@ th {
   .receipt-import-form,
   .receipt-import-summary,
   .food-master-filter-row,
-  .recipe-image-tools,
   .recipe-filter-row,
   .recipe-ingredient-form,
   .recipe-builder-add-ingredient,

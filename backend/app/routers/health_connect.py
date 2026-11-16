@@ -1,15 +1,17 @@
 """Read-only, admin-only diagnostic view of HA Companion health sensors.
 
-The Supervisor token remains server-side. Never accept a URL from the caller or
-forward arbitrary HA attributes (which may contain unrelated personal data).
+The configured Home Assistant token stays server-side. The client can select
+entity IDs, while the upstream address comes from the add-on configuration.
 """
 import json
 import math
 import os
 import re
 from datetime import datetime, timezone
+from pathlib import Path
 from typing import Literal
 from urllib.error import HTTPError, URLError
+from urllib.parse import urlsplit
 from urllib.request import HTTPRedirectHandler, ProxyHandler, Request, build_opener
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Response
@@ -19,7 +21,7 @@ from ..security import current_principal
 
 
 router = APIRouter(prefix="/health-connect", tags=["health-connect"])
-STATES_URL = "http://supervisor/core/api/states"
+ADDON_OPTIONS_PATH = Path("/data/options.json")
 MAX_RESPONSE_BYTES = 8 * 1024 * 1024
 NO_STORE = {"Cache-Control": "no-store, private"}
 ENTITY_PATTERN = r"^sensor\.[a-z0-9_]{1,180}$"
@@ -56,15 +58,46 @@ def require_admin():
         raise HTTPException(403, "Das Test Health dashboard ist nur fuer den Administrator freigegeben.", headers=NO_STORE)
 
 
+def read_health_credentials() -> tuple[str, str]:
+    try:
+        options = json.loads(ADDON_OPTIONS_PATH.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return "", ""
+    if not isinstance(options, dict):
+        return "", ""
+    origin = options.get("health_ha_url")
+    token = options.get("health_ha_token")
+    if not isinstance(origin, str) or not isinstance(token, str):
+        return "", ""
+    return origin.strip(), token.strip()
+
+
 class NoRedirects(HTTPRedirectHandler):
     def redirect_request(self, req, fp, code, msg, headers, newurl):
         return None
 
 
-def fetch_states(token: str) -> list[dict]:
-    # Fixed internal destination; disable environment proxies and redirects so
-    # the administrator credential cannot leave the Supervisor connection.
-    request = Request(STATES_URL, headers={"Authorization": f"Bearer {token}", "Accept": "application/json"})
+def home_assistant_states_url(origin: str) -> str:
+    try:
+        address = urlsplit(origin)
+        port = address.port
+    except ValueError as exc:
+        raise ValueError("Invalid Home Assistant origin") from exc
+    if (
+        address.scheme != "https" or not address.hostname or address.username is not None
+        or address.path not in {"", "/"} or any(char in origin for char in "?#\\")
+        or any(char.isspace() or ord(char) < 32 or ord(char) == 127 for char in origin)
+        or address.netloc.endswith(":") or port == 0
+    ):
+        raise ValueError("Invalid Home Assistant HTTPS origin")
+    return f"https://{address.netloc}/api/states"
+
+
+def fetch_states(origin: str, token: str) -> list[dict]:
+    request = Request(
+        home_assistant_states_url(origin),
+        headers={"Authorization": f"Bearer {token}", "Accept": "application/json"},
+    )
     try:
         with build_opener(ProxyHandler({}), NoRedirects()).open(request, timeout=8) as result:
             if result.headers.get_content_type() != "application/json":
@@ -79,7 +112,7 @@ def fetch_states(token: str) -> list[dict]:
     except HTTPError as exc:
         exc.close()
         if exc.code in (401, 403):
-            detail = "Home Assistant verweigert den Sensorzugriff. Bitte das Add-on auf die aktuelle Version aktualisieren und neu starten; der HA-API-Zugriff muss aktiviert sein."
+            detail = "Home Assistant verweigert den Sensorzugriff. Bitte den API-Token des Add-ons pruefen."
         else:
             detail = "Die Sensorabfrage bei Home Assistant ist fehlgeschlagen. Bitte spaeter erneut versuchen."
         raise HTTPException(502, detail, headers=NO_STORE) from None
@@ -132,14 +165,18 @@ def read_health_test(
 ):
     response.headers.update(NO_STORE)
     checked_at = datetime.now(timezone.utc).isoformat()
-    token = os.getenv("SUPERVISOR_TOKEN", "").strip()
     if os.getenv("NOKO_AUTH_MODE") != "ingress":
         return HealthTestRead(status="not_configured", checked_at=checked_at, sensors=[],
                               message="Die Sensorabfrage ist im Home-Assistant-Add-on verfuegbar. Lokal besteht keine Verbindung zu deiner HA-Instanz.")
-    if not token:
+    origin, token = read_health_credentials()
+    if not origin or not token:
         return HealthTestRead(status="not_configured", checked_at=checked_at, sensors=[],
-                              message="Der interne HA-Zugang fehlt. Bitte das Add-on aktualisieren und neu starten.")
-    records = fetch_states(token)
+                              message="Bitte HTTPS-Adresse und API-Token in der Add-on-Konfiguration eintragen.")
+    try:
+        records = fetch_states(origin, token)
+    except ValueError:
+        return HealthTestRead(status="not_configured", checked_at=checked_at, sensors=[],
+                              message="Die HA-Adresse muss eine HTTPS-Basisadresse ohne Pfad sein.")
     manual = {kind: entity for kind, entity in (("steps", steps_entity), ("heart_rate", pulse_entity), ("sleep", sleep_entity)) if entity}
     sensors = []
     by_id = {}

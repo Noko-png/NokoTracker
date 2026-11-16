@@ -9,6 +9,7 @@ from sqlalchemy.orm import Session
 
 from .. import schemas
 from ..database import get_db
+from ..local_paths import resolve_local_path
 from ..services import grocy_import_service, receipt_import_service
 from ..upload_limits import MAX_ARCHIVE_BYTES, MAX_EXPANDED_BYTES, MAX_CSV_BYTES, MAX_IMPORT_FILES, copy_upload
 
@@ -83,20 +84,21 @@ def import_grocy_csv(
     request: schemas.CsvImportRequest,
     db: Session = Depends(get_db),
 ):
-    if os.getenv("NOKO_AUTH_MODE") == "ingress":
-        allowed = Path("/data/imports").resolve()
-        requested = Path(request.directory).resolve()
-        if not requested.is_relative_to(allowed):
-            raise HTTPException(403, "Serverimporte sind nur aus /data/imports erlaubt. Alternativ CSV/ZIP hochladen.")
+    directory = Path(
+        "/data/imports" if os.getenv("NOKO_AUTH_MODE") == "ingress"
+        else os.getenv("NOKO_GROCY_IMPORT_DIR", "imports")
+    )
+    if request.directory is not None and Path(request.directory).absolute() != directory.absolute():
+        raise HTTPException(403, "Nur der konfigurierte CSV-Ordner ist erlaubt. Alternativ CSV/ZIP hochladen.")
     try:
         return grocy_import_service.import_grocy_csv_directory(
             db=db,
-            directory=request.directory,
+            directory=str(resolve_local_path(directory)),
             dry_run=request.dry_run,
         )
     except FileNotFoundError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
-    except ValueError as exc:
+    except (ValueError, OSError, RuntimeError) as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
 
 

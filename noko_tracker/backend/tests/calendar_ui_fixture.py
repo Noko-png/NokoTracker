@@ -1,5 +1,6 @@
 import os
 import sys
+from contextlib import contextmanager
 from pathlib import Path
 from threading import Lock
 
@@ -47,6 +48,7 @@ def test_db():
 
 
 app.dependency_overrides[get_db] = test_db
+foods.barcode_db_session = contextmanager(test_db)
 
 
 @app.post("/__calendar_test__/reset")

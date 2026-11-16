@@ -1,12 +1,8 @@
 import { loadAllPages } from "../pagination";
+import { resolveApiBaseUrl } from "./baseUrl";
 import { readJsonResponse } from "./response";
 
-const configuredApiBaseUrl = import.meta.env.VITE_API_BASE_URL;
-
-export const API_BASE_URL =
-  configuredApiBaseUrl === undefined
-    ? "http://127.0.0.1:8000"
-    : configuredApiBaseUrl;
+export const API_BASE_URL = resolveApiBaseUrl(import.meta.env.VITE_API_BASE_URL);
 
 function apiUrl(path: string) {
   const normalizedPath = path.replace(/^\/+/, "");
@@ -950,6 +946,7 @@ export function getFoods() {
 export function lookupFoodByBarcode(barcode: string) {
   return request<FoodBarcodeLookup>(
     `/foods/barcode/${encodeURIComponent(barcode)}`,
+    { method: "POST" },
   );
 }
 
@@ -1338,13 +1335,10 @@ export function getCalendarGroups() {
   return request<CalendarGroup[]>("/calendar/groups?limit=500");
 }
 
-export function importGrocyCsv(directory: string, dryRun = false) {
+export function importGrocyCsv(dryRun = false) {
   return request<CsvImportResult>("/imports/grocy-csv", {
     method: "POST",
-    body: {
-      directory,
-      dry_run: dryRun,
-    },
+    body: { dry_run: dryRun },
   });
 }
 
@@ -1379,6 +1373,13 @@ async function exportFile(path: string) {
 
 export function exportDatabaseBackup() {
   return exportFile("/database/export");
+}
+
+export function resetDatabase() {
+  return request<void>("/database/reset", {
+    method: "POST",
+    body: { confirmation: "ALLE DATEN LOESCHEN" },
+  });
 }
 
 export function exportRecipeBackup(recipeId: number) {

@@ -13,10 +13,10 @@ NokoTracker ist eine private Heim-ERP-App mit React/Vite-Frontend und FastAPI-Ba
 ```powershell
 cd backend
 pip install -r requirements.txt
-uvicorn app.main:app --reload
+uvicorn app.main:app --reload --host 127.0.0.1 --no-proxy-headers
 ```
 
-Die API ist danach unter `http://127.0.0.1:8000` erreichbar, die OpenAPI-Dokumentation unter `http://127.0.0.1:8000/docs`.
+Die API ist danach unter `http://127.0.0.1:8000` erreichbar, das OpenAPI-Schema unter `http://127.0.0.1:8000/openapi.json`.
 
 ## Frontend starten
 
@@ -27,6 +27,7 @@ npm run dev
 ```
 
 Das Frontend laeuft standardmaessig unter `http://127.0.0.1:5173`.
+Fuer einen anderen lokalen Frontend-Port muss `NOKO_LOCAL_FRONTEND_PORT` beim Backend-Start auf denselben Port gesetzt werden.
 
 ## Lokal alles starten
 
@@ -39,13 +40,13 @@ start-local.cmd
 Das oeffnet zwei CMD-Fenster:
 
 - Frontend: `http://127.0.0.1:5173`
-- Backend/API-Doku: `http://127.0.0.1:8000/docs`
+- Backend/OpenAPI: `http://127.0.0.1:8000/openapi.json`
 
 Dass `http://127.0.0.1:8000` nur JSON ausgibt, ist normal. Die Bedienoberflaeche laeuft lokal ueber den Frontend-Devserver auf Port `5173`.
 
 ## Konfiguration
 
-Das Frontend nutzt standardmaessig `http://127.0.0.1:8000` als API-Basis. Fuer andere Umgebungen kann `VITE_API_BASE_URL` gesetzt werden.
+Das Frontend nutzt standardmaessig `http://127.0.0.1:8000` als API-Basis. Fuer andere Umgebungen akzeptiert `VITE_API_BASE_URL` relative Pfade und HTTPS-Adressen. HTTP ist auf Loopback beschraenkt.
 
 ```powershell
 $env:VITE_API_BASE_URL = "http://127.0.0.1:8000"
@@ -96,7 +97,7 @@ Titel und Notizen bestehender Serien bleiben bearbeitbar. Sobald eine Serie zusa
 
 ## Test Health dashboard
 
-Ab 3.1.16 koennen Administratoren unter **Test Health dashboard** die Health-Connect-Sensoren der Home-Assistant-Companion-App testweise abrufen. Auf dem Handy sowohl die Leserechte in Health Connect als auch die einzelnen Sensoren unter **Einstellungen > Companion App > Sensoren verwalten > Health Connect** aktivieren. Danach die App synchronisieren und das Dashboard oeffnen. Schritte, Puls/Ruhepuls und Schlafdauer werden mit Quelle, Einheit und HA-Aktualisierungszeit angezeigt. Umbenannte Sensoren koennen per Sensor-ID ausgewaehlt werden.
+Administratoren koennen unter **Test Health dashboard** die Health-Connect-Sensoren der Home-Assistant-Companion-App testweise abrufen. Ab 3.1.21 benoetigt die Funktion eine HTTPS-Adresse und einen separaten HA-API-Token. Die Einrichtung steht in der [Add-on-Dokumentation](noko_tracker/DOCS.md#test-health-dashboard).
 
 Die Testansicht speichert keine Messwerte, ordnet sie keinem Profil zu und ist nur fuer Administratoren erreichbar. Der Abruf benoetigt die HA-Add-on-Installation; ein lokal gestarteter NokoTracker meldet den fehlenden HA-Anschluss. Hinweise zu den neuen HA-API-Rechten stehen in der [Add-on-Dokumentation](noko_tracker/DOCS.md).
 
@@ -111,7 +112,7 @@ Teilimporte ordnen Profile ueber den exakten Profilnamen zu, niemals ueber zufae
 
 Kann ein Bereich wegen Verknuepfungen zu anderen Daten nicht allein ersetzt werden, bricht der Import ohne Aenderung ab; die verbundenen Bereiche muessen gemeinsam ausgewaehlt werden. Vorratsabbuchungen lassen sich nur zusammen mit dem Vorrat vollstaendig wiederherstellen. Beim Mahlzeitenimport ohne Vorrat bleiben Abbuchungen als Altbuchungen ohne automatische Rueckbuchung erhalten. Vor jedem Import wird die aktuelle Datenbank automatisch gesichert; die Uebernahme erfolgt erst nach erfolgreicher Pruefung.
 
-Der Grocy-Import kann weiterhin einen Serverordner lesen und zusaetzlich direkt im Browser CSV-Dateien oder ein ZIP-Archiv aus deinem PC hochladen.
+Der Grocy-Import verwendet den konfigurierten lokalen Serverordner. In der lokalen Version ist das standardmaessig `imports` relativ zum Backend-Arbeitsverzeichnis und kann beim Start ueber `NOKO_GROCY_IMPORT_DIR` gesetzt werden. CSV-Dateien oder ZIP-Archive lassen sich auch direkt im Browser hochladen.
 
 ## Rezepte importieren, exportieren und duplizieren
 

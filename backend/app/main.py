@@ -5,7 +5,7 @@ from sqlalchemy.exc import OperationalError
 
 from . import crud, models
 from .database import DATABASE_URL, SessionLocal, engine
-from .security import install_security, migrate_security_schema
+from .security import LOCAL_FRONTEND_ORIGINS, install_security, migrate_security_schema
 from .routers import (
     backups,
     database_reset,
@@ -915,16 +915,14 @@ ensure_default_user()
 app = FastAPI(
     title="Heim-ERP Backend",
     description="Backend API fuer ein privates Heim-ERP mit Kalender, Vorrat, Rezepten, Mahlzeiten und Einkaufsliste.",
-    version="3.1.20",
+    version="3.1.21",
+    docs_url=None,
+    redoc_url=None,
 )
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=[
-        "http://127.0.0.1:5173",
-        "http://localhost:5173",
-    ],
-    allow_origin_regex=r"http://(127\.0\.0\.1|localhost):\d+",
+    allow_origins=LOCAL_FRONTEND_ORIGINS,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -933,7 +931,7 @@ app.add_middleware(
 
 @app.get("/", tags=["system"])
 def read_root():
-    return {"name": "Heim-ERP Backend", "docs": "/docs"}
+    return {"name": "Heim-ERP Backend", "openapi": "/openapi.json"}
 
 
 @app.get("/health", tags=["system"])

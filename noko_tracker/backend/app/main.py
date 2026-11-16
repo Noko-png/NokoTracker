@@ -10,7 +10,7 @@ from sqlalchemy.exc import OperationalError
 
 from . import crud, models
 from .database import DATABASE_URL, SessionLocal, engine
-from .security import install_security, migrate_security_schema
+from .security import LOCAL_FRONTEND_ORIGINS, install_security, migrate_security_schema
 from .routers import (
     backups,
     database_reset,
@@ -920,16 +920,16 @@ ensure_default_user()
 app = FastAPI(
     title="Heim-ERP Backend",
     description="Backend API fuer ein privates Heim-ERP mit Kalender, Vorrat, Rezepten, Mahlzeiten und Einkaufsliste.",
-    version="3.1.20",
+    version="3.1.21",
+    docs_url=None,
+    redoc_url=None,
+    openapi_url=None,
+    redirect_slashes=False,
 )
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=[
-        "http://127.0.0.1:5173",
-        "http://localhost:5173",
-    ],
-    allow_origin_regex=r"http://(127\.0\.0\.1|localhost):\d+",
+    allow_origins=LOCAL_FRONTEND_ORIGINS,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -981,7 +981,7 @@ def configure_frontend() -> None:
     if not static_dir or not index_file or not index_file.is_file():
         @app.get("/", tags=["system"])
         def read_root():
-            return {"name": "Heim-ERP Backend", "docs": "/docs"}
+            return {"name": "Heim-ERP Backend"}
 
         return
 
@@ -989,9 +989,21 @@ def configure_frontend() -> None:
     if assets_dir.is_dir():
         app.mount("/assets", StaticFiles(directory=assets_dir), name="assets")
 
+    def frontend_index():
+        return FileResponse(index_file, headers={
+            "Cache-Control": "no-store",
+            "Content-Security-Policy": (
+                "default-src 'self'; base-uri 'none'; object-src 'none'; "
+                "frame-ancestors 'self'; form-action 'self'; "
+                "img-src 'self' data: blob:; style-src 'self' 'unsafe-inline'"
+            ),
+            "Referrer-Policy": "no-referrer",
+            "X-Content-Type-Options": "nosniff",
+        })
+
     @app.get("/", include_in_schema=False)
     def read_frontend_index():
-        return FileResponse(index_file, headers={"Cache-Control": "no-store"})
+        return frontend_index()
 
     @app.get("/{full_path:path}", include_in_schema=False)
     def read_frontend_asset_or_index(full_path: str, request: Request):
@@ -1004,10 +1016,13 @@ def configure_frontend() -> None:
         except ValueError:
             raise HTTPException(status_code=404, detail="Datei wurde nicht gefunden")
 
+        if requested_path == index_file:
+            return frontend_index()
+
         if requested_path.is_file():
             return FileResponse(requested_path)
 
-        return FileResponse(index_file, headers={"Cache-Control": "no-store"})
+        return frontend_index()
 
 
 # install_security also registers /session. All API routes must precede the SPA

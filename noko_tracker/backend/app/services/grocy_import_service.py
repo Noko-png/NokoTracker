@@ -15,7 +15,7 @@ from . import barcode_service
 from ..upload_limits import MAX_CSV_BYTES, MAX_EXPANDED_BYTES, MAX_IMPORT_FILES
 
 
-DEFAULT_GROCY_CSV_DIRECTORY = r"u:\Nico\Desktop\db"
+DEFAULT_GROCY_CSV_DIRECTORY = "imports"
 
 SENSITIVE_OR_UNSUPPORTED_FILES = {
     "api_keys.csv",

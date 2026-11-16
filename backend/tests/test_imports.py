@@ -1,15 +1,18 @@
 import csv
+import os
 import tempfile
 import unittest
 from datetime import date
 from pathlib import Path
 from unittest.mock import patch
 
+from fastapi import HTTPException
 from sqlalchemy import create_engine
 from sqlalchemy.orm import Session
 
 from app import models, schemas
 from app.database import Base
+from app.routers import imports
 from app.services import grocy_import_service as grocy
 from app.services import receipt_import_service as receipt
 
@@ -90,6 +93,20 @@ class ImportTest(unittest.TestCase):
             self.assertEqual(food.barcodes, ["0012345678905", "4012345678901"])
             self.assertEqual(self.db.query(models.InventoryItem).one().food_id, food.id)
             self.assertEqual(self.db.query(models.FoodBarcode).count(), 2)
+
+    def test_grocy_route_uses_configured_directory(self):
+        with patch.dict(os.environ, {"NOKO_AUTH_MODE": "local", "NOKO_GROCY_IMPORT_DIR": str(self.root)}):
+            result = imports.import_grocy_csv(schemas.CsvImportRequest(dry_run=True), self.db)
+            self.assertEqual(Path(result["directory"]), self.root)
+            self.assertEqual(result["imported"]["foods"]["created"], 2)
+
+    def test_grocy_route_does_not_resolve_a_different_requested_directory(self):
+        with patch.dict(os.environ, {"NOKO_AUTH_MODE": "local", "NOKO_GROCY_IMPORT_DIR": str(self.root)}):
+            with patch.object(imports, "resolve_local_path") as resolve:
+                with self.assertRaises(HTTPException) as caught:
+                    imports.import_grocy_csv(schemas.CsvImportRequest(directory="another-directory"), self.db)
+            self.assertEqual(caught.exception.status_code, 403)
+            resolve.assert_not_called()
 
     def test_grocy_warns_on_invalid_or_conflicting_eans_without_reassigning_stock(self):
         self.write_csv("product_barcodes.csv", ["product_id", "barcode"], [

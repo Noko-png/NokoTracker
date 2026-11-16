@@ -239,9 +239,10 @@ class SecurityTest(unittest.TestCase):
         with Session(self.engine) as db:
             self.assertEqual(db.get(models.User, 1).password, "!")
 
-    def test_local_development_allows_loopback_ports_but_rejects_remote_origins(self):
+    def test_local_development_limits_browser_origins_to_the_ui_port(self):
         with patch.dict(os.environ, {"NOKO_AUTH_MODE": "local"}):
-            self.assertEqual(self.call("GET", "/users", peer="127.0.0.1", headers={"origin": "http://127.0.0.1:5175"})[0], 200)
+            self.assertEqual(self.call("GET", "/users", peer="127.0.0.1", headers={"origin": "http://127.0.0.1:5173"})[0], 200)
+            self.assertEqual(self.call("GET", "/users", peer="127.0.0.1", headers={"origin": "http://127.0.0.1:5175"})[0], 403)
             self.assertEqual(self.call("GET", "/users", peer="127.0.0.1", headers={"origin": "https://attacker.invalid"})[0], 403)
             self.assertEqual(self.call("GET", "/users", peer="127.0.0.1", headers={"host": "attacker.invalid"})[0], 403)
             self.assertEqual(self.call("GET", "/users", peer="192.168.1.20")[0], 403)

@@ -2,6 +2,7 @@ import unittest
 from unittest.mock import patch
 
 from fastapi import HTTPException
+from pydantic import ValidationError
 from sqlalchemy import create_engine
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
@@ -90,3 +91,28 @@ class RecipeDuplicationTest(unittest.TestCase):
             recipes.duplicate_recipe(999, self.db)
         self.assertEqual(caught.exception.status_code, 404)
         self.assertEqual(self.db.query(models.Recipe).count(), 1)
+
+    def test_recipe_image_writes_accept_only_embedded_images(self):
+        for image_path in (
+            "https://example.invalid/image.png", "//example.invalid/image.png", "/assets/image.png",
+            "data:text/plain;base64,dGVzdA==", "data:image/png;base64,a",
+        ):
+            with self.subTest(image_path=image_path):
+                with self.assertRaises(ValidationError):
+                    schemas.RecipeCreate(name="Externes Bild", image_path=image_path)
+                with self.assertRaises(ValidationError):
+                    schemas.RecipeUpdate(image_path=image_path)
+
+        local_image = "data:image/png;base64,dGVzdA=="
+        self.assertEqual(schemas.RecipeUpdate(image_path=local_image).image_path, local_image)
+
+    def test_legacy_image_reference_survives_an_update_until_explicitly_removed(self):
+        legacy_image = "https://example.invalid/legacy.png"
+        self.source.image_path = legacy_image
+        self.db.commit()
+
+        recipe = recipes.update_recipe(self.source.id, schemas.RecipeUpdate(name="Neuer Name"), self.db)
+        self.assertEqual(schemas.RecipeRead.model_validate(recipe).image_path, legacy_image)
+
+        recipe = recipes.update_recipe(self.source.id, schemas.RecipeUpdate(image_path=None), self.db)
+        self.assertIsNone(recipe.image_path)

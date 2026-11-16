@@ -33,6 +33,12 @@ class Principal:
 
 current_principal: ContextVar[Principal | None] = ContextVar("principal", default=None)
 PERSONAL_MODELS = (models.MealLog, models.WeightEntry, models.TrainingPlan, models.TrainingSession)
+LOCAL_FRONTEND_PORT = int(os.getenv("NOKO_LOCAL_FRONTEND_PORT", "5173"))
+if not 1 <= LOCAL_FRONTEND_PORT <= 65535:
+    raise ValueError("NOKO_LOCAL_FRONTEND_PORT muss ein TCP-Port sein.")
+LOCAL_FRONTEND_ORIGINS = (
+    f"http://127.0.0.1:{LOCAL_FRONTEND_PORT}", f"http://localhost:{LOCAL_FRONTEND_PORT}",
+)
 
 
 def migrate_security_schema(engine):
@@ -86,7 +92,7 @@ class SecurityMiddleware:
                 except ValueError:
                     local = False
                 origin = headers.get("origin")
-                local_origin = origin is None or re.fullmatch(r"http://(127\.0\.0\.1|localhost):\d{1,5}", origin)
+                local_origin = origin is None or origin in LOCAL_FRONTEND_ORIGINS
                 if not local or not local_origin:
                     raise HTTPException(403, "Lokaler Entwicklungszugriff ist nur vom eigenen Rechner erlaubt.")
                 try:
@@ -111,7 +117,9 @@ class SecurityMiddleware:
 
             token = current_principal.set(principal)
             try:
-                if scope["method"] in {"POST", "PATCH", "PUT"}:
+                if scope["method"] == "POST" and re.fullmatch(r"/foods/barcode/[^/]+/?", path):
+                    await self.bounded_request(scope, receive, send, headers, 0)
+                elif scope["method"] in {"POST", "PATCH", "PUT"}:
                     async with self.upload_slots:
                         limit = 65 * 1024 * 1024 if path.rstrip("/") in {
                             "/database/import", "/database/preview", "/recipes/import", "/recipes/import/preview",
