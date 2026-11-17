@@ -44,6 +44,10 @@ In den Produktstammdaten unter **EAN-Codes (optional)** mit **EAN hinzufuegen** 
 
 Alle EANs eines Produkts nutzen dieselben Naehrwerte, Einheiten und denselben Bestand in Tracker, Rezepten und Einkaufsliste. Varianten mit anderen Naehrwerten oder Mengeneinheiten als eigene Produkte anlegen. Datenbanksicherungen enthalten alle Codes, alte Sicherungen bleiben importierbar. Der Grocy-Import uebernimmt mehrere EANs pro Produkt und meldet Konflikte.
 
+## Standardumrechnungen ab 3.1.22
+
+Unter **Stammdaten > Mengeneinheiten** die Einheit bearbeiten und **Standardumrechnung** ausfuellen, zum Beispiel **1 kg = 1000 g**. Beim Auswaehlen der Einheit wird der Vorschlag ins Lebensmittel- oder Bestandsformular uebernommen und kann dort angepasst werden. Neue Lebensmittel aus Einkaufsliste und Kassenzettel nutzen die Vorgabe ebenfalls. Eine spaetere Aenderung der Standardumrechnung ersetzt keine gespeicherten Lebensmittelangaben.
+
 ## Test Health dashboard
 
 1. In Home Assistant einen langlebigen Zugriffstoken fuer ein separates Konto ohne Administratorrechte erzeugen. In der Add-on-Konfiguration `health_ha_url` und `health_ha_token` eintragen, das Add-on neu starten und als NokoTracker-Administrator anmelden.

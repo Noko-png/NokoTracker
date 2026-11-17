@@ -371,6 +371,66 @@ class BackupTest(unittest.TestCase):
             self.assertEqual(db.get(models.Food, 1).barcodes, ["0012345678905"])
             self.assertEqual(db.query(models.FoodBarcode).count(), 0)
 
+    def unit_conversion_source(self):
+        source = self.root / "unit-conversions.db"
+        source_engine = self.create_database(source)
+        with Session(source_engine) as db:
+            unit = models.ProductUnit(name="Flasche", default_conversion_quantity=330, default_conversion_unit="ml")
+            food = models.Food(name="Getraenk", product_unit=unit, serving_size=250, serving_unit="ml")
+            recipe = models.Recipe(name="Getraenkerezept", ingredients=[
+                models.RecipeIngredient(food=food, quantity=1, unit="Flasche"),
+            ])
+            db.add(recipe)
+            db.commit()
+        return source
+
+    def test_default_unit_conversions_survive_full_selected_and_recipe_imports(self):
+        source = self.unit_conversion_source()
+        with patch.object(backups, "sqlite_database_path", return_value=source):
+            response = backups.export_database()
+        try:
+            content = Path(response.path).read_bytes()
+        finally:
+            asyncio.run(response.background())
+        for options in ({}, {"mode": "selected", "groups": '["foods", "recipes"]'},
+                        {"mode": "recipes", "recipe_ids": "[1]"}):
+            with self.subTest(options=options):
+                self.upload(content, **options)
+                with Session(self.engine) as db:
+                    unit = db.query(models.ProductUnit).one()
+                    self.assertEqual((unit.default_conversion_quantity, unit.default_conversion_unit), (330, "ml"))
+                    self.assertEqual((db.query(models.Food).one().serving_size, db.query(models.Food).one().serving_unit),
+                                     (250, "ml"))
+
+    def test_legacy_units_without_default_columns_support_all_import_modes(self):
+        source = self.unit_conversion_source()
+        self.execute(source, '''
+            CREATE TABLE old_product_units (id INTEGER PRIMARY KEY, name VARCHAR(32) NOT NULL,
+                                            created_at DATETIME NOT NULL, updated_at DATETIME NOT NULL);
+            INSERT INTO old_product_units SELECT id, name, created_at, updated_at FROM product_units;
+            DROP TABLE product_units;
+            ALTER TABLE old_product_units RENAME TO product_units;
+        ''')
+        for options in ({}, {"mode": "selected", "groups": '["foods", "recipes"]'},
+                        {"mode": "recipes", "recipe_ids": "[1]"}):
+            with self.subTest(options=options):
+                self.upload(source.read_bytes(), **options)
+                with Session(self.engine) as db:
+                    unit = db.query(models.ProductUnit).one()
+                    self.assertEqual((unit.default_conversion_quantity, unit.default_conversion_unit), (None, None))
+                    self.assertEqual(db.query(models.Food).one().serving_size, 250)
+
+    def test_invalid_default_unit_conversion_is_rejected_before_replacing_database(self):
+        source = self.unit_conversion_source()
+        before = self.target.read_bytes()
+        for value in ("NULL", "0", "1e999"):
+            with self.subTest(value=value):
+                self.execute(source, f"PRAGMA ignore_check_constraints=ON; UPDATE product_units SET default_conversion_quantity={value};")
+                with self.assertRaises(HTTPException) as caught:
+                    self.upload(source.read_bytes())
+                self.assertEqual(caught.exception.status_code, 422)
+                self.assertEqual(self.target.read_bytes(), before)
+
     def test_older_backup_without_new_nutrients_uses_safe_defaults(self):
         source = self.root / "legacy-nutrients.db"
         self.seed_all_tables(self.create_database(source))

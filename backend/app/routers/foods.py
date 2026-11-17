@@ -1,6 +1,9 @@
 import json
+import logging
 import math
 import re
+import socket
+import ssl
 from contextlib import closing, contextmanager
 from http.client import HTTPException as HTTPClientError, HTTPSConnection
 from urllib.parse import quote
@@ -12,15 +15,20 @@ from sqlalchemy.orm import Session
 from .. import crud, models, schemas
 from ..database import get_db
 from ..services import barcode_service
+from ..services.unit_defaults import apply_product_unit_defaults
 
 
 router = APIRouter(prefix="/foods", tags=["foods"])
 barcode_db_session = contextmanager(get_db)
+logger = logging.getLogger(__name__)
 
-OPEN_FOOD_FACTS_USER_AGENT = "HeimERP/0.1 (local calorie tracker)"
+OPEN_FOOD_FACTS_USER_AGENT = "NokoTracker/3 (https://github.com/Noko-png/NokoTracker)"
 OPEN_FOOD_FACTS_TIMEOUT_SECONDS = 6
 OPEN_FOOD_FACTS_MAX_RESPONSE_BYTES = 2 * 1024 * 1024
 OPEN_FOOD_FACTS_HOST = "world.openfoodfacts.org"
+OPEN_FOOD_FACTS_PRODUCT_FIELDS = (
+    "product_name,product_name_de,product_name_en,brands,categories,serving_size,nutriments"
+)
 
 
 def get_food_or_404(db: Session, food_id: int) -> models.Food:
@@ -215,21 +223,27 @@ def ensure_food_for_inventory_item(
 def open_food_facts_product(barcode: str) -> dict | None:
     best_product: dict | None = None
     best_score = -1
+    last_error: Exception | None = None
     barcode_path = quote(barcode, safe="")
 
-    for version in ("v3.6", "v2"):
+    # API v3.5 changed the nutrition structure. These versions expose normalized nutriments.
+    for version in ("v2", "v3.4"):
         try:
             # Connect directly with certificate verification. Redirects are treated as errors.
             with closing(HTTPSConnection(OPEN_FOOD_FACTS_HOST, timeout=OPEN_FOOD_FACTS_TIMEOUT_SECONDS)) as connection:
                 connection.request(
-                    "GET", f"/api/{version}/product/{barcode_path}.json",
+                    "GET", f"/api/{version}/product/{barcode_path}.json?fields={OPEN_FOOD_FACTS_PRODUCT_FIELDS}",
                     headers={"User-Agent": OPEN_FOOD_FACTS_USER_AGENT, "Accept": "application/json"},
                 )
                 with connection.getresponse() as response:
                     if response.status == 404:
-                        continue
+                        return best_product
                     if response.status != 200:
-                        raise ValueError("Unexpected Open Food Facts status")
+                        logger.warning("Open Food Facts API %s returned HTTP %s", version, response.status)
+                        last_error = HTTPClientError(f"Open Food Facts HTTP {response.status}")
+                        if 300 <= response.status < 400 or response.status in {401, 403, 429}:
+                            break
+                        continue
                     raw = response.read(OPEN_FOOD_FACTS_MAX_RESPONSE_BYTES + 1)
             if len(raw) > OPEN_FOOD_FACTS_MAX_RESPONSE_BYTES:
                 raise ValueError("Open Food Facts response is too large")
@@ -237,10 +251,11 @@ def open_food_facts_product(barcode: str) -> dict | None:
             if not isinstance(payload, dict):
                 raise ValueError("Expected a JSON object from Open Food Facts")
         except (OSError, HTTPClientError, ValueError, RecursionError) as exc:
-            raise HTTPException(
-                status_code=502,
-                detail="EAN-Suche ist momentan nicht erreichbar. Bitte erneut versuchen oder das Lebensmittel manuell anlegen.",
-            ) from exc
+            logger.warning("Open Food Facts API %s request failed (%s)", version, type(exc).__name__)
+            last_error = exc
+            if isinstance(exc, (ssl.SSLCertVerificationError, socket.gaierror)):
+                break
+            continue
 
         product = payload.get("product")
         if not isinstance(product, dict):
@@ -252,7 +267,14 @@ def open_food_facts_product(barcode: str) -> dict | None:
         if score >= 4:
             return product
 
-    return best_product
+    if best_product is not None:
+        return best_product
+    if last_error is not None:
+        raise HTTPException(
+            status_code=502,
+            detail="EAN-Suche ist momentan nicht erreichbar. Bitte erneut versuchen oder das Lebensmittel manuell anlegen.",
+        ) from last_error
+    return None
 
 
 def food_values_from_open_food_facts(barcode: str, product: dict) -> dict:
@@ -449,6 +471,10 @@ def create_food(food_in: schemas.FoodCreate, db: Session = Depends(get_db)):
     validate_food_references(db, food_in.product_group_id, food_in.product_unit_id)
     try:
         data = food_in.model_dump(exclude={"conversions", "barcode", "barcodes"})
+        if not {"serving_size", "serving_unit"}.intersection(food_in.model_fields_set):
+            data.pop("serving_size")
+            data.pop("serving_unit")
+        data = apply_product_unit_defaults(db, data)
         food = models.Food(**data)
         barcode_service.apply_input(db, food, food_in)
         replace_food_conversions(db, food, food_in.conversions)

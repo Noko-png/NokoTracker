@@ -87,8 +87,17 @@ def _conversion_quantity_for_unit(food, unit: str | None) -> float | None:
     return None
 
 
-def food_serving_size_in_grams(food: models.Food) -> float:
+def food_serving_size_in_grams(food: models.Food, unit: str | None = None) -> float:
     source = _food_conversion_source(food)
+    inventory_unit = _normalized_unit(getattr(food, "unit", None))
+    product_unit = _normalized_unit(getattr(getattr(source, "product_unit", None), "name", None))
+    if (
+        inventory_unit and _normalized_unit(unit) == inventory_unit
+        and inventory_unit != product_unit
+        and _conversion_quantity_for_unit(food, unit) is None
+    ):
+        # A lot can store its own pack size when the linked food uses a different unit.
+        source = food
     serving_size = _safe_number(getattr(source, "serving_size", None)) or _safe_number(
         getattr(food, "serving_size", None)
     ) or 100.0
@@ -103,7 +112,7 @@ def food_amount_in_grams(food: models.Food, quantity: float, unit: str | None) -
     if direct_grams is not None:
         return direct_grams
 
-    serving_size = food_serving_size_in_grams(food)
+    serving_size = food_serving_size_in_grams(food, normalized_unit)
     conversion_quantity = _conversion_quantity_for_unit(food, normalized_unit)
     if conversion_quantity is not None and serving_size > 0:
         return safe_quantity * serving_size / conversion_quantity
@@ -139,7 +148,7 @@ def food_quantity_from_grams(food: models.Food, grams: float, unit: str | None) 
     if normalized_unit in POUND_UNITS:
         return safe_grams / 453.592
 
-    serving_size = food_serving_size_in_grams(food)
+    serving_size = food_serving_size_in_grams(food, normalized_unit)
     conversion_quantity = _conversion_quantity_for_unit(food, normalized_unit)
     if conversion_quantity is not None and serving_size > 0:
         return safe_grams / serving_size * conversion_quantity

@@ -2,6 +2,12 @@ import { addFoodBarcode, foodBarcodes, foodMatchesSearch, normalizeBarcodes } fr
 import { DatabaseImportForm } from "./DatabaseImportForm";
 import { DatabaseReset } from "./DatabaseReset";
 import { resolveProfileId } from "./profileSelection";
+import {
+  defaultConversionForProductUnit,
+  inventorySnapshotGramsPerUnit,
+  standardConversionUnits,
+  unitQuantityToGrams,
+} from "./productUnitDefaults";
 import { RecipeActionsMenu } from "./RecipeActionsMenu";
 import { RecipeImage, RecipeImageField } from "./RecipeImage";
 import { RecipeImportDialog } from "./RecipeImportDialog";
@@ -345,6 +351,8 @@ type ProductGroupForm = {
 
 type ProductUnitForm = {
   name: string;
+  default_conversion_quantity: string;
+  default_conversion_unit: string;
 };
 
 type RecipeForm = {
@@ -583,7 +591,7 @@ const macroMeta: Array<{
   { key: "carbs", label: "Kohlenhydrate", unit: "g", tone: "red" },
 ];
 
-const appVersion = "3.1.21";
+const appVersion = "3.1.22";
 const updateSourceLabel = "main / github.com/Noko-png/NokoTracker";
 
 const emptyNutrition: NutritionDay = {
@@ -684,6 +692,8 @@ const initialProductGroupForm: ProductGroupForm = {
 
 const initialProductUnitForm: ProductUnitForm = {
   name: "",
+  default_conversion_quantity: "",
+  default_conversion_unit: "",
 };
 
 const initialRecipeForm: RecipeForm = {
@@ -1354,22 +1364,19 @@ function formatServingConversion(
   return [`1 ${productUnit}`, mainConversion, ...extraConversions].join(" = ");
 }
 
-function defaultConversionForProductUnit(
-  productUnit: string,
-  currentSize: string,
-  currentUnit: string,
-) {
-  const directGrams = unitQuantityToGrams(1, productUnit);
-  if (directGrams !== null) {
-    return {
-      serving_size: formatFractionalQuantity(directGrams),
-      serving_unit: "g",
-    };
+function createProductUnitPayload(form: ProductUnitForm): ProductUnitCreate {
+  const quantity = optionalNumber(form.default_conversion_quantity);
+  const unit = optionalText(form.default_conversion_unit);
+  if (quantity !== null && (!Number.isFinite(quantity) || quantity <= 0)) {
+    throw new Error("Die Standardmenge muss größer als 0 sein.");
   }
-
+  if ((quantity === null) !== (unit === null)) {
+    throw new Error("Bitte Menge und Umrechnungseinheit gemeinsam angeben.");
+  }
   return {
-    serving_size: currentSize || "100",
-    serving_unit: currentUnit || "g",
+    name: form.name,
+    default_conversion_quantity: quantity,
+    default_conversion_unit: unit,
   };
 }
 
@@ -2407,11 +2414,16 @@ export default function App() {
 
   async function submitProductUnit(event: FormEvent) {
     event.preventDefault();
-    await createProductUnit({
-      name: productUnitForm.name,
-    } satisfies ProductUnitCreate);
-    setProductUnitForm(initialProductUnitForm);
-    await loadData();
+    try {
+      setApiError(null);
+      await createProductUnit(createProductUnitPayload(productUnitForm));
+      setProductUnitForm(initialProductUnitForm);
+      await loadData();
+      return true;
+    } catch (error) {
+      setApiError(error instanceof Error ? error.message : "Mengeneinheit konnte nicht gespeichert werden.");
+      return false;
+    }
   }
 
   async function submitFood(event: FormEvent) {
@@ -2593,9 +2605,7 @@ export default function App() {
     event.preventDefault();
     try {
       setApiError(null);
-      const payload = {
-        name: masterProductUnitForm.name,
-      } satisfies ProductUnitCreate;
+      const payload = createProductUnitPayload(masterProductUnitForm);
       if (editingProductUnitId === null) {
         await createProductUnit(payload);
       } else {
@@ -2607,17 +2617,25 @@ export default function App() {
       setMasterProductUnitForm(initialProductUnitForm);
       setEditingProductUnitId(null);
       await loadData();
+      return true;
     } catch (error) {
       setApiError(error instanceof Error ? error.message : "API-Fehler");
+      return false;
     }
   }
 
   function startEditingProductUnit(unit: ProductUnit) {
-    setMasterProductUnitForm({ name: unit.name });
+    setApiError(null);
+    setMasterProductUnitForm({
+      name: unit.name,
+      default_conversion_quantity: toFormValue(unit.default_conversion_quantity),
+      default_conversion_unit: unit.default_conversion_unit ?? "",
+    });
     setEditingProductUnitId(unit.id);
   }
 
   function cancelEditingProductUnit() {
+    setApiError(null);
     setMasterProductUnitForm(initialProductUnitForm);
     setEditingProductUnitId(null);
   }
@@ -7442,7 +7460,7 @@ function InventoryPage({
   onMasterProductGroupFormChange: (value: ProductGroupForm) => void;
   onMasterProductGroupSubmit: (event: FormEvent) => Promise<void> | void;
   onMasterProductUnitFormChange: (value: ProductUnitForm) => void;
-  onMasterProductUnitSubmit: (event: FormEvent) => Promise<void> | void;
+  onMasterProductUnitSubmit: (event: FormEvent) => Promise<boolean>;
   onReceiptBook: (
     request: ReceiptImportBookRequest,
   ) => Promise<ReceiptImportBookResult>;
@@ -7458,7 +7476,7 @@ function InventoryPage({
   onSubmit: (event: FormEvent) => void;
   onUnitDelete: (id: number) => void;
   onUnitFormChange: (value: ProductUnitForm) => void;
-  onUnitSubmit: (event: FormEvent) => Promise<void> | void;
+  onUnitSubmit: (event: FormEvent) => Promise<boolean>;
   productGroupForm: ProductGroupForm;
   productGroups: ProductGroup[];
   productUnitForm: ProductUnitForm;
@@ -7634,7 +7652,7 @@ function InventoryPage({
       (unit) => String(unit.id) === productUnitId,
     );
     const conversion = defaultConversionForProductUnit(
-      productUnit?.name ?? form.unit,
+      productUnit ?? { name: form.unit },
       form.serving_size,
       form.serving_unit,
     );
@@ -7651,9 +7669,8 @@ function InventoryPage({
     setProductGroupUiOpen(false);
   }
 
-  function submitProductUnitAndClose(event: FormEvent) {
-    void onUnitSubmit(event);
-    setProductUnitUiOpen(false);
+  async function submitProductUnitAndClose(event: FormEvent) {
+    if (await onUnitSubmit(event)) setProductUnitUiOpen(false);
   }
 
   function toggleColumn(columnKey: InventoryColumnKey) {
@@ -8751,14 +8768,8 @@ function InventoryPage({
                 </button>
               </div>
               <form className="form-grid" onSubmit={submitProductUnitAndClose}>
-                <TextInput
-                  label="Einheitsname"
-                  onChange={(name) =>
-                    onUnitFormChange({ ...productUnitForm, name })
-                  }
-                  required
-                  value={productUnitForm.name}
-                />
+                {inventoryError && <div className="notice error" role="alert">{inventoryError}</div>}
+                <ProductUnitFields form={productUnitForm} onChange={onUnitFormChange} />
                 <div className="form-actions">
                   <button className="button primary" type="submit">
                     <Plus size={16} />
@@ -8879,7 +8890,7 @@ function MasterDataPanel({
   onProductGroupFormChange: (value: ProductGroupForm) => void;
   onProductGroupSubmit: (event: FormEvent) => Promise<void> | void;
   onProductUnitFormChange: (value: ProductUnitForm) => void;
-  onProductUnitSubmit: (event: FormEvent) => Promise<void> | void;
+  onProductUnitSubmit: (event: FormEvent) => Promise<boolean>;
   onStoreFood: (food: Food) => void;
   onStorageLocationFormChange: (value: StorageLocationForm) => void;
   onStorageLocationSubmit: (event: FormEvent) => Promise<void> | void;
@@ -8996,7 +9007,7 @@ function MasterDataPanel({
       (unit) => String(unit.id) === productUnitId,
     );
     const conversion = defaultConversionForProductUnit(
-      productUnit?.name ?? selectedFoodProductUnitName,
+      productUnit ?? { name: selectedFoodProductUnitName },
       foodForm.serving_size,
       foodForm.serving_unit,
     );
@@ -10038,12 +10049,13 @@ function MasterDataPanel({
                     <Eye size={16} />
                   </th>
                   <th>Name</th>
+                  <th>Standardumrechnung</th>
                 </tr>
               </thead>
               <tbody>
                 {productUnits.length === 0 ? (
                   <tr>
-                    <td colSpan={2}>
+                    <td colSpan={3}>
                       <EmptyState label="Keine Mengeneinheiten vorhanden" />
                     </td>
                   </tr>
@@ -10072,6 +10084,11 @@ function MasterDataPanel({
                         </button>
                       </td>
                       <td>{unit.name}</td>
+                      <td>
+                        {unit.default_conversion_quantity != null && unit.default_conversion_unit
+                          ? `1 ${unit.name} = ${formatFractionalQuantity(unit.default_conversion_quantity)} ${unit.default_conversion_unit}`
+                          : "–"}
+                      </td>
                     </tr>
                   ))
                 )}
@@ -10108,19 +10125,13 @@ function MasterDataPanel({
                 <form
                   className="master-data-form"
                   onSubmit={(event) => {
-                    void Promise.resolve(onProductUnitSubmit(event)).then(() =>
-                      setProductUnitEditorOpen(false),
-                    );
+                    void onProductUnitSubmit(event).then((saved) => {
+                      if (saved) setProductUnitEditorOpen(false);
+                    });
                   }}
                 >
-                  <TextInput
-                    label="Name"
-                    onChange={(name) =>
-                      onProductUnitFormChange({ ...productUnitForm, name })
-                    }
-                    required
-                    value={productUnitForm.name}
-                  />
+                  {foodError && <div className="notice error" role="alert">{foodError}</div>}
+                  <ProductUnitFields form={productUnitForm} onChange={onProductUnitFormChange} />
                   <MasterDataFormActions
                     editing={editingProductUnitId !== null}
                     onCancel={() => {
@@ -10432,43 +10443,10 @@ type RecipeIngredientPreview = {
   unit: string;
 };
 
-const gramUnits = new Set(["g", "gram", "grams", "gramm"]);
-const kilogramUnits = new Set(["kg", "kilogram", "kilograms", "kilogramm"]);
-const milligramUnits = new Set(["mg", "milligram", "milligrams", "milligramm"]);
-const milliliterUnits = new Set(["ml", "milliliter", "milliliters"]);
-const literUnits = new Set(["l", "liter", "liters"]);
-const ounceUnits = new Set(["oz", "ounce", "ounces"]);
-const poundUnits = new Set(["lb", "lbs", "pound", "pounds"]);
 const servingAliasUnits = new Set(["serving", "servings", "portion", "portions"]);
 
 function normalizedUnitName(unit?: string | null) {
   return (unit ?? "").trim().toLowerCase();
-}
-
-function unitQuantityToGrams(quantity: number, unit?: string | null) {
-  const normalizedUnit = normalizedUnitName(unit);
-  if (gramUnits.has(normalizedUnit)) {
-    return quantity;
-  }
-  if (kilogramUnits.has(normalizedUnit)) {
-    return quantity * 1000;
-  }
-  if (milligramUnits.has(normalizedUnit)) {
-    return quantity / 1000;
-  }
-  if (milliliterUnits.has(normalizedUnit)) {
-    return quantity;
-  }
-  if (literUnits.has(normalizedUnit)) {
-    return quantity * 1000;
-  }
-  if (ounceUnits.has(normalizedUnit)) {
-    return quantity * 28.3495;
-  }
-  if (poundUnits.has(normalizedUnit)) {
-    return quantity * 453.592;
-  }
-  return null;
 }
 
 function productUnitNameForFood(
@@ -10579,26 +10557,9 @@ function foodQuantityFromGrams(
 ) {
   const safeGrams = Math.max(grams, 0);
   const normalizedUnit = normalizedUnitName(unit);
-  if (gramUnits.has(normalizedUnit)) {
-    return safeGrams;
-  }
-  if (kilogramUnits.has(normalizedUnit)) {
-    return safeGrams / 1000;
-  }
-  if (milligramUnits.has(normalizedUnit)) {
-    return safeGrams * 1000;
-  }
-  if (milliliterUnits.has(normalizedUnit)) {
-    return safeGrams;
-  }
-  if (literUnits.has(normalizedUnit)) {
-    return safeGrams / 1000;
-  }
-  if (ounceUnits.has(normalizedUnit)) {
-    return safeGrams / 28.3495;
-  }
-  if (poundUnits.has(normalizedUnit)) {
-    return safeGrams / 453.592;
+  const gramsPerUnit = unitQuantityToGrams(1, unit);
+  if (gramsPerUnit !== null) {
+    return safeGrams / gramsPerUnit;
   }
 
   const servingSize = foodServingSizeInGrams(food);
@@ -12519,22 +12480,21 @@ function NutritionPage({
         break;
       }
 
-      const rawAmount = foodQuantityFromGrams(
-        food,
-        remainingGrams,
-        inventoryItem.unit,
-        productUnits,
+      const snapshotGrams = inventorySnapshotGramsPerUnit(
+        inventoryItem,
+        productUnits.find((unit) => unit.id === food.product_unit_id)?.name ?? "",
+        food.conversions ?? [],
       );
+      const rawAmount = snapshotGrams !== null
+        ? remainingGrams / snapshotGrams
+        : foodQuantityFromGrams(food, remainingGrams, inventoryItem.unit, productUnits);
       const amount = Math.min(
         normalizeFractionalQuantityValue(rawAmount),
         inventoryItem.quantity,
       );
-      const consumedGrams = foodQuantityToGrams(
-        food,
-        amount,
-        inventoryItem.unit,
-        productUnits,
-      );
+      const consumedGrams = snapshotGrams !== null
+        ? amount * snapshotGrams
+        : foodQuantityToGrams(food, amount, inventoryItem.unit, productUnits);
 
       if (
         !Number.isFinite(amount) ||
@@ -14464,6 +14424,48 @@ function TextInput({
         value={value}
       />
     </label>
+  );
+}
+
+function ProductUnitFields({ form, onChange }: {
+  form: ProductUnitForm;
+  onChange: (value: ProductUnitForm) => void;
+}) {
+  return (
+    <>
+      <TextInput
+        label="Name"
+        maxLength={32}
+        onChange={(name) => onChange({ ...form, name })}
+        required
+        value={form.name}
+      />
+      <fieldset className="unit-conversion-fields">
+        <legend>Standardumrechnung (optional)</legend>
+        <div className="inline-field-pair">
+          <NumberInput
+            label={`1 ${form.name.trim() || "Einheit"} =`}
+            min="0"
+            onChange={(default_conversion_quantity) => onChange({ ...form, default_conversion_quantity })}
+            required={Boolean(form.default_conversion_unit)}
+            step="any"
+            value={form.default_conversion_quantity}
+          />
+          <label>
+            <span>Umrechnungseinheit</span>
+            <select
+              onChange={(event) => onChange({ ...form, default_conversion_unit: event.target.value })}
+              required={Boolean(form.default_conversion_quantity)}
+              value={form.default_conversion_unit}
+            >
+              <option value="">Keine</option>
+              {standardConversionUnits.map((unit) => <option key={unit} value={unit}>{unit}</option>)}
+            </select>
+          </label>
+        </div>
+        <small>Vorschlag für neue Produkte und beim Wechsel der Mengeneinheit.</small>
+      </fieldset>
+    </>
   );
 }
 

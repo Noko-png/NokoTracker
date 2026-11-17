@@ -235,6 +235,48 @@ class StockBookingTest(unittest.TestCase):
         shopping.import_shopping_list_to_inventory(db=self.db)
         self.assertEqual(self.db.query(m.InventoryItem).count(), 2)
 
+    def test_different_inventory_pack_unit_uses_saved_size_for_availability_and_booking(self):
+        food, item = self.stock(1, "Beutel", 1, m.ProductUnit(name="g"))
+        item.serving_size = 500
+        self.db.commit()
+        self.assertEqual(nutrition.food_amount_in_grams(item, 1, "beutel"), 500)
+        self.assertEqual(nutrition.food_quantity_from_grams(item, 250, "Beutel"), .5)
+        self.assertEqual(nutrition.food_amount_in_grams(item, 1, "serving"), 1)
+        recipe = self.recipe(food, (250, "g"))
+        self.assertEqual(recipes.sync_missing_recipe_ingredients_to_shopping_list(recipe.id, self.db)["missing"], [])
+
+        entry = self.book(food, 250)
+        self.assertEqual(item.quantity, .5)
+        self.assertEqual((food.serving_size, food.serving_unit), (1, "g"))
+        meals.delete_meal_log(entry.id, self.db)
+        self.assertEqual(item.quantity, 1)
+
+    def test_explicit_food_conversion_takes_priority_over_inventory_pack_size(self):
+        food, item = self.stock(1, "Beutel", 1, m.ProductUnit(name="g"))
+        item.serving_size = 500
+        food.conversions = [m.FoodConversion(quantity=.004, unit="Beutel")]
+        self.db.commit()
+        self.assertEqual(nutrition.food_amount_in_grams(item, 1, "Beutel"), 250)
+        self.assertEqual(nutrition.food_quantity_from_grams(item, 125, "Beutel"), .5)
+        self.book(food, 125)
+        self.assertEqual(item.quantity, .5)
+
+    def test_same_inventory_product_unit_keeps_linked_food_size(self):
+        food, item = self.stock(1, "Beutel", 100, m.ProductUnit(name="Beutel"))
+        item.serving_size = 500
+        self.db.commit()
+        self.assertEqual(nutrition.food_amount_in_grams(item, 1, "Beutel"), 100)
+        self.assertEqual(nutrition.food_quantity_from_grams(item, 50, "Beutel"), .5)
+        self.book(food, 50)
+        self.assertEqual(item.quantity, .5)
+
+    def test_physical_inventory_units_keep_standard_mass_conversion(self):
+        _, item = self.stock(1, "kg", 100, m.ProductUnit(name="Beutel"))
+        item.serving_size = 500
+        self.db.commit()
+        self.assertEqual(nutrition.food_amount_in_grams(item, 1, "kg"), 1000)
+        self.assertEqual(nutrition.food_quantity_from_grams(item, 250, "kg"), .25)
+
     def test_shopping_import_does_not_renew_expired_stock(self):
         food, item = self.stock(1, "pcs")
         food.expiry_days = 5
@@ -261,6 +303,39 @@ class StockBookingTest(unittest.TestCase):
         receipt.book_receipt_import(self.db, request.model_copy(update={"receipt_id": "b" * 64}))
         self.assertEqual(self.db.query(m.InventoryItem).count(), 2)
 
+    def test_unknown_shopping_product_uses_unit_default_and_keeps_it_after_change(self):
+        product_unit = m.ProductUnit(
+            name="Beutel", default_conversion_quantity=500, default_conversion_unit="g",
+        )
+        self.db.add(product_unit)
+        self.db.add(m.ShoppingListItem(name="Reis", quantity=2, unit="Beutel"))
+        self.db.commit()
+        result = shopping.import_shopping_list_to_inventory(
+            s.ShoppingListInventoryImportRequest(unknown_item_action="create"), self.db,
+        )
+        item = self.db.get(m.InventoryItem, result["created_inventory_items"][0].id)
+        food = item.food
+        self.assertEqual((food.serving_size, food.serving_unit), (500, "g"))
+        self.assertEqual((item.serving_size, item.serving_unit), (500, "g"))
+        self.assertEqual(nutrition.food_amount_in_grams(food, 2, "Beutel"), 1000)
+
+        product_unit.default_conversion_quantity = 750
+        self.db.add(m.ShoppingListItem(name="Reis", quantity=1, unit="Beutel"))
+        self.db.commit()
+        shopping.import_shopping_list_to_inventory(db=self.db)
+        self.assertEqual((food.serving_size, food.serving_unit), (500, "g"))
+
+    def test_unknown_receipt_product_uses_unit_default(self):
+        self.db.add(m.ProductUnit(
+            name="Beutel", default_conversion_quantity=500, default_conversion_unit="g",
+        ))
+        self.db.commit()
+        receipt.book_receipt_import(self.db, s.ReceiptImportBookRequest(items=[
+            s.ReceiptImportBookItem(source_index=0, raw_name="Reis", name="Reis", quantity=2, unit="Beutel"),
+        ]))
+        item = self.db.query(m.InventoryItem).one()
+        self.assertEqual((item.food.serving_size, item.food.serving_unit), (500, "g"))
+        self.assertEqual((item.serving_size, item.serving_unit), (500, "g"))
     def test_older_receipt_client_identical_request_is_also_protected(self):
         request = s.ReceiptImportBookRequest(items=[
             s.ReceiptImportBookItem(source_index=0, raw_name="Milk", name="Milk", quantity=2)

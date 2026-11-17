@@ -423,6 +423,23 @@ def migrate_sqlite_inventory_schema() -> None:
 migrate_sqlite_inventory_schema()
 
 
+def migrate_sqlite_product_unit_schema() -> None:
+    if not DATABASE_URL.startswith("sqlite"):
+        return
+    columns = {column["name"] for column in inspect(engine).get_columns("product_units")}
+    migrations = {
+        "default_conversion_quantity": "ALTER TABLE product_units ADD COLUMN default_conversion_quantity FLOAT",
+        "default_conversion_unit": "ALTER TABLE product_units ADD COLUMN default_conversion_unit VARCHAR(8)",
+    }
+    with engine.begin() as connection:
+        for name, statement in migrations.items():
+            if name not in columns:
+                connection.execute(text(statement))
+
+
+migrate_sqlite_product_unit_schema()
+
+
 DEFAULT_PRODUCT_UNITS = (
     "pcs",
     "g",
@@ -915,7 +932,7 @@ ensure_default_user()
 app = FastAPI(
     title="Heim-ERP Backend",
     description="Backend API fuer ein privates Heim-ERP mit Kalender, Vorrat, Rezepten, Mahlzeiten und Einkaufsliste.",
-    version="3.1.21",
+    version="3.1.22",
     docs_url=None,
     redoc_url=None,
 )

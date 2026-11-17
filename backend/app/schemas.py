@@ -532,16 +532,50 @@ class ProductGroupRead(ProductGroupSummary):
     updated_at: datetime
 
 
-class ProductUnitBase(BaseModel):
+class ProductUnitDefaults(BaseModel):
+    default_conversion_quantity: Optional[float] = Field(None, gt=0, allow_inf_nan=False)
+    default_conversion_unit: Optional[Literal["g", "kg", "mg", "ml", "l", "oz", "lb"]] = None
+
+    @field_validator("default_conversion_quantity", mode="before")
+    @classmethod
+    def parse_default_conversion_quantity(cls, value):
+        return None if value is None else parse_fractional_number(value)
+
+    @field_validator("default_conversion_unit", mode="before")
+    @classmethod
+    def normalize_default_conversion_unit(cls, value):
+        return value.strip().lower() if isinstance(value, str) else value
+
+
+class ProductUnitBase(ProductUnitDefaults):
     name: str = Field(..., min_length=1, max_length=32)
+
+    @model_validator(mode="after")
+    def validate_default_conversion(self):
+        if (self.default_conversion_quantity is None) != (self.default_conversion_unit is None):
+            raise ValueError("Standardumrechnung benoetigt Menge und Einheit zusammen.")
+        return self
 
 
 class ProductUnitCreate(ProductUnitBase):
-    pass
+    @field_validator("name")
+    @classmethod
+    def normalize_name(cls, value):
+        value = value.strip()
+        if not value:
+            raise ValueError("Bitte einen Namen fuer die Mengeneinheit eingeben.")
+        return value
 
 
-class ProductUnitUpdate(BaseModel):
+class ProductUnitUpdate(ProductUnitDefaults):
     name: Optional[str] = Field(None, min_length=1, max_length=32)
+
+    @field_validator("name")
+    @classmethod
+    def require_name(cls, value):
+        if value is None:
+            raise ValueError("Der Name darf nicht leer sein.")
+        return ProductUnitCreate.normalize_name(value)
 
 
 class ProductUnitSummary(ProductUnitBase, ORMBase):
@@ -676,6 +710,8 @@ class InventoryItemSummary(ORMBase):
     food_id: Optional[int] = None
     quantity: float
     unit: str
+    serving_size: float = 100.0
+    serving_unit: str = "g"
     minimum_quantity: float
     storage_location: Optional[str] = None
     expiry_days: Optional[int] = None

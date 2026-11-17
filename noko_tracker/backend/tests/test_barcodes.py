@@ -1,3 +1,5 @@
+import json
+import ssl
 import unittest
 from contextlib import contextmanager, nullcontext
 from unittest.mock import MagicMock, patch
@@ -295,9 +297,10 @@ class BarcodeTest(unittest.TestCase):
 
 
 class OpenFoodFactsTransportTest(unittest.TestCase):
-    def test_missing_v3_product_falls_back_to_v2(self):
+    def test_incomplete_v2_product_falls_back_to_compatible_v3(self):
         missing, existing = MagicMock(), MagicMock()
-        missing.__enter__.return_value.status = 404
+        missing.__enter__.return_value.status = 200
+        missing.__enter__.return_value.read.return_value = b'{"product":{"product_name":"Test"}}'
         existing_response = existing.__enter__.return_value
         existing_response.status = 200
         existing_response.read.return_value = b'{"product": {"product_name": "Test"}}'
@@ -306,18 +309,81 @@ class OpenFoodFactsTransportTest(unittest.TestCase):
             connection.getresponse.side_effect = [missing, existing]
             self.assertEqual(foods.open_food_facts_product(A), {"product_name": "Test"})
         request_paths = [request.args[1] for request in connection.request.call_args_list]
-        self.assertEqual(request_paths, [f"/api/v3.6/product/{A}.json", f"/api/v2/product/{A}.json"])
+        self.assertEqual(request_paths, [
+            f"/api/{version}/product/{A}.json?fields={foods.OPEN_FOOD_FACTS_PRODUCT_FIELDS}"
+            for version in ("v2", "v3.4")
+        ])
+
+    def test_normalized_nutrition_uses_one_small_product_request(self):
+        product = {
+            "product_name": "Gnocchi", "brands": "REWE Beste Wahl", "serving_size": "200g",
+            "nutriments": {
+                "energy-kcal_100g": 144.5, "proteins_100g": 4.5,
+                "fat_100g": 0.5, "carbohydrates_100g": 30.5,
+            },
+        }
+        with patch.object(foods, "HTTPSConnection") as https:
+            response = https.return_value.getresponse.return_value.__enter__.return_value
+            response.status = 200
+            response.read.return_value = json.dumps({"product": product}).encode()
+            self.assertEqual(foods.open_food_facts_product("4388844003972"), product)
+        https.assert_called_once_with("world.openfoodfacts.org", timeout=foods.OPEN_FOOD_FACTS_TIMEOUT_SECONDS)
+        self.assertIn("?fields=product_name", https.return_value.request.call_args.args[1])
+        headers = https.return_value.request.call_args.kwargs["headers"]
+        self.assertIn("NokoTracker", headers["User-Agent"])
+        self.assertEqual(foods.food_values_from_open_food_facts("4388844003972", product)["calories_per_100g"], 144.5)
+
+    def test_failed_primary_api_uses_compatibility_response(self):
+        for status in (500, 503):
+            with self.subTest(status=status), patch.object(foods, "HTTPSConnection") as https:
+                failed, success = MagicMock(), MagicMock()
+                failed.__enter__.return_value.status = status
+                success.__enter__.return_value.status = 200
+                success.__enter__.return_value.read.return_value = b'{"product":{"product_name":"Test"}}'
+                https.return_value.getresponse.side_effect = [failed, success]
+                with self.assertLogs(foods.logger, level="WARNING") as logs:
+                    self.assertEqual(foods.open_food_facts_product(A), {"product_name": "Test"})
+                self.assertIn(f"HTTP {status}", " ".join(logs.output))
+                self.assertNotIn(A, " ".join(logs.output))
+
+    def test_timeout_fallback_preserves_available_product_data(self):
+        response = MagicMock()
+        response.__enter__.return_value.status = 200
+        response.__enter__.return_value.read.return_value = b'{"product":{"product_name":"Test"}}'
+        for responses in ([TimeoutError(), response], [response, TimeoutError()]):
+            with patch.object(foods, "HTTPSConnection") as https:
+                https.return_value.getresponse.side_effect = responses
+                with self.assertLogs(foods.logger, level="WARNING") as logs:
+                    self.assertEqual(foods.open_food_facts_product(A), {"product_name": "Test"})
+                self.assertIn("TimeoutError", " ".join(logs.output))
+                self.assertNotIn(A, " ".join(logs.output))
+
+    def test_certificate_failure_is_not_retried(self):
+        with patch.object(foods, "HTTPSConnection") as https:
+            https.return_value.request.side_effect = ssl.SSLCertVerificationError("certificate verification failed")
+            with self.assertLogs(foods.logger, level="WARNING") as logs, self.assertRaises(HTTPException) as caught:
+                foods.open_food_facts_product(A)
+        self.assertEqual(caught.exception.status_code, 502)
+        self.assertIn("SSLCertVerificationError", " ".join(logs.output))
+        https.assert_called_once()
+
+    def test_missing_product_is_reported_without_retrying_the_other_api(self):
+        with patch.object(foods, "HTTPSConnection") as https:
+            response = https.return_value.getresponse.return_value.__enter__.return_value
+            response.status = 404
+            self.assertIsNone(foods.open_food_facts_product(A))
+        https.assert_called_once()
 
     def test_redirect_does_not_start_another_connection(self):
         with patch.object(foods, "HTTPSConnection") as https:
             response = https.return_value.getresponse.return_value.__enter__.return_value
             response.status = 302
-            with self.assertRaises(HTTPException) as caught:
+            with self.assertLogs(foods.logger, level="WARNING"), self.assertRaises(HTTPException) as caught:
                 foods.open_food_facts_product(A)
         self.assertEqual(caught.exception.status_code, 502)
         https.assert_called_once_with("world.openfoodfacts.org", timeout=foods.OPEN_FOOD_FACTS_TIMEOUT_SECONDS)
         method, path = https.return_value.request.call_args.args
-        self.assertEqual((method, path), ("GET", f"/api/v3.6/product/{A}.json"))
+        self.assertEqual((method, path), ("GET", f"/api/v2/product/{A}.json?fields={foods.OPEN_FOOD_FACTS_PRODUCT_FIELDS}"))
         response.read.assert_not_called()
 
     def test_response_size_and_invalid_json_are_reported_as_upstream_errors(self):
@@ -330,10 +396,11 @@ class OpenFoodFactsTransportTest(unittest.TestCase):
                 response = https.return_value.getresponse.return_value.__enter__.return_value
                 response.status = 200
                 response.read.return_value = body
-                with self.assertRaises(HTTPException) as caught:
+                with self.assertLogs(foods.logger, level="WARNING"), self.assertRaises(HTTPException) as caught:
                     foods.open_food_facts_product(A)
                 self.assertEqual(caught.exception.status_code, 502)
-                response.read.assert_called_once_with(65)
+                self.assertEqual(response.read.call_count, 2)
+                response.read.assert_called_with(65)
 
 
 if __name__ == "__main__":

@@ -158,6 +158,8 @@ export type ProductGroupUpdate = Partial<ProductGroupCreate>;
 export type ProductUnit = {
   id: number;
   name: string;
+  default_conversion_quantity?: number | null;
+  default_conversion_unit?: string | null;
   created_at: string;
   updated_at: string;
 };
@@ -235,7 +237,7 @@ export type InventoryItemSummary = Pick<
   | "protein_per_100g"
   | "carbs_per_100g"
   | "fat_per_100g"
->;
+> & Partial<Pick<InventoryItem, "serving_size" | "serving_unit">>;
 
 export type FoodBarcodeLookup = {
   barcode: string;
@@ -916,7 +918,7 @@ export function deleteProductGroup(id: number) {
 }
 
 export function getProductUnits() {
-  return request<ProductUnit[]>("/product-units");
+  return loadAllPages((skip, limit) => request<ProductUnit[]>(`/product-units?skip=${skip}&limit=${limit}`));
 }
 
 export function createProductUnit(unit: ProductUnitCreate) {

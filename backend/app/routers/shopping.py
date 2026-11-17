@@ -7,6 +7,7 @@ from sqlalchemy.orm import Session
 
 from .. import crud, models, schemas
 from ..database import get_db
+from ..services.unit_defaults import apply_product_unit_defaults
 
 
 router = APIRouter(prefix="/shopping-list", tags=["shopping-list"])
@@ -226,13 +227,14 @@ def create_food_for_unknown_shopping_item(
 ) -> models.Food:
     product_unit = crud.get_or_create_product_unit(db, shopping_item.unit)
     serving_size, serving_unit = default_conversion_for_unit(product_unit.name)
+    defaults = apply_product_unit_defaults(db, {"product_unit_id": product_unit.id})
     food = crud.get_food_by_name_brand(db, shopping_item.name, None)
     if food is None:
         food = models.Food(
             name=shopping_item.name,
             product_unit_id=product_unit.id,
-            serving_size=serving_size,
-            serving_unit=serving_unit,
+            serving_size=defaults.get("serving_size", serving_size),
+            serving_unit=defaults.get("serving_unit", serving_unit),
         )
         db.add(food)
         db.flush()

@@ -1,5 +1,11 @@
 # Changelog
 
+## 3.1.22
+
+- EAN-Suche auf kompatible Open-Food-Facts-Endpunkte mit begrenzter Feldauswahl umgestellt. Voruebergehende Abruffehler koennen ueber den zweiten Endpunkt aufgefangen werden.
+- Mengeneinheiten speichern optionale Standardumrechnungen, zum Beispiel 1 kg = 1000 g. Beim Auswaehlen einer Einheit wird die Vorgabe ins Lebensmittel- oder Bestandsformular uebernommen.
+- Neue Lebensmittel aus Einkaufsliste und Kassenzettel verwenden die hinterlegte Standardumrechnung. Lebensmittelspezifische Mengenangaben und aeltere Sicherungen werden weiterhin unterstuetzt.
+
 ## 3.1.21
 
 - Das Health-Dashboard verwendet einen separaten HA-API-Token ueber HTTPS mit Zertifikatspruefung. Adresse und Token werden optional in der Add-on-Konfiguration gesetzt.

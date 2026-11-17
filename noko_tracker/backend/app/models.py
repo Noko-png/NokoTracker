@@ -340,9 +340,21 @@ class ProductUnit(TimestampMixin, Base):
 
     id = Column(Integer, primary_key=True, index=True)
     name = Column(String(32), nullable=False, unique=True, index=True)
+    default_conversion_quantity = Column(Float, nullable=True)
+    default_conversion_unit = Column(String(8), nullable=True)
 
     foods = relationship("Food", back_populates="product_unit")
     inventory_items = relationship("InventoryItem", back_populates="product_unit")
+
+    __table_args__ = (
+        CheckConstraint(
+            "(default_conversion_quantity IS NULL AND default_conversion_unit IS NULL) OR "
+            "(default_conversion_quantity IS NOT NULL AND default_conversion_quantity > 0 "
+            "AND default_conversion_unit IS NOT NULL "
+            "AND default_conversion_unit IN ('g', 'kg', 'mg', 'ml', 'l', 'oz', 'lb'))",
+            name="ck_product_unit_default_conversion",
+        ),
+    )
 
 
 class StorageLocation(TimestampMixin, Base):

@@ -30,6 +30,7 @@ EXPECTED_TABLES = set(models.Base.metadata.tables)
 BOOKING_TABLES = {"meal_inventory_bookings", "receipt_bookings"}
 # Added in 3.1.15; older backups use the defaults from the current schema.
 FOOD_NUTRIENT_COLUMNS = {"fiber_per_100g", "sugar_per_100g", "caffeine_mg_per_100g"}
+UNIT_CONVERSION_COLUMNS = {"default_conversion_quantity", "default_conversion_unit"}
 # Older backups may lack inserted rest days or ordered training plans.
 CALENDAR_OPTIONAL_TABLES = {"calendar_event_shifts", "calendar_event_training_plans"}
 CALENDAR_OPTIONAL_COLUMNS = {
@@ -118,12 +119,27 @@ def validate_sqlite_database(path: Path) -> tuple[dict[str, int], list[str]]:
                 optional_columns |= CALENDAR_OPTIONAL_COLUMNS.get(table.name, set())
                 if table.name == "foods":
                     optional_columns |= FOOD_NUTRIENT_COLUMNS
+                if table.name == "product_units":
+                    optional_columns |= UNIT_CONVERSION_COLUMNS
                 missing_columns = sorted(set(table.columns.keys()) - columns - optional_columns)
                 if missing_columns:
                     raise ValueError(
                         f"Die Datenbank ist nicht kompatibel. Fehlende Spalten in {table.name}: "
                         + ", ".join(missing_columns)
                     )
+                if table.name == "product_units":
+                    conversion_columns = [name if name in columns else "NULL" for name in (
+                        "default_conversion_quantity", "default_conversion_unit",
+                    )]
+                    for quantity, unit in connection.execute(
+                        f'SELECT {", ".join(conversion_columns)} FROM product_units'
+                    ):
+                        try:
+                            schemas.ProductUnitCreate(
+                                name="Import", default_conversion_quantity=quantity, default_conversion_unit=unit,
+                            )
+                        except ValueError as exc:
+                            raise ValueError("Die Sicherung enthaelt eine ungueltige Standardumrechnung.") from exc
 
             if connection.execute("PRAGMA foreign_key_check").fetchone():
                 raise ValueError("Die Datenbank enthaelt ungueltige Datenverknuepfungen.")

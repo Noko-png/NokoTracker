@@ -49,6 +49,16 @@ def update_product_unit(
     db: Session = Depends(get_db),
 ):
     product_unit = get_product_unit_or_404(db, unit_id)
+    updated_values = {
+        "name": product_unit.name,
+        "default_conversion_quantity": product_unit.default_conversion_quantity,
+        "default_conversion_unit": product_unit.default_conversion_unit,
+        **unit_in.model_dump(exclude_unset=True),
+    }
+    try:
+        schemas.ProductUnitCreate.model_validate(updated_values)
+    except ValueError as exc:
+        raise HTTPException(422, "Standardumrechnung benoetigt eine positive Menge und eine Einheit zusammen.") from exc
     try:
         return crud.update(db, product_unit, unit_in)
     except IntegrityError as exc:

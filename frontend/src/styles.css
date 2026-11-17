@@ -2232,6 +2232,24 @@ th {
   gap: 8px;
 }
 
+.unit-conversion-fields {
+  display: grid;
+  grid-column: 1 / -1;
+  min-width: 0;
+  gap: 8px;
+  margin: 0;
+  border: 0;
+  padding: 0;
+}
+
+.unit-conversion-fields legend {
+  margin-bottom: 8px;
+}
+
+.unit-conversion-fields small {
+  color: var(--muted);
+}
+
 .master-data-list {
   display: grid;
   gap: 8px;

@@ -17,6 +17,7 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from .. import crud, models, schemas
+from .unit_defaults import apply_product_unit_defaults
 
 
 ITEM_LINE_RE = re.compile(
@@ -332,11 +333,12 @@ def food_or_create(
         return food
 
     serving_size, serving_unit = default_conversion_for_unit(product_unit.name)
+    defaults = apply_product_unit_defaults(db, {"product_unit_id": product_unit.id})
     food = models.Food(
         name=item.name,
         product_unit_id=product_unit.id,
-        serving_size=serving_size,
-        serving_unit=serving_unit,
+        serving_size=defaults.get("serving_size", serving_size),
+        serving_unit=defaults.get("serving_unit", serving_unit),
     )
     db.add(food)
     db.flush()

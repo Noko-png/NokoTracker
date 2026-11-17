@@ -79,6 +79,10 @@ In den Produktstammdaten koennen unter **EAN-Codes (optional)** mehrere Codes hi
 
 Bestehende Einzelcodes bleiben erhalten. Jeder Code darf nur einem Produkt gehoeren. Export und Import sichern die komplette EAN-Liste; auch alte Sicherungen mit einem Einzelcode und mehrere EANs aus Grocy werden unterstuetzt.
 
+## Standardumrechnungen fuer Mengeneinheiten
+
+Unter **Stammdaten > Mengeneinheiten** eine Einheit anlegen oder bearbeiten und die optionale Standardumrechnung eintragen, zum Beispiel **1 kg = 1000 g** oder **1 Beutel = 500 g**. Beim Auswaehlen dieser Einheit im Lebensmittel- oder Bestandsformular wird die Vorgabe als bearbeitbarer Vorschlag uebernommen. Auch neu angelegte Lebensmittel aus Einkaufsliste und Kassenzettel verwenden die Vorgabe. Bestehende Mengenangaben bleiben am jeweiligen Lebensmittel gespeichert.
+
 ## Naehrwerte in den Lebensmittel-Stammdaten
 
 Ballaststoffe und Zucker werden in Gramm je 100 g gespeichert, Koffein optional in Milligramm je 100 g. Ein leeres Koffeinfeld bedeutet "nicht angegeben"; eine eingetragene 0 bleibt als bekannter Nullwert erhalten. Beim Anlegen per EAN werden verfuegbare Angaben ebenfalls uebernommen.
