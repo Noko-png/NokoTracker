@@ -593,7 +593,7 @@ const macroMeta: Array<{
   { key: "carbs", label: "Kohlenhydrate", unit: "g", tone: "red" },
 ];
 
-const appVersion = "3.1.24";
+const appVersion = "3.1.25";
 const updateSourceLabel = "main / github.com/Noko-png/NokoTracker";
 
 const emptyNutrition: NutritionDay = {
@@ -7581,6 +7581,7 @@ function InventoryPage({
   const useOriginalInventoryConversion = originalInventoryItem && originalFoodUnit
     && normalizedUnitName(originalFoodUnit) === normalizedUnitName(form.unit)
     && !foodInventoryUnits.some((unit) => normalizedUnitName(unit) === normalizedUnitName(form.unit));
+  const inventoryNutrition = selectedInventoryFood ?? originalInventoryItem;
 
   function selectInventoryFood(foodId: string, foodQuery?: string) {
     const food = foods.find((item) => String(item.id) === foodId);
@@ -7848,18 +7849,6 @@ function InventoryPage({
   const selectedProductUnitId =
     form.product_unit_id ||
     String(productUnits.find((unit) => unit.name === form.unit)?.id ?? "");
-  const selectedProductUnitName =
-    productUnits.find((unit) => String(unit.id) === selectedProductUnitId)?.name ||
-    form.unit ||
-    "Einheit";
-  const servingUnitOptions = unitOptionsWithCurrent(
-    configuredUnitNames(productUnits).filter((unit) => unitQuantityToGrams(1, unit) !== null),
-    form.serving_unit,
-    editingItemId !== null || normalizedUnitName(selectedInventoryFood?.serving_unit) === normalizedUnitName(form.serving_unit),
-  );
-  const selectedServingUnit = servingUnitOptions.some((option) => option.value === form.serving_unit)
-    ? form.serving_unit
-    : "";
   const inventoryEditorOpen = editingItemId !== null || inventoryCreateOpen;
   const inventoryEditorIsCreate = editingItemId === null;
 
@@ -8490,6 +8479,18 @@ function InventoryPage({
                 )}
               </>
             )}
+            {!selectedInventoryFood && originalInventoryItem && (
+              <div className="shopping-inventory-summary">
+                <span>Umrechnung</span>
+                <strong>{formatServingConversion(originalInventoryItem.unit, originalInventoryItem)}</strong>
+              </div>
+            )}
+            {!selectedInventoryFood && !originalInventoryItem && (
+              <div className="shopping-inventory-summary">
+                <span>Umrechnung</span>
+                <strong>—</strong>
+              </div>
+            )}
             {!inventoryEditorIsCreate && (
               <div className="field-with-action">
                 <label>
@@ -8525,21 +8526,22 @@ function InventoryPage({
               <label>
                 <span>Einheit</span>
                 <select
+                  disabled={inventoryEditorIsCreate && !selectedInventoryFood}
                   onChange={(event) => selectProductUnit(event.target.value)}
                   required
-                  value={selectedInventoryFood ? selectedFoodInventoryUnit : selectedProductUnitId}
+                  value={selectedInventoryFood ? selectedFoodInventoryUnit : inventoryEditorIsCreate ? "" : selectedProductUnitId}
                 >
-                  <option value="">Einheit auswaehlen</option>
+                  <option value="">{inventoryEditorIsCreate && !selectedInventoryFood ? "Zuerst Lebensmittel auswählen" : "Einheit auswaehlen"}</option>
                   {selectedInventoryFood ? foodInventoryUnitOptions.map(({ value, label }) => (
                     <option key={value} value={value}>{label}</option>
-                  )) : productUnits.map((unit) => (
+                  )) : !inventoryEditorIsCreate && productUnits.map((unit) => (
                     <option key={unit.id} value={unit.id}>
                       {unit.name}
                     </option>
                   ))}
                 </select>
               </label>
-              {!selectedInventoryFood && (
+              {!inventoryEditorIsCreate && !selectedInventoryFood && (
                 <button
                   className="button secondary field-action"
                   onClick={() => setProductUnitUiOpen(true)}
@@ -8603,69 +8605,16 @@ function InventoryPage({
               onChange={(price) => onFormChange({ ...form, price })}
               value={form.price}
             />
-            {!selectedInventoryFood && (!inventoryEditorIsCreate || !selectedServingUnit) && (
-              <div className="inline-field-pair">
-                <NumberInput
-                  label={`1 ${selectedProductUnitName} =`}
-                  onChange={(serving_size) =>
-                    onFormChange({ ...form, serving_size })
-                  }
-                  value={form.serving_size}
-                />
-                <label>
-                  <span>Umrechnungseinheit</span>
-                  <select
-                    onChange={(event) =>
-                      onFormChange({ ...form, serving_unit: event.target.value })
-                    }
-                    required
-                    value={selectedServingUnit}
-                  >
-                    <option value="">Einheit auswählen</option>
-                    {servingUnitOptions.map(({ value, label }) => (
-                      <option key={value} value={value}>
-                        {label}
-                      </option>
-                    ))}
-                  </select>
-                </label>
-              </div>
-            )}
-            {selectedInventoryFood ? (
-              <div className="shopping-inventory-summary">
-                <span>Kalorien / 100 g</span>
-                <strong>{formatNumber(selectedInventoryFood.calories_per_100g)} kcal</strong>
-                <span>Protein / 100 g</span>
-                <strong>{formatNumber(selectedInventoryFood.protein_per_100g)} g</strong>
-                <span>Fett / 100 g</span>
-                <strong>{formatNumber(selectedInventoryFood.fat_per_100g)} g</strong>
-                <span>Kohlenhydrate / 100 g</span>
-                <strong>{formatNumber(selectedInventoryFood.carbs_per_100g)} g</strong>
-              </div>
-            ) : (
-              <>
-                <NumberInput
-                  label="Kalorien / 100g"
-                  onChange={(calories_per_100g) => onFormChange({ ...form, calories_per_100g })}
-                  value={form.calories_per_100g}
-                />
-                <NumberInput
-                  label="Protein / 100g"
-                  onChange={(protein_per_100g) => onFormChange({ ...form, protein_per_100g })}
-                  value={form.protein_per_100g}
-                />
-                <NumberInput
-                  label="Fett / 100g"
-                  onChange={(fat_per_100g) => onFormChange({ ...form, fat_per_100g })}
-                  value={form.fat_per_100g}
-                />
-                <NumberInput
-                  label="Kohlenhydrate / 100g"
-                  onChange={(carbs_per_100g) => onFormChange({ ...form, carbs_per_100g })}
-                  value={form.carbs_per_100g}
-                />
-              </>
-            )}
+            <div className="shopping-inventory-summary">
+              <span>Kalorien / 100 g</span>
+              <strong>{inventoryNutrition ? `${formatNumber(inventoryNutrition.calories_per_100g)} kcal` : "—"}</strong>
+              <span>Protein / 100 g</span>
+              <strong>{inventoryNutrition ? `${formatNumber(inventoryNutrition.protein_per_100g)} g` : "—"}</strong>
+              <span>Fett / 100 g</span>
+              <strong>{inventoryNutrition ? `${formatNumber(inventoryNutrition.fat_per_100g)} g` : "—"}</strong>
+              <span>Kohlenhydrate / 100 g</span>
+              <strong>{inventoryNutrition ? `${formatNumber(inventoryNutrition.carbs_per_100g)} g` : "—"}</strong>
+            </div>
             <div className="form-actions">
               <button
                 className="button primary"

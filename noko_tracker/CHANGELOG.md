@@ -1,5 +1,9 @@
 # Changelog
 
+## 3.1.25
+
+- Der Dialog **Bestand hinzufuegen** zeigt Naehrwerte und Umrechnungen bereits beim Oeffnen schreibgeschuetzt an. Die Einheitenauswahl wird nach der Lebensmittelauswahl freigeschaltet.
+
 ## 3.1.24
 
 - Beim Einlagern stammen die Naehrwerte und Umrechnungen aus dem ausgewaehlten Lebensmittel. Die Einlagerungsmaske zeigt sie schreibgeschuetzt an.

@@ -106,9 +106,9 @@ const daysLabel = "Haltbarkeit bis Ablauf (Tage)";
 const fiberLabel = "Ballaststoffe (g / 100 g)";
 const sugarLabel = "Zucker (g / 100 g)";
 const caffeineLabel = "Koffein (mg / 100 g, optional)";
-async function assertStockFoodRestrictions() {
+async function assertStockFoodRestrictions(expectedUnits = ["g", "Packung"]) {
   const units = await evaluate(`Array.from((${field(stockForm, "Einheit")}).options).map(option => option.value).filter(Boolean)`);
-  assert.deepEqual(units, ["g", "Packung"]);
+  assert.deepEqual(units, expectedUnits);
   const editableFoodFields = await evaluate(`Array.from(document.querySelectorAll('${stockForm} label'))
     .filter(label => ['Kalorien / 100g', 'Protein / 100g', 'Fett / 100g', 'Kohlenhydrate / 100g', 'Umrechnungseinheit']
       .includes(label.querySelector('span')?.textContent))
@@ -215,6 +215,21 @@ try {
     console.log(`PASS ${width}px inventory editing: error retains inputs, retry recalculates expiry, zero days persists`);
 
     await clickButton('.inventory-overview-header', 'Bestand hinzufügen');
+    await assertStockFoodRestrictions([]);
+    assert.equal(await evaluate(`(${field(stockForm, 'Einheit')}).disabled`), true);
+    assert.equal(await evaluate(`Array.from(document.querySelectorAll('${stockForm} button')).some(button => button.textContent.trim() === 'Einheit')`), false);
+    assert.equal(await evaluate(`Array.from(document.querySelectorAll('${stockForm} .shopping-inventory-summary span'))
+      .find(label => label.textContent === 'Kalorien / 100 g').nextElementSibling.textContent`), '—');
+    await fill(stockForm, 'Lebensmittel', food.name);
+    await waitFor(`(${field(stockForm, 'Einheit')}).value === 'g'`);
+    assert.equal(await evaluate(`(${field(stockForm, 'Einheit')}).disabled`), false);
+    await assertStockFoodRestrictions();
+    assert.equal(await evaluate(`document.querySelector('${stockForm}').textContent.includes('120 kcal')`), true);
+    await fill(stockForm, 'Lebensmittel', '');
+    await waitFor(`(${field(stockForm, 'Einheit')}).disabled`);
+    await assertStockFoodRestrictions([]);
+    assert.equal(await evaluate(`Array.from(document.querySelectorAll('${stockForm} .shopping-inventory-summary span'))
+      .find(label => label.textContent === 'Kalorien / 100 g').nextElementSibling.textContent`), '—');
     await fill(stockForm, 'Lebensmittel', food.name);
     await waitFor(`(${field(stockForm, 'Einheit')}).value === 'g'`);
     await assertStockFoodRestrictions();
