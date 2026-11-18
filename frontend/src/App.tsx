@@ -3,9 +3,10 @@ import { DatabaseImportForm } from "./DatabaseImportForm";
 import { DatabaseReset } from "./DatabaseReset";
 import { resolveProfileId } from "./profileSelection";
 import {
+  configuredConversionUnitNames,
+  configuredUnitNames,
   defaultConversionForProductUnit,
   inventorySnapshotGramsPerUnit,
-  standardConversionUnits,
   unitQuantityToGrams,
 } from "./productUnitDefaults";
 import { RecipeActionsMenu } from "./RecipeActionsMenu";
@@ -591,7 +592,7 @@ const macroMeta: Array<{
   { key: "carbs", label: "Kohlenhydrate", unit: "g", tone: "red" },
 ];
 
-const appVersion = "3.1.22";
+const appVersion = "3.1.23";
 const updateSourceLabel = "main / github.com/Noko-png/NokoTracker";
 
 const emptyNutrition: NutritionDay = {
@@ -7829,13 +7830,14 @@ function InventoryPage({
     productUnits.find((unit) => String(unit.id) === selectedProductUnitId)?.name ||
     form.unit ||
     "Einheit";
-  const servingUnitOptions = Array.from(
-    new Set(
-      ["g", "kg", "ml", "l", form.serving_unit].filter(
-        (unit): unit is string => Boolean(unit),
-      ),
-    ),
+  const servingUnitOptions = unitOptionsWithCurrent(
+    configuredUnitNames(productUnits).filter((unit) => unitQuantityToGrams(1, unit) !== null),
+    form.serving_unit,
+    editingItemId !== null || normalizedUnitName(selectedInventoryFood?.serving_unit) === normalizedUnitName(form.serving_unit),
   );
+  const selectedServingUnit = servingUnitOptions.some((option) => option.value === form.serving_unit)
+    ? form.serving_unit
+    : "";
   const inventoryEditorOpen = editingItemId !== null || inventoryCreateOpen;
   const inventoryEditorIsCreate = editingItemId === null;
 
@@ -8578,7 +8580,7 @@ function InventoryPage({
               onChange={(price) => onFormChange({ ...form, price })}
               value={form.price}
             />
-            {!inventoryEditorIsCreate && (
+            {(!inventoryEditorIsCreate || !selectedServingUnit) && (
               <div className="inline-field-pair">
                 <NumberInput
                   label={`1 ${selectedProductUnitName} =`}
@@ -8593,11 +8595,13 @@ function InventoryPage({
                     onChange={(event) =>
                       onFormChange({ ...form, serving_unit: event.target.value })
                     }
-                    value={form.serving_unit}
+                    required
+                    value={selectedServingUnit}
                   >
-                    {servingUnitOptions.map((unit) => (
-                      <option key={unit} value={unit}>
-                        {unit}
+                    <option value="">Einheit auswählen</option>
+                    {servingUnitOptions.map(({ value, label }) => (
+                      <option key={value} value={value}>
+                        {label}
                       </option>
                     ))}
                   </select>
@@ -8769,7 +8773,7 @@ function InventoryPage({
               </div>
               <form className="form-grid" onSubmit={submitProductUnitAndClose}>
                 {inventoryError && <div className="notice error" role="alert">{inventoryError}</div>}
-                <ProductUnitFields form={productUnitForm} onChange={onUnitFormChange} />
+                <ProductUnitFields form={productUnitForm} onChange={onUnitFormChange} productUnits={productUnits} />
                 <div className="form-actions">
                   <button className="button primary" type="submit">
                     <Plus size={16} />
@@ -8931,17 +8935,14 @@ function MasterDataPanel({
     () => new Map(productUnits.map((unit) => [unit.id, unit])),
     [productUnits],
   );
-  const servingUnitOptions = Array.from(
-    new Set(
-      [
-        "g",
-        "kg",
-        "ml",
-        "l",
-        foodForm.serving_unit,
-      ].filter((unit): unit is string => Boolean(unit)),
-    ),
+  const servingUnitOptions = unitOptionsWithCurrent(
+    configuredUnitNames(productUnits).filter((unit) => unitQuantityToGrams(1, unit) !== null),
+    foodForm.serving_unit,
+    editingFoodId !== null,
   );
+  const selectedServingUnit = servingUnitOptions.some((option) => option.value === foodForm.serving_unit)
+    ? foodForm.serving_unit
+    : "";
   const selectedFoodProductUnitName =
     foodForm.product_unit_id
       ? productUnitById.get(toNumber(foodForm.product_unit_id))?.name ?? "Einheit"
@@ -9787,11 +9788,13 @@ function MasterDataPanel({
                             serving_unit: event.target.value,
                           })
                         }
-                        value={foodForm.serving_unit}
+                        required
+                        value={selectedServingUnit}
                       >
-                        {servingUnitOptions.map((unit) => (
-                          <option key={unit} value={unit}>
-                            {unit}
+                        <option value="">Einheit auswählen</option>
+                        {servingUnitOptions.map(({ value, label }) => (
+                          <option key={value} value={value}>
+                            {label}
                           </option>
                         ))}
                       </select>
@@ -10131,7 +10134,12 @@ function MasterDataPanel({
                   }}
                 >
                   {foodError && <div className="notice error" role="alert">{foodError}</div>}
-                  <ProductUnitFields form={productUnitForm} onChange={onProductUnitFormChange} />
+                  <ProductUnitFields
+                    allowExistingConversion={editingProductUnitId !== null}
+                    form={productUnitForm}
+                    onChange={onProductUnitFormChange}
+                    productUnits={productUnits}
+                  />
                   <MasterDataFormActions
                     editing={editingProductUnitId !== null}
                     onCancel={() => {
@@ -10449,6 +10457,19 @@ function normalizedUnitName(unit?: string | null) {
   return (unit ?? "").trim().toLowerCase();
 }
 
+function unitOptionsWithCurrent(units: string[], currentUnit: string, retainCurrent = true) {
+  const currentName = normalizedUnitName(currentUnit);
+  const hasCurrentUnit = units.some((unit) => normalizedUnitName(unit) === currentName);
+  const options = units.map((unit) => ({
+    value: normalizedUnitName(unit) === currentName ? currentUnit : unit,
+    label: unit,
+  }));
+  if (retainCurrent && currentName && !hasCurrentUnit) {
+    options.push({ value: currentUnit, label: `${currentUnit} (bisherige Einheit)` });
+  }
+  return options;
+}
+
 function productUnitNameForFood(
   food: Pick<Food, "product_unit_id" | "serving_unit">,
   productUnits: ProductUnit[] = [],
@@ -10467,23 +10488,15 @@ function foodUnitOptions(
   productUnits: ProductUnit[] = [],
   currentUnit = "",
 ) {
-  const units = ["g", "kg", "ml", "l"];
-  if (food) {
-    units.push(productUnitNameForFood(food, productUnits));
-    units.push(food.serving_unit);
-    units.push(...(food.conversions ?? []).map((conversion) => conversion.unit));
-  }
-  units.push(currentUnit);
-
-  const seen = new Set<string>();
-  return units.filter((unit) => {
-    const normalizedUnit = normalizedUnitName(unit);
-    if (!normalizedUnit || seen.has(normalizedUnit)) {
-      return false;
-    }
-    seen.add(normalizedUnit);
-    return true;
-  });
+  const foodUnits = new Set((food ? [
+    productUnitNameForFood(food, productUnits),
+    food.serving_unit,
+    ...(food.conversions ?? []).filter((conversion) => conversion.quantity > 0).map((conversion) => conversion.unit),
+  ] : []).map(normalizedUnitName));
+  const units = configuredUnitNames(productUnits).filter(
+    (unit) => unitQuantityToGrams(1, unit) !== null || foodUnits.has(normalizedUnitName(unit)),
+  );
+  return unitOptionsWithCurrent(units, currentUnit, Boolean(food));
 }
 
 function foodServingSizeInGrams(
@@ -11307,11 +11320,12 @@ function RecipesPage({
                             })
                           }
                           required
-                          value={ingredientForm.unit}
+                          value={ingredientUnitOptions.some((option) => option.value === ingredientForm.unit) ? ingredientForm.unit : ""}
                         >
-                          {ingredientUnitOptions.map((unit) => (
-                            <option key={unit} value={unit}>
-                              {unit}
+                          <option value="">Einheit auswählen</option>
+                          {ingredientUnitOptions.map(({ value, label }) => (
+                            <option key={value} value={value}>
+                              {label}
                             </option>
                           ))}
                         </select>
@@ -11448,11 +11462,12 @@ function RecipesPage({
                             })
                           }
                           required
-                          value={ingredientForm.unit}
+                          value={ingredientUnitOptions.some((option) => option.value === ingredientForm.unit) ? ingredientForm.unit : ""}
                         >
-                          {ingredientUnitOptions.map((unit) => (
-                            <option key={unit} value={unit}>
-                              {unit}
+                          <option value="">Einheit auswählen</option>
+                          {ingredientUnitOptions.map(({ value, label }) => (
+                            <option key={value} value={value}>
+                              {label}
                             </option>
                           ))}
                         </select>
@@ -13371,15 +13386,15 @@ function NutritionPage({
                     <div className="nutrition-unit-row">
                       {(form.kind === "food"
                         ? foodUnitOptions(selectedFood, productUnits, form.unit)
-                        : ["serving", "recipe"]
-                      ).map((unit) => (
+                        : [{ value: "serving", label: "serving" }, { value: "recipe", label: "recipe" }]
+                      ).map(({ value, label }) => (
                         <button
-                          className={form.unit === unit ? "active" : ""}
-                          key={unit}
-                          onClick={() => onFormChange({ ...form, unit })}
+                          className={form.unit === value ? "active" : ""}
+                          key={value}
+                          onClick={() => onFormChange({ ...form, unit: value })}
                           type="button"
                         >
-                          {unit}
+                          {label}
                         </button>
                       ))}
                     </div>
@@ -14427,10 +14442,17 @@ function TextInput({
   );
 }
 
-function ProductUnitFields({ form, onChange }: {
+function ProductUnitFields({ allowExistingConversion = false, form, onChange, productUnits }: {
+  allowExistingConversion?: boolean;
   form: ProductUnitForm;
   onChange: (value: ProductUnitForm) => void;
+  productUnits: ProductUnit[];
 }) {
+  const conversionUnitOptions = unitOptionsWithCurrent(
+    configuredConversionUnitNames(productUnits),
+    form.default_conversion_unit,
+    allowExistingConversion,
+  );
   return (
     <>
       <TextInput
@@ -14459,7 +14481,7 @@ function ProductUnitFields({ form, onChange }: {
               value={form.default_conversion_unit}
             >
               <option value="">Keine</option>
-              {standardConversionUnits.map((unit) => <option key={unit} value={unit}>{unit}</option>)}
+              {conversionUnitOptions.map(({ value, label }) => <option key={value} value={value}>{label}</option>)}
             </select>
           </label>
         </div>

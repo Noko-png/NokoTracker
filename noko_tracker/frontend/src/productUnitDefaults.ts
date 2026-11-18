@@ -1,4 +1,23 @@
-export const standardConversionUnits = ["g", "ml", "kg", "mg", "l", "oz", "lb"] as const;
+const conversionUnits = new Set(["g", "ml", "kg", "mg", "l", "oz", "lb"]);
+
+export function configuredUnitNames(productUnits: Array<{ name: string }>): string[] {
+  const names: string[] = [];
+  const seen = new Set<string>();
+  for (const productUnit of productUnits) {
+    const name = productUnit.name.trim();
+    const normalizedName = name.toLowerCase();
+    if (!name || seen.has(normalizedName)) continue;
+    seen.add(normalizedName);
+    names.push(name);
+  }
+  return names;
+}
+
+export function configuredConversionUnitNames(productUnits: Array<{ name: string }>): string[] {
+  return configuredUnitNames(productUnits)
+    .map((name) => name.toLowerCase())
+    .filter((name) => conversionUnits.has(name));
+}
 
 type ProductUnitDefault = {
   name: string;

@@ -1,5 +1,10 @@
 # Changelog
 
+## 3.1.23
+
+- Einheiten-Auswahllisten verwenden die angelegten Mengeneinheiten. Unkonfigurierte Einheiten wie oz werden nicht zusaetzlich eingeblendet.
+- Bereits gespeicherte Werte ausserhalb der aktuellen Stammdaten bleiben beim Bearbeiten als bisherige Einheit erkennbar.
+
 ## 3.1.22
 
 - EAN-Suche auf kompatible Open-Food-Facts-Endpunkte mit begrenzter Feldauswahl umgestellt. Voruebergehende Abruffehler koennen ueber den zweiten Endpunkt aufgefangen werden.

@@ -1,6 +1,31 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { defaultConversionForProductUnit, unitQuantityToGrams } from "../src/productUnitDefaults.ts";
+import {
+  configuredConversionUnitNames, configuredUnitNames,
+  defaultConversionForProductUnit, unitQuantityToGrams,
+} from "../src/productUnitDefaults.ts";
+
+test("unit choices come from configured units without adding known measurement names", () => {
+  const units = [{ name: "g" }, { name: "kg" }, { name: "Packung" }];
+  assert.deepEqual(configuredUnitNames(units), ["g", "kg", "Packung"]);
+  assert.deepEqual(configuredConversionUnitNames(units), ["g", "kg"]);
+  assert.deepEqual(configuredUnitNames([]), []);
+  assert.deepEqual(configuredConversionUnitNames([]), []);
+});
+
+test("oz becomes selectable only after it is configured", () => {
+  const units = [{ name: "g" }];
+  assert.equal(configuredConversionUnitNames(units).includes("oz"), false);
+  units.push({ name: "oz" });
+  assert.deepEqual(configuredConversionUnitNames(units), ["g", "oz"]);
+  assert.equal(unitQuantityToGrams(1, "oz"), 28.3495);
+});
+
+test("configured unit spelling is retained and equivalent names are deduplicated", () => {
+  const units = [{ name: " KG " }, { name: "kg" }, { name: "" }, { name: "Flasche" }];
+  assert.deepEqual(configuredUnitNames(units), ["KG", "Flasche"]);
+  assert.deepEqual(configuredConversionUnitNames(units), ["kg"]);
+});
 
 test("selecting a product unit prefills its configured conversion", () => {
   const unit = { name: "Packung", default_conversion_quantity: 500, default_conversion_unit: "g" };
