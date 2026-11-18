@@ -106,6 +106,15 @@ const daysLabel = "Haltbarkeit bis Ablauf (Tage)";
 const fiberLabel = "Ballaststoffe (g / 100 g)";
 const sugarLabel = "Zucker (g / 100 g)";
 const caffeineLabel = "Koffein (mg / 100 g, optional)";
+async function assertStockFoodRestrictions() {
+  const units = await evaluate(`Array.from((${field(stockForm, "Einheit")}).options).map(option => option.value).filter(Boolean)`);
+  assert.deepEqual(units, ["g", "Packung"]);
+  const editableFoodFields = await evaluate(`Array.from(document.querySelectorAll('${stockForm} label'))
+    .filter(label => ['Kalorien / 100g', 'Protein / 100g', 'Fett / 100g', 'Kohlenhydrate / 100g', 'Umrechnungseinheit']
+      .includes(label.querySelector('span')?.textContent))
+    .filter(label => label.querySelector('input, select, textarea')).length`);
+  assert.equal(editableFoodFields, 0);
+}
 try {
   await send("Page.enable");
   await send("Runtime.enable");
@@ -114,11 +123,14 @@ try {
     const reset = await request("/__calendar_test__/reset", "POST");
     assert.equal(reset.fixture, "calendar-create-memory");
     const unit = await request("/product-units", "POST", { name: "g" });
+    await request("/product-units", "POST", { name: "kg" });
+    await request("/product-units", "POST", { name: "oz" });
     const group = await request("/product-groups", "POST", { name: "Testgruppe", default_expiry_days: 7 });
     const food = await request("/foods", "POST", {
       name: "A Testlebensmittel", brand: "Testmarke", product_unit_id: unit.id,
       product_group_id: group.id, purchase_date: "2026-10-20", expiry_days: 7,
       conversions: [{ unit: "Packung", quantity: 500 }],
+      calories_per_100g: 120, protein_per_100g: 5, fat_per_100g: 2, carbs_per_100g: 20,
     });
     await request("/foods", "POST", { name: "Z Belegt", brand: "Testmarke" });
     const stock = await request("/inventory", "POST", {
@@ -180,6 +192,7 @@ try {
 
     await click('[title="Bestandsübersicht"]');
     await click('.stock-action.edit');
+    await assertStockFoodRestrictions();
     await fill(stockForm, daysLabel, "21");
     await fill(stockForm, "Einlagerungsdatum", "2026-10-25");
     rejectInventorySave = true;
@@ -200,6 +213,24 @@ try {
     await waitFor(`!document.querySelector('${stockForm}')`);
     assert.equal((await request(`/inventory/${stock.id}`)).expiry_date, "2026-10-25");
     console.log(`PASS ${width}px inventory editing: error retains inputs, retry recalculates expiry, zero days persists`);
+
+    await clickButton('.inventory-overview-header', 'Bestand hinzufügen');
+    await fill(stockForm, 'Lebensmittel', food.name);
+    await waitFor(`(${field(stockForm, 'Einheit')}).value === 'g'`);
+    await assertStockFoodRestrictions();
+    await fill(stockForm, 'Einheit', 'Packung');
+    await fill(stockForm, 'Menge', '1/2');
+    await click(`${stockForm} button[type=submit]`);
+    await waitFor(`!document.querySelector('${stockForm}')`);
+    const stored = (await request('/inventory')).find(item => item.id !== stock.id);
+    assert.equal(stored.unit, 'Packung');
+    assert.equal(stored.quantity, 0.5);
+    assert.equal(stored.calories_per_100g, 120);
+    assert.equal(stored.protein_per_100g, 5);
+    assert.equal(stored.fat_per_100g, 2);
+    assert.equal(stored.carbs_per_100g, 20);
+    assert.equal((await request('/product-units')).some(unit => unit.name === 'Packung'), false);
+    console.log(`PASS ${width}px food storage: read-only nutrients, only food-defined units, stored fractional conversion unit without a new global unit`);
 
     if (!await evaluate("Boolean(document.querySelector('.sidebar-master-options'))")) {
       await click('[title="Stammdaten verwalten"]');
@@ -229,7 +260,7 @@ try {
     assert.equal(imported.serving_size, 250);
     assert.equal(imported.serving_unit, 'ml');
     assert.deepEqual(imported.barcodes, ['0012345678905']);
-    assert.equal((await request('/inventory')).length, 1);
+    assert.equal((await request('/inventory')).length, 2);
     assert.equal((await request('/meals/logs')).length, 0);
     await fill(foodForm, daysLabel, '14');
     await click(`${foodForm} button[type=submit]`);

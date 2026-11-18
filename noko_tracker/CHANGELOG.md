@@ -1,5 +1,10 @@
 # Changelog
 
+## 3.1.24
+
+- Beim Einlagern stammen die Naehrwerte und Umrechnungen aus dem ausgewaehlten Lebensmittel. Die Einlagerungsmaske zeigt sie schreibgeschuetzt an.
+- Einlagerungen verwenden die am Lebensmittel hinterlegte Mengeneinheit, seine Umrechnungseinheit oder seine zusaetzlichen Umrechnungen. Die API prueft die Auswahl ebenfalls.
+
 ## 3.1.23
 
 - Einheiten-Auswahllisten verwenden die angelegten Mengeneinheiten. Unkonfigurierte Einheiten wie oz werden nicht zusaetzlich eingeblendet.

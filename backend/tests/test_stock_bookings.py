@@ -278,7 +278,7 @@ class StockBookingTest(unittest.TestCase):
         self.assertEqual(nutrition.food_quantity_from_grams(item, 250, "kg"), .25)
 
     def test_shopping_import_does_not_renew_expired_stock(self):
-        food, item = self.stock(1, "pcs")
+        food, item = self.stock(1, "pcs", product_unit=m.ProductUnit(name="pcs"))
         food.expiry_days = 5
         item.purchase_date = date.today() - timedelta(days=10)
         item.expiry_days = 5
@@ -289,6 +289,55 @@ class StockBookingTest(unittest.TestCase):
         self.assertEqual(item.expiry_date, old_expiry)
         self.assertEqual(item.quantity, 1)
         self.assertEqual(result["created_inventory_items"][0].expiry_date, date.today() + timedelta(days=5))
+
+    def test_shopping_rejects_unattached_unit_without_partial_stock_or_new_unit(self):
+        food = m.Food(name="Reis", product_unit=m.ProductUnit(name="Beutel"), serving_size=500, serving_unit="g")
+        self.db.add_all([
+            food,
+            m.ShoppingListItem(name=food.name, food=food, quantity=1, unit="Beutel"),
+            m.ShoppingListItem(name=food.name, food=food, quantity=1, unit="Palette"),
+        ])
+        self.db.commit()
+        self.assert_http(422, shopping.import_shopping_list_to_inventory, db=self.db)
+        self.assertEqual(self.db.query(m.InventoryItem).count(), 0)
+        self.assertEqual(self.db.query(m.ShoppingListItem).count(), 2)
+        self.assertIsNone(self.db.query(m.ProductUnit).filter_by(name="Palette").first())
+        self.assertEqual((food.serving_size, food.serving_unit), (500, "g"))
+
+    def test_receipt_rejects_unattached_unit_without_partial_stock_or_receipt_marker(self):
+        food = m.Food(name="Reis", product_unit=m.ProductUnit(name="Beutel"), serving_size=500, serving_unit="g")
+        self.db.add(food)
+        self.db.commit()
+        request = s.ReceiptImportBookRequest(receipt_id="c" * 64, items=[
+            s.ReceiptImportBookItem(source_index=0, raw_name=food.name, name=food.name, food_id=food.id, quantity=1, unit="Beutel"),
+            s.ReceiptImportBookItem(source_index=1, raw_name=food.name, name=food.name, food_id=food.id, quantity=1, unit="Palette"),
+        ])
+        self.assert_http(422, receipt.book_receipt_import, self.db, request)
+        self.assertEqual(self.db.query(m.InventoryItem).count(), 0)
+        self.assertEqual(self.db.query(m.ReceiptBooking).count(), 0)
+        self.assertIsNone(self.db.query(m.ProductUnit).filter_by(name="Palette").first())
+        self.assertEqual((food.serving_size, food.serving_unit), (500, "g"))
+
+    def test_shopping_and_receipt_use_attached_conversion_and_authoritative_nutrition(self):
+        food = m.Food(
+            name="Reis", product_unit=m.ProductUnit(name="Beutel"), serving_size=500, serving_unit="g",
+            calories_per_100g=350, protein_per_100g=7, carbs_per_100g=78, fat_per_100g=1,
+            conversions=[m.FoodConversion(quantity=2, unit="Tasse")],
+        )
+        self.db.add(food)
+        self.db.add(m.ShoppingListItem(name=food.name, food=food, quantity=1, unit="tasse"))
+        self.db.commit()
+        shopping.import_shopping_list_to_inventory(db=self.db)
+        receipt.book_receipt_import(self.db, s.ReceiptImportBookRequest(items=[
+            s.ReceiptImportBookItem(source_index=0, raw_name=food.name, name=food.name, food_id=food.id, quantity=1, unit="Tasse"),
+        ]))
+        for item in self.db.query(m.InventoryItem).all():
+            self.assertEqual(item.unit, "Tasse")
+            self.assertEqual(nutrition.food_amount_in_grams(item, item.quantity, item.unit), 250)
+            self.assertEqual(
+                (item.calories_per_100g, item.protein_per_100g, item.carbs_per_100g, item.fat_per_100g),
+                (350, 7, 78, 1),
+            )
 
     def test_receipt_retries_and_changed_rows_cannot_book_same_receipt_twice(self):
         request = s.ReceiptImportBookRequest(receipt_id="a" * 64, items=[

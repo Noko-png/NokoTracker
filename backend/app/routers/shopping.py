@@ -7,6 +7,7 @@ from sqlalchemy.orm import Session
 
 from .. import crud, models, schemas
 from ..database import get_db
+from ..services.food_inventory import apply_food_inventory_values
 from ..services.unit_defaults import apply_product_unit_defaults
 
 
@@ -206,16 +207,16 @@ def create_inventory_item_from_food(
     shopping_item: models.ShoppingListItem,
     purchase_date: date,
 ) -> models.InventoryItem:
-    product_unit = crud.get_or_create_product_unit(db, shopping_item.unit)
     inventory_item = models.InventoryItem(
         name=food.name,
         quantity=normalized_quantity(shopping_item.quantity),
-        unit=product_unit.name,
+        unit=shopping_item.unit,
         minimum_quantity=0.0,
-        product_unit_id=product_unit.id,
         notes=f"Aus Einkaufsliste uebernommen: {shopping_item.name}",
     )
     apply_default_inventory_values(inventory_item, food, purchase_date)
+    for field, value in apply_food_inventory_values(db, food, {"unit": shopping_item.unit}).items():
+        setattr(inventory_item, field, value)
     db.add(inventory_item)
     db.flush()
     return inventory_item
@@ -413,6 +414,9 @@ def import_shopping_list_to_inventory(
             status_code=409,
             detail="Einkaufsliste konnte nicht in den Bestand uebernommen werden",
         ) from exc
+    except Exception:
+        db.rollback()
+        raise
 
     imported_count = len(created_inventory_items) + len(updated_inventory_items)
     if imported_count:

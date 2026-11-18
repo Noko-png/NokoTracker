@@ -46,7 +46,9 @@ Alle EANs eines Produkts nutzen dieselben Naehrwerte, Einheiten und denselben Be
 
 ## Standardumrechnungen ab 3.1.22
 
-Unter **Stammdaten > Mengeneinheiten** die Einheit bearbeiten und **Standardumrechnung** ausfuellen, zum Beispiel **1 kg = 1000 g**. Beim Auswaehlen der Einheit wird der Vorschlag ins Lebensmittel- oder Bestandsformular uebernommen und kann dort angepasst werden. Neue Lebensmittel aus Einkaufsliste und Kassenzettel nutzen die Vorgabe ebenfalls. Eine spaetere Aenderung der Standardumrechnung ersetzt keine gespeicherten Lebensmittelangaben.
+Unter **Stammdaten > Mengeneinheiten** die Einheit bearbeiten und **Standardumrechnung** ausfuellen, zum Beispiel **1 kg = 1000 g**. Beim Auswaehlen der Einheit wird der Vorschlag ins Lebensmittelformular uebernommen und kann dort angepasst werden. Neue Lebensmittel aus Einkaufsliste und Kassenzettel nutzen die Vorgabe ebenfalls.
+
+Ab 3.1.24 zeigt **Lebensmittel einlagern** die Naehrwerte und Umrechnungen schreibgeschuetzt an. Verfuegbar sind die am Lebensmittel gespeicherte Mengeneinheit, Umrechnungseinheit und zusaetzliche Umrechnungen. Aenderungen an diesen Stammdaten erfolgen unter **Stammdaten > Lebensmittel**.
 
 ## Test Health dashboard
 

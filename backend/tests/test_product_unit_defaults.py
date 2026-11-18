@@ -112,7 +112,7 @@ class ProductUnitDefaultsTest(unittest.TestCase):
                 self.assertEqual((linked["serving_size"], linked["serving_unit"]), (330, "ml"))
         self.assertEqual(self.call("GET", f'/foods/{food["id"]}')["serving_size"], 330)
 
-    def test_inventory_explicit_conversion_and_replacement_keep_their_values(self):
+    def test_manual_inventory_conversion_is_kept_when_replacing_linked_stock(self):
         unit = self.unit()
         item = self.call("POST", "/inventory", {
             "name": "Individuell", "product_unit_id": unit["id"], "serving_size": 400,
@@ -122,12 +122,18 @@ class ProductUnitDefaultsTest(unittest.TestCase):
             "name": item["name"], "food_id": item["food_id"], "product_unit_id": unit["id"],
             "expected_updated_at": item["updated_at"], "serving_size": 120, "serving_unit": "ml",
         })
-        self.assertEqual((replaced["serving_size"], replaced["serving_unit"]), (120, "ml"))
+        self.assertEqual((replaced["serving_size"], replaced["serving_unit"]), (400, "g"))
 
-    def test_different_inventory_unit_uses_its_default_without_rewriting_food(self):
+    def test_inventory_unit_must_be_registered_for_food_before_using_it(self):
         gram = self.unit("g", 1)
         bag = self.unit("Beutel", 500)
         food = self.call("POST", "/foods", {"name": "Mehl", "product_unit_id": gram["id"]}, status=201)
+        self.call("POST", "/inventory", {
+            "name": food["name"], "food_id": food["id"], "product_unit_id": bag["id"],
+        }, status=422)
+        self.call("PATCH", f'/foods/{food["id"]}', {
+            "conversions": [{"quantity": .002, "unit": "Beutel"}],
+        })
         for selection in ({"food_id": food["id"]}, {}):
             with self.subTest(selection=selection):
                 item = self.call("POST", "/inventory", {

@@ -7,6 +7,7 @@ from sqlalchemy.orm import Session
 from .. import crud, models, schemas
 from ..database import get_db
 from ..services import barcode_service
+from ..services.food_inventory import apply_food_inventory_values
 from ..services.unit_defaults import apply_product_unit_defaults
 
 
@@ -61,8 +62,8 @@ def inventory_payload_with_food(
     item_in: schemas.InventoryItemCreate,
     *,
     use_unit_defaults: bool = False,
+    existing_item: models.InventoryItem | None = None,
 ) -> dict:
-    product_unit = resolve_product_unit(db, item_in)
     payload = item_in.model_dump(exclude={"expected_updated_at"})
     payload["barcode"] = barcode_service.normalize_barcode(item_in.barcode) if item_in.barcode and item_in.barcode.strip() else None
     codes = [payload["barcode"]] if payload["barcode"] else []
@@ -74,55 +75,32 @@ def inventory_payload_with_food(
         if item_in.food_id is not None
         else crud.get_food_by_name_brand(db, item_in.name, brand)
     )
+    if item_in.food_id is not None and food is None:
+        raise HTTPException(status_code=404, detail="Food not found")
+    if food is not None:
+        if "unit" not in item_in.model_fields_set:
+            payload.pop("unit")
+        payload = apply_food_inventory_values(db, food, payload, existing_item)
+        barcode_service.append_barcodes(db, food, codes)
+        return payload
+
+    product_unit = resolve_product_unit(db, item_in)
     if use_unit_defaults:
         conversion = item_in.model_dump(include={"serving_size", "serving_unit"}, exclude_unset=True)
         conversion["product_unit_id"] = product_unit.id
-        if food is not None and (
-            food.product_unit_id != product_unit.id
-            and not {"serving_size", "serving_unit"}.intersection(conversion)
-        ):
-            conversion = apply_product_unit_defaults(db, conversion)
-        if food is not None:
-            conversion.setdefault("serving_size", food.serving_size)
-            conversion.setdefault("serving_unit", food.serving_unit)
         payload.update(apply_product_unit_defaults(db, conversion))
 
-    if item_in.food_id is not None:
-        if food is None:
-            raise HTTPException(status_code=404, detail="Food not found")
-
-        barcode_service.append_barcodes(db, food, codes)
-        payload["name"] = food.name
-        payload["emoji"] = food.emoji
-        payload["brand"] = normalized_text(food.brand)
-        payload["category"] = normalized_text(food.category)
-        payload["unit"] = product_unit.name
-        payload["food_id"] = food.id
-        payload["product_unit_id"] = product_unit.id
-        return payload
-
-    new_food = food is None
-    if new_food:
-        food = models.Food(name=item_in.name)
-        db.add(food)
-
-    food.name = item_in.name
-    food.brand = brand
-    food.category = category
-    food.product_group_id = item_in.product_group_id
-    food.minimum_quantity = item_in.minimum_quantity
+    food = models.Food(
+        name=item_in.name, brand=brand, category=category,
+        product_group_id=item_in.product_group_id, product_unit_id=product_unit.id,
+        minimum_quantity=item_in.minimum_quantity,
+        purchase_date=item_in.purchase_date, expiry_days=item_in.expiry_days, price=item_in.price,
+        serving_size=payload["serving_size"], serving_unit=payload["serving_unit"],
+        calories_per_100g=item_in.calories_per_100g, protein_per_100g=item_in.protein_per_100g,
+        carbs_per_100g=item_in.carbs_per_100g, fat_per_100g=item_in.fat_per_100g,
+    )
+    db.add(food)
     barcode_service.append_barcodes(db, food, codes)
-    food.purchase_date = item_in.purchase_date
-    food.expiry_days = item_in.expiry_days
-    food.price = item_in.price
-    if new_food or not use_unit_defaults:
-        food.product_unit_id = product_unit.id
-        food.serving_size = payload["serving_size"]
-        food.serving_unit = payload["serving_unit"]
-    food.calories_per_100g = item_in.calories_per_100g
-    food.protein_per_100g = item_in.protein_per_100g
-    food.carbs_per_100g = item_in.carbs_per_100g
-    food.fat_per_100g = item_in.fat_per_100g
     db.flush()
 
     payload["brand"] = brand
@@ -250,7 +228,7 @@ def replace_inventory_item(
     ensure_product_group_exists(db, item_in.product_group_id)
     ensure_product_unit_exists(db, item_in.product_unit_id)
     try:
-        apply_inventory_payload(item, inventory_payload_with_food(db, item_in))
+        apply_inventory_payload(item, inventory_payload_with_food(db, item_in, existing_item=item))
         db.add(item)
         db.commit()
         db.refresh(item)

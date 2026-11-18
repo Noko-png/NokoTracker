@@ -17,6 +17,7 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from .. import crud, models, schemas
+from .food_inventory import apply_food_inventory_values
 from .unit_defaults import apply_product_unit_defaults
 
 
@@ -320,7 +321,6 @@ def default_conversion_for_unit(unit_name: str) -> tuple[float, str]:
 def food_or_create(
     db: Session,
     item: schemas.ReceiptImportBookItem,
-    product_unit: models.ProductUnit,
 ) -> models.Food:
     if item.food_id is not None:
         food = crud.get(db, models.Food, item.food_id)
@@ -332,6 +332,7 @@ def food_or_create(
     if food is not None:
         return food
 
+    product_unit = crud.get_or_create_product_unit(db, item.unit)
     serving_size, serving_unit = default_conversion_for_unit(product_unit.name)
     defaults = apply_product_unit_defaults(db, {"product_unit_id": product_unit.id})
     food = models.Food(
@@ -366,8 +367,7 @@ def book_receipt_import(
                 skipped_count += 1
                 continue
 
-            product_unit = crud.get_or_create_product_unit(db, item.unit)
-            food = food_or_create(db, item, product_unit)
+            food = food_or_create(db, item)
             product_group = (
                 crud.get(db, models.ProductGroup, food.product_group_id)
                 if food.product_group_id is not None
@@ -379,13 +379,11 @@ def book_receipt_import(
                 or food.storage_location
                 or (product_group.default_storage_location if product_group is not None else None)
             )
+            inventory_values = apply_food_inventory_values(db, food, {
+                "unit": item.unit,
+            })
             inventory_item = models.InventoryItem(
-                name=food.name,
-                emoji=food.emoji,
-                brand=food.brand,
-                category=food.category,
                 quantity=schemas.normalize_fractional_number(item.quantity),
-                unit=product_unit.name,
                 minimum_quantity=0.0,
                 storage_location=storage_location,
                 expiry_days=food.expiry_days if food.expiry_days is not None else (
@@ -396,15 +394,8 @@ def book_receipt_import(
                 barcode=None,
                 image_path=None,
                 notes=f"REWE-Bon: {item.raw_name}",
-                food_id=food.id,
                 product_group_id=food.product_group_id,
-                product_unit_id=product_unit.id,
-                serving_size=food.serving_size,
-                serving_unit=food.serving_unit,
-                calories_per_100g=food.calories_per_100g,
-                protein_per_100g=food.protein_per_100g,
-                carbs_per_100g=food.carbs_per_100g,
-                fat_per_100g=food.fat_per_100g,
+                **inventory_values,
             )
             db.add(inventory_item)
             inventory_items.append(inventory_item)
