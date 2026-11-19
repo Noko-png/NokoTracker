@@ -91,6 +91,8 @@ Das gilt auch fuer Einkaufsliste, Kassenzettel, zubereitete Gerichte und Rueckbu
 
 Der **Mindestbestand** wird unter **Stammdaten > Lebensmittel** in der Mengeneinheit des Lebensmittels festgelegt. Die Pruefung addiert alle Chargen mit Einheitenumrechnung und gilt bereits ohne erste Einlagerung (Bestand 0). Die Bestandsuebersicht zeigt die Fehlmengen; die Einkaufsliste kann sie direkt uebernehmen. Ein Mindestbestand von 0 deaktiviert die Warnung. Archivierte Lebensmittel werden ausgenommen; bei genau erreichtem Mindestbestand gibt es keine Warnung.
 
+**Einkaufsliste > Aus Lagerbestand** ergaenzt ausschliesslich die noch fehlende Menge bis zum Mindestbestand und rechnet bereits offene Einkaufspositionen desselben Lebensmittels an. Beispiel: Mindestbestand 2 kg, Lagerbestand 1 kg, Einkaufsliste 250 g → die vorhandene Einkaufsposition wird auf 1000 g erhoeht. Wiederholtes Klicken erzeugt keine zusaetzliche Menge. Bereits manuell geplante Mehrmengen bleiben erhalten.
+
 Die API liefert unter `/inventory/low-stock` und `low_stock` in `/inventory/warnings` eine Zusammenfassung pro Lebensmittel mit `food_id`, `quantity`, `minimum_quantity`, `missing_quantity`, `unit` und optionaler `inventory_item_id`. Ohne Bestandsposition ist `inventory_item_id` null.
 
 ## Naehrwerte in den Lebensmittel-Stammdaten

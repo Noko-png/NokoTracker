@@ -598,7 +598,7 @@ const macroMeta: Array<{
   { key: "carbs", label: "Kohlenhydrate", unit: "g", tone: "red" },
 ];
 
-const appVersion = "3.1.27";
+const appVersion = "3.1.28";
 const updateSourceLabel = "main / github.com/Noko-png/NokoTracker";
 
 const emptyNutrition: NutritionDay = {
@@ -13642,7 +13642,7 @@ function ShoppingPage({
               <Database size={16} />
               {inventoryImportBusy ? "Wird uebernommen" : "In Bestand uebernehmen"}
             </button>
-            <button className="button secondary" onClick={onGenerate} type="button">
+            <button className="button secondary" onClick={onGenerate} title="Nur Fehlmengen bis zum Mindestbestand ergänzen; offene Einkaufspositionen werden angerechnet" type="button">
               <RefreshCw size={16} />
               Aus Lagerbestand
             </button>

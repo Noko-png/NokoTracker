@@ -98,4 +98,4 @@ POST /shopping-list/{item_id}/uncheck
 POST /shopping-list/generate-from-low-stock
 ```
 
-`generate-from-low-stock` erzeugt je Lebensmittel unter seinem Stammdaten-Mindestbestand einen Eintrag ueber die Fehlmenge in dessen Mengeneinheit. Das funktioniert bereits ohne Bestandsposition. Bereits offene Einkaufspositionen desselben Lebensmittels werden unabhaengig von ihrer Einheit uebersprungen.
+`generate-from-low-stock` ergaenzt ausschliesslich die Menge, die nach Anrechnung des gesamten Lagerbestands und aller offenen Einkaufspositionen noch bis zum Stammdaten-Mindestbestand fehlt. Die Einheiten werden umgerechnet. Eine vorhandene Einkaufsposition wird in ihrer Einheit erhoeht; andernfalls entsteht eine Position in der Stammdaten-Einheit, auch ohne vorherige Einlagerung. Wiederholte Aufrufe erzeugen keine Mehrmenge. Manuell geplante Mengen ueber dem Ziel bleiben erhalten. Die Antwort enthaelt angelegte und aktualisierte Positionen. Bei nicht umrechenbaren Einheiten eines zugeordneten Einkaufsartikels wird der gesamte Aufruf mit 422 ohne Aenderungen abgebrochen.

@@ -1,4 +1,5 @@
 from datetime import date
+import math
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Response, status
 from sqlalchemy import func, or_
@@ -151,6 +152,19 @@ def quantity_to_buy(inventory_item: models.InventoryItem) -> float:
     else:
         missing = normalized_quantity(inventory_item.minimum_quantity - inventory_item.quantity)
     return missing if missing > 0 else 1.0
+
+
+def shopping_quantity_in_unit(food: models.Food, quantity: float, unit: str, target_unit: str) -> float:
+    known_units = {normalized_unit(shopping_unit_for_food(food)), normalized_unit(food.serving_unit)}
+    known_units.update(normalized_unit(row.unit) for row in food.conversions if row.quantity > 0)
+    known_units.update(nutrition.SERVING_UNITS)
+    if nutrition._unit_to_grams(1, unit) is None and normalized_unit(unit) not in known_units:
+        raise HTTPException(422, f"Die Einheit '{unit}' des Einkaufsartikels '{food.name}' hat keine hinterlegte Umrechnung.")
+    grams = nutrition.food_amount_in_grams(food, quantity, unit)
+    converted = nutrition.food_quantity_from_grams(food, grams, target_unit)
+    if not math.isfinite(converted) or converted <= 0:
+        raise HTTPException(422, "Die umgerechnete Einkaufsmenge ist ungueltig.")
+    return converted
 
 
 def default_conversion_for_unit(unit_name: str) -> tuple[float, str]:
@@ -314,42 +328,58 @@ def create_shopping_item(
     status_code=status.HTTP_201_CREATED,
 )
 def generate_shopping_items_from_low_stock(db: Session = Depends(get_db)):
-    created_items = []
-    for stock in foods_below_minimum(db):
-        duplicate = db.query(models.ShoppingListItem).filter(
-            models.ShoppingListItem.is_checked.is_(False),
-            or_(
-                models.ShoppingListItem.food_id == stock.food_id,
-                (models.ShoppingListItem.food_id.is_(None)
-                 & (func.lower(models.ShoppingListItem.name) == stock.name.lower())
-                 & (func.lower(models.ShoppingListItem.unit) == normalized_unit(stock.unit))),
-            ),
-        ).first()
-        if duplicate is not None:
-            continue
-
-        shopping_item = models.ShoppingListItem(
-            name=stock.name,
-            food_id=stock.food_id,
-            inventory_item_id=stock.inventory_item_id,
-            quantity=stock.missing_quantity,
-            unit=stock.unit,
-            is_checked=False,
-            priority=1,
-            notes="Generated from low stock",
-        )
-        db.add(shopping_item)
-        created_items.append(shopping_item)
-
+    changed_items = []
     try:
+        for stock in foods_below_minimum(db):
+            food = db.get(models.Food, stock.food_id)
+            planned_items = db.query(models.ShoppingListItem).filter(
+                models.ShoppingListItem.is_checked.is_(False),
+                or_(
+                    models.ShoppingListItem.food_id == stock.food_id,
+                    (models.ShoppingListItem.food_id.is_(None)
+                     & or_(
+                         models.ShoppingListItem.inventory_item.has(models.InventoryItem.food_id == stock.food_id),
+                         (models.ShoppingListItem.inventory_item_id.is_(None)
+                          & (func.lower(models.ShoppingListItem.name) == stock.name.lower())
+                          & (func.lower(models.ShoppingListItem.unit) == normalized_unit(stock.unit))),
+                     )),
+                ),
+            ).order_by(models.ShoppingListItem.id).all()
+            planned_quantity = sum(
+                shopping_quantity_in_unit(food, row.quantity, row.unit, stock.unit) for row in planned_items
+            )
+            if not math.isfinite(planned_quantity):
+                raise HTTPException(422, "Die geplante Einkaufsmenge ist zu gross.")
+            remaining = stock.missing_quantity - planned_quantity
+            if remaining <= 0 or math.isclose(remaining, 0, abs_tol=1e-9):
+                continue
+            if planned_items:
+                shopping_item = planned_items[0]
+                additional = shopping_quantity_in_unit(food, remaining, stock.unit, shopping_item.unit)
+                merge_shopping_item_quantity(shopping_item, additional, priority=1, notes="Generated from low stock")
+                if not math.isfinite(shopping_item.quantity):
+                    raise HTTPException(422, "Die geplante Einkaufsmenge ist zu gross.")
+                fill_shopping_item_references(shopping_item, stock.food_id, stock.inventory_item_id)
+            else:
+                shopping_item = models.ShoppingListItem(
+                    name=stock.name, food_id=stock.food_id, inventory_item_id=stock.inventory_item_id,
+                    quantity=stock.missing_quantity, unit=stock.unit, is_checked=False,
+                    priority=1, notes="Generated from low stock",
+                )
+            db.add(shopping_item)
+            db.flush()
+            changed_items.append(shopping_item)
         db.commit()
     except IntegrityError as exc:
         db.rollback()
         raise HTTPException(status_code=409, detail="Shopping list items could not be generated") from exc
+    except Exception:
+        db.rollback()
+        raise
 
-    for item in created_items:
+    for item in changed_items:
         db.refresh(item)
-    return created_items
+    return changed_items
 
 
 @router.post(

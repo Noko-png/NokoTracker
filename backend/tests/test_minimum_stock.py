@@ -25,7 +25,7 @@ class MinimumStockTest(unittest.TestCase):
         security.install_security(self.app)
 
         def database():
-            with Session(self.engine) as db:
+            with Session(self.engine, autoflush=False) as db:
                 yield db
 
         self.app.dependency_overrides[get_db] = database
@@ -149,3 +149,92 @@ class MinimumStockTest(unittest.TestCase):
         purchase, = self.generate()
         self.assertFalse(purchase["is_checked"])
         self.assertEqual(purchase["quantity"], 2)
+
+    def test_existing_purchase_is_topped_up_only_by_remaining_shortage(self):
+        self.store(.5, "kg")
+        planned = self.call("POST", "/shopping-list", {
+            "name": self.food["name"], "food_id": self.food["id"], "quantity": .25, "unit": "kg",
+            "notes": "Manuell vorgemerkt", "store": "Supermarkt",
+        }, status=201)
+        updated, = self.generate()
+        self.assertEqual((updated["id"], updated["quantity"], updated["unit"]), (planned["id"], 1.5, "kg"))
+        self.assertEqual(updated["store"], "Supermarkt")
+        self.assertIn("Manuell vorgemerkt", updated["notes"])
+        self.assertEqual(self.generate(), [])
+        self.assertEqual(len(self.call("GET", "/shopping-list")), 1)
+        self.call("POST", "/shopping-list/import-to-inventory")
+        self.assertEqual(self.warnings(), [])
+        self.assertEqual(self.call("GET", "/inventory")[0]["quantity"], 2)
+
+    def test_all_existing_purchase_units_count_towards_the_target(self):
+        self.store(500, "g", purchase_date="2026-11-18")
+        self.store(.5, "kg", purchase_date="2026-11-19")
+        first = self.call("POST", "/shopping-list", {
+            "name": self.food["name"], "food_id": self.food["id"], "quantity": 250, "unit": "g",
+        }, status=201)
+        second = self.call("POST", "/shopping-list", {
+            "name": self.food["name"], "food_id": self.food["id"], "quantity": .25, "unit": "kg",
+        }, status=201)
+        updated, = self.generate()
+        self.assertEqual((updated["id"], updated["quantity"], updated["unit"]), (first["id"], 750, "g"))
+        rows = {row["id"]: row for row in self.call("GET", "/shopping-list")}
+        self.assertEqual(rows[second["id"]]["quantity"], .25)
+        self.assertEqual(len(rows), 2)
+        self.assertEqual(self.generate(), [])
+
+    def test_custom_purchase_conversion_reaches_minimum_without_rounding_up(self):
+        self.call("PATCH", f'/foods/{self.food["id"]}', {"conversions": [{"unit": "Beutel", "quantity": 2}]})
+        self.store(.75, "kg")
+        planned = self.call("POST", "/shopping-list", {
+            "name": self.food["name"], "food_id": self.food["id"], "quantity": 1, "unit": "Beutel",
+        }, status=201)
+        updated, = self.generate()
+        self.assertEqual((updated["id"], updated["quantity"], updated["unit"]), (planned["id"], 2.5, "Beutel"))
+        self.assertEqual(self.generate(), [])
+        self.call("POST", "/shopping-list/import-to-inventory")
+        self.assertEqual(self.warnings(), [])
+
+    def test_existing_purchase_above_target_is_preserved_without_new_items(self):
+        self.store(1, "kg")
+        planned = self.call("POST", "/shopping-list", {
+            "name": self.food["name"], "food_id": self.food["id"], "quantity": 3, "unit": "kg",
+        }, status=201)
+        self.assertEqual(self.generate(), [])
+        self.assertEqual(self.call("GET", "/shopping-list"), [planned])
+
+    def test_stock_above_minimum_and_zero_minimum_do_not_add_items(self):
+        self.store(3, "kg")
+        self.create_food(name="Ohne Mindestbestand", minimum_quantity=0)
+        self.assertEqual(self.generate(), [])
+        self.assertEqual(self.call("GET", "/shopping-list"), [])
+
+    def test_legacy_purchase_linked_to_stock_is_counted_and_attached_to_food(self):
+        item = self.store(1, "kg")
+        planned = self.call("POST", "/shopping-list", {
+            "name": "Alter Name", "inventory_item_id": item["id"], "quantity": 250, "unit": "g",
+        }, status=201)
+        updated, = self.generate()
+        self.assertEqual((updated["id"], updated["food_id"], updated["quantity"], updated["unit"]),
+                         (planned["id"], self.food["id"], 1000, "g"))
+        self.assertEqual(self.generate(), [])
+
+    def test_unknown_purchase_unit_rolls_back_all_generated_changes(self):
+        other = self.create_food(name="Ungeklaerte Einheit")
+        planned = self.call("POST", "/shopping-list", {
+            "name": other["name"], "food_id": other["id"], "quantity": 1, "unit": "Unbekannt",
+        }, status=201)
+        self.call("POST", "/shopping-list/generate-from-low-stock", status=422)
+        self.assertEqual(self.call("GET", "/shopping-list"), [planned])
+
+    def test_unassigned_purchase_is_not_counted_twice_for_different_brands(self):
+        other = self.create_food(brand="Andere Marke")
+        planned = self.call("POST", "/shopping-list", {
+            "name": self.food["name"], "quantity": .5, "unit": "kg",
+        }, status=201)
+        changed = self.generate()
+        self.assertEqual(len(changed), 2)
+        rows = {row["food_id"]: row for row in self.call("GET", "/shopping-list")}
+        self.assertEqual(set(rows), {self.food["id"], other["id"]})
+        self.assertEqual(rows[self.food["id"]]["id"], planned["id"])
+        self.assertEqual([row["quantity"] for row in rows.values()], [2, 2])
+        self.assertEqual(self.generate(), [])

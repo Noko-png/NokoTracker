@@ -390,6 +390,33 @@ try {
     await waitFor("document.querySelector('.inventory-alert.low strong')?.textContent === '0'");
     assert.equal(await evaluate("Boolean(document.querySelector('.inventory-minimum-stock'))"), false);
     console.log(`PASS ${width}px minimum stock: master data works without stock, lots convert into one total, changed master minimum applies immediately`);
+
+    const shoppingFood = await request('/foods', 'POST', {
+      name: 'Einkauf bis Mindestbestand', product_unit_id: kilogram.id,
+      serving_size: 1000, serving_unit: 'g', minimum_quantity: 2,
+    });
+    await request('/inventory', 'POST', {
+      name: shoppingFood.name, food_id: shoppingFood.id, quantity: 1, unit: 'kg',
+    });
+    const shoppingPlan = await request('/shopping-list', 'POST', {
+      name: shoppingFood.name, food_id: shoppingFood.id, quantity: 250, unit: 'g',
+    });
+    await click('[title="Einkaufsliste"]');
+    await clickButton('.shopping-header-actions', 'Aus Lagerbestand');
+    await waitFor(`Array.from(document.querySelectorAll('.shopping-item')).some(row => row.textContent.includes(${JSON.stringify(shoppingFood.name)}) && row.textContent.includes('1000 g'))`);
+    let shoppingRows = (await request('/shopping-list')).filter(row => row.food_id === shoppingFood.id);
+    assert.equal(shoppingRows.length, 1);
+    assert.equal(shoppingRows[0].id, shoppingPlan.id);
+    assert.equal(shoppingRows[0].quantity, 1000);
+    assert.equal(shoppingRows[0].unit, 'g');
+    await clickButton('.shopping-header-actions', 'Aus Lagerbestand');
+    await new Promise(resolve => setTimeout(resolve, 200));
+    await waitFor("!document.querySelector('.loading-bar')");
+    shoppingRows = (await request('/shopping-list')).filter(row => row.food_id === shoppingFood.id);
+    assert.equal(shoppingRows.length, 1);
+    assert.equal(shoppingRows[0].quantity, 1000);
+    assert.equal(shoppingRows[0].unit, 'g');
+    console.log(`PASS ${width}px shopping from stock: adds only remaining shortage, converts existing purchase units and repeated clicks keep the same quantity`);
   }
 } finally {
   await send("Page.navigate", { url: "about:blank" });

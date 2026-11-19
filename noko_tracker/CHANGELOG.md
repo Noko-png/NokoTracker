@@ -1,5 +1,10 @@
 # Changelog
 
+## 3.1.28
+
+- **Einkaufsliste > Aus Lagerbestand** fuellt nur bis zum Mindestbestand aus den Stammdaten auf. Bereits offene Einkaufspositionen werden mit Einheitenumrechnung angerechnet und bei Bedarf um die verbleibende Fehlmenge erhoeht.
+- Wiederholtes Klicken erzeugt keine Mehrmenge. Ausreichender Lagerbestand und Mindestbestand 0 fuehren zu keinem neuen Einkaufsartikel. Bereits manuell geplante Mehrmengen bleiben erhalten.
+
 ## 3.1.27
 
 - Mindestbestaende werden aus den Lebensmittel-Stammdaten geprueft, auch ohne vorherige Einlagerung. Alle Chargen zaehlen mit Einheitenumrechnung zum Gesamtbestand; Aenderungen der Stammdaten gelten sofort.
