@@ -469,11 +469,15 @@ export type CalendarEvent = {
   exclusions: CalendarEventExclusion[];
   created_at: string;
   updated_at: string;
+  ics_uid?: string | null;
+  is_ics?: boolean;
+  ics_is_series?: boolean;
+  ics_occurrence_start_utc?: string | null;
 };
 
 export type CalendarEventCreate = Omit<
   CalendarEvent,
-  "id" | "created_at" | "updated_at" | "group" | "exclusions" | "training_plan" | "training_plans" | "shifts"
+  "id" | "created_at" | "updated_at" | "group" | "exclusions" | "training_plan" | "training_plans" | "shifts" | "ics_uid" | "is_ics" | "ics_is_series" | "ics_occurrence_start_utc"
 >;
 
 export type CalendarEventUpdate = Partial<CalendarEventCreate>;
@@ -1342,7 +1346,28 @@ export function importShoppingListToInventory(
 }
 
 export function getCalendarEvents() {
-  return request<CalendarEvent[]>("/calendar/events?limit=500");
+  return loadAllPages((skip, limit) => request<CalendarEvent[]>(`/calendar/events?skip=${skip}&limit=${limit}`));
+}
+
+export function getIcsOccurrences(start: string, end: string, timezone: string, signal?: AbortSignal) {
+  const params = new URLSearchParams({ start, end, timezone });
+  return request<CalendarEvent[]>(`/calendar/ics/occurrences?${params}`, { signal });
+}
+
+export type CalendarIcsImportResult = { imported_count: number; updated_count: number; skipped_count: number; warnings: string[] };
+
+export async function importCalendarIcs(file: File, timezone: string, userId: number, groupId: number | null) {
+  if (!file.name.toLowerCase().endsWith(".ics") || file.size > 2_000_000) {
+    throw new Error("Bitte eine .ics-Datei mit maximal 2 MB auswählen.");
+  }
+  const content = new TextDecoder("utf-8", { fatal: true }).decode(await file.arrayBuffer());
+  return request<CalendarIcsImportResult>("/calendar/ics/import", {
+    method: "POST", body: { filename: file.name, content, timezone, user_id: userId, group_id: groupId },
+  });
+}
+
+export function exportCalendarIcs(start: string, end: string, timezone: string) {
+  return exportFile(`/calendar/ics/export?${new URLSearchParams({ start, end, timezone })}`);
 }
 
 export function getCalendarGroups() {

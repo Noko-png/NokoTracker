@@ -46,6 +46,18 @@ Sicherung wiederhergestellt oder neu angelegt werden.
 Kalender-Pruefungen: im Backend `python -m unittest discover -s tests -v`,
 im Frontend `npm test` (Node.js ab 22.18).
 
+ICS-Dateiaustausch (iCalendar / RFC 5545):
+
+```text
+POST /calendar/ics/import
+GET /calendar/ics/occurrences?start=2026-11-01T00:00:00&end=2026-12-01T00:00:00&timezone=Europe%2FBerlin
+GET /calendar/ics/export?start=2026-11-01T00:00:00&end=2026-12-01T00:00:00&timezone=Europe%2FBerlin
+```
+
+Der Import erwartet JSON mit `filename`, UTF-8-`content`, `timezone` und optional `group_id` / `user_id`. UIDs werden je Profil abgeglichen: neue Termine werden angelegt, geaenderte ICS-Termine aktualisiert und identische uebersprungen. Die Antwort enthaelt `imported_count`, `updated_count`, `skipped_count` und `warnings`. Originalregeln bleiben in `ics_source` gespeichert; die normale Termin-API liefert stattdessen nur `is_ics`, `ics_uid` und `ics_is_series`. Die Occurrence-API liefert berechnete Termine und `ics_occurrence_start_utc` fuer zeitzonenstabile Einzel-Loeschungen.
+
+ICS-Originale werden ueber erneuten Import bearbeitet. PATCH auf importierte Termine wird abgelehnt. Der Export liefert `text/calendar` und materialisiert die Termine des angefragten, exklusiv endenden Zeitraums als einzelne VEVENTs. Aufgaben werden ausgelassen. Grenzen: 2 MB und 500 VEVENTs pro Datei; 370 Tage und 2000 Vorkommen je Abfrage; Verarbeitung in einem separaten Prozess mit Zeitlimit und unter Linux zusaetzlichem Speicherlimit. Browser-Regression: `npm run test:calendar-ics-ui` gegen die isolierte `calendar_ui_fixture`.
+
 ## Beziehungen
 
 - `Recipe` hat viele `RecipeIngredient`-Eintraege.

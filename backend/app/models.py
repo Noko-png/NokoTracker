@@ -106,6 +106,9 @@ class CalendarEvent(TimestampMixin, Base):
     start_at = Column(DateTime(timezone=True), nullable=False, index=True)
     end_at = Column(DateTime(timezone=True), nullable=True, index=True)
     location = Column(String(255), nullable=True)
+    ics_uid = Column(String(1024), nullable=True, index=True)
+    ics_source = Column(Text, nullable=True)
+    ics_timezone = Column(String(64), nullable=True)
     entry_type = Column(String(32), default="event", nullable=False, index=True)
     all_day = Column(Boolean, default=False, nullable=False)
     is_completed = Column(Boolean, default=False, nullable=False, index=True)
@@ -150,6 +153,17 @@ class CalendarEvent(TimestampMixin, Base):
         CheckConstraint("cycle_training_days BETWEEN 1 AND 31", name="ck_calendar_cycle_training_days"),
         CheckConstraint("cycle_rest_days BETWEEN 1 AND 31", name="ck_calendar_cycle_rest_days"),
     )
+
+    @property
+    def is_ics(self):
+        return bool(self.ics_source)
+
+    @property
+    def ics_is_series(self):
+        return bool(self.ics_source and any(
+            line.startswith(("RRULE:", "RDATE:", "RDATE;", "RECURRENCE-ID:", "RECURRENCE-ID;"))
+            for line in self.ics_source.splitlines()
+        ))
 
     @property
     def training_plan_ids(self):

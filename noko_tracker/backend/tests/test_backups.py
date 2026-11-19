@@ -585,6 +585,28 @@ class BackupTest(unittest.TestCase):
                     self.assertIsNone(session.calendar_occurrence_start_at)
                     self.assertEqual(db.query(models.CalendarEventShift).count(), 0)
 
+    def test_calendar_backup_preserves_ics_source_and_timezone(self):
+        source = self.source_with_data()
+        with Session(self.engine) as db:
+            db.add(models.User(username="Test", password="!"))
+            db.commit()
+        source_engine = create_engine("sqlite:///" + source.as_posix())
+        try:
+            with Session(source_engine) as db:
+                event = db.query(models.CalendarEvent).filter_by(title="Serie").one()
+                event.ics_uid = "backup@test"
+                event.ics_source = "BEGIN:VCALENDAR\r\nVERSION:2.0\r\nEND:VCALENDAR\r\n"
+                event.ics_timezone = "Europe/Berlin"
+                db.commit()
+        finally:
+            source_engine.dispose()
+        self.upload(source.read_bytes(), mode="selected", groups='["training","calendar"]')
+        with Session(self.engine) as db:
+            event = db.query(models.CalendarEvent).filter_by(ics_uid="backup@test").one()
+            self.assertTrue(event.is_ics)
+            self.assertEqual(event.ics_timezone, "Europe/Berlin")
+            self.assertIn("BEGIN:VCALENDAR", event.ics_source)
+
     def test_older_backup_without_booking_tables_still_imports(self):
         source = self.root / "legacy.db"
         source_engine = self.create_database(source)

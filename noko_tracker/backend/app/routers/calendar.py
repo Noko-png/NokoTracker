@@ -2,7 +2,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query, Response, status
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 from pydantic import ValidationError
-from datetime import timedelta
+from datetime import timedelta, timezone
 
 from .. import crud, models, schemas
 from ..database import get_db
@@ -127,6 +127,8 @@ def update_event(
     db: Session = Depends(get_db),
 ):
     event = get_event_or_404(db, event_id)
+    if event.is_ics:
+        raise HTTPException(409, "Importierte ICS-Termine werden mit ihren Originalregeln verwaltet. Zum Bearbeiten bitte die Quelldatei verwenden.")
     if event.training_plan_id is not None:
         ensure_training_event(db, event)
     current_plan_ids = event.training_plan_ids
@@ -191,7 +193,7 @@ def exclude_event_occurrence(
     db: Session = Depends(get_db),
 ):
     event = get_event_or_404(db, event_id)
-    if event.recurrence_frequency == "none":
+    if event.recurrence_frequency == "none" and not event.is_ics:
         raise HTTPException(status_code=409, detail="Only recurring entries support exclusions")
     if event.training_plan_id is not None:
         ensure_training_event(db, event)
@@ -204,7 +206,10 @@ def exclude_event_occurrence(
 
     exclusion = schemas.CalendarEventExclusionCreate(
         event_id=event.id,
-        occurrence_start_at=exclusion_in.occurrence_start_at,
+        occurrence_start_at=(
+            exclusion_in.occurrence_start_at.astimezone(timezone.utc).replace(tzinfo=None)
+            if event.is_ics and exclusion_in.occurrence_start_at.tzinfo else exclusion_in.occurrence_start_at
+        ),
     )
     try:
         return crud.create(db, models.CalendarEventExclusion, exclusion)

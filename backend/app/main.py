@@ -10,6 +10,7 @@ from .routers import (
     backups,
     database_reset,
     calendar,
+    calendar_ics,
     dashboard,
     foods,
     health_connect,
@@ -125,6 +126,9 @@ def migrate_sqlite_calendar_schema() -> None:
         ),
         "recurrence_until": "ALTER TABLE calendar_events ADD COLUMN recurrence_until DATETIME",
         "group_id": "ALTER TABLE calendar_events ADD COLUMN group_id INTEGER",
+        "ics_uid": "ALTER TABLE calendar_events ADD COLUMN ics_uid VARCHAR(1024)",
+        "ics_source": "ALTER TABLE calendar_events ADD COLUMN ics_source TEXT",
+        "ics_timezone": "ALTER TABLE calendar_events ADD COLUMN ics_timezone VARCHAR(64)",
         "cycle_training_days": "ALTER TABLE calendar_events ADD COLUMN cycle_training_days INTEGER NOT NULL DEFAULT 2",
         "cycle_rest_days": "ALTER TABLE calendar_events ADD COLUMN cycle_rest_days INTEGER NOT NULL DEFAULT 1",
         "training_plan_id": "ALTER TABLE calendar_events ADD COLUMN training_plan_id INTEGER REFERENCES training_plans(id) ON DELETE SET NULL",
@@ -932,7 +936,7 @@ ensure_default_user()
 app = FastAPI(
     title="Heim-ERP Backend",
     description="Backend API fuer ein privates Heim-ERP mit Kalender, Vorrat, Rezepten, Mahlzeiten und Einkaufsliste.",
-    version="3.1.28",
+    version="3.1.29",
     docs_url=None,
     redoc_url=None,
 )
@@ -958,6 +962,7 @@ def read_health():
 
 app.include_router(users.router)
 app.include_router(calendar.router)
+app.include_router(calendar_ics.router)
 app.include_router(calendar.groups_router)
 app.include_router(inventory.router)
 app.include_router(product_groups.router)

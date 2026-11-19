@@ -101,6 +101,20 @@ Ballaststoffe und Zucker werden in Gramm je 100 g gespeichert, Koffein optional 
 
 Die neuen Werte sind in Datenbanksicherungen enthalten. Bestehende Installationen werden beim Start ergaenzt; aeltere Sicherungen bleiben importierbar und erhalten fuer Ballaststoffe/Zucker den Standardwert 0 sowie ein leeres Koffeinfeld.
 
+## ICS-Kalenderimport und Export
+
+Unter **Kalender > ICS importieren / exportieren** eine UTF-8-Datei mit der Endung `.ics` auswaehlen, die Zielgruppe und die Kalender-Zeitzone (standardmaessig Europe/Berlin) festlegen und **ICS importieren** anklicken. Die Verarbeitung basiert auf [iCalendar / RFC 5545](https://www.rfc-editor.org/rfc/rfc5545.html).
+
+Unterstuetzt werden VEVENT-Termine mit Titel, Beschreibung und Ort, ganztagige und mehrtaegige Termine, UTC, lokale Zeiten und eingebettete Zeitzonen sowie Serien mit RRULE, RDATE, EXDATE und RECURRENCE-ID. Das exklusive ICS-Enddatum eines Ganztagstermins wird korrekt auf die enthaltenen Kalendertage abgebildet. Die gewaehlte Zeitzone gilt fuer die Anzeige und fuer Termine ohne eigene Zeitzone.
+
+Die Originalregeln werden gespeichert und fuer den sichtbaren Zeitraum sowie den heutigen Tag berechnet. Derselbe UID-Wert im gleichen Profil wird bei erneutem Import aktualisiert und erzeugt keine Dublette. Unveraenderte Termine werden uebersprungen. Importierte Termine werden in der Quelldatei bearbeitet und erneut importiert; einzelne Vorkommen und ganze Serien lassen sich im Kalender loeschen. Erinnerungen werden nicht aktiviert; externe Adressen und Anhaenge werden nicht abgerufen.
+
+Unter **Importierte ICS-Termine verwalten** koennen auch Serien ohne Vorkommen im aktuellen Zeitraum oder mit zu aufwendigen Wiederholungsregeln entfernt werden.
+
+**Zeitraum als .ics exportieren** exportiert die Termine des angezeigten Zeitraums als Einzeltermine mit stabilen UIDs, einschliesslich der Vorkommen eigener und importierter Serien. Aufgaben werden nicht exportiert. Der Export ist eine Momentaufnahme des Zeitraums und enthaelt keine laufenden Serienregeln.
+
+Grenzen: maximal 2 MB und 500 VEVENT-Komponenten je Import; maximal 2000 Vorkommen und 370 Tage je Berechnung. Die Verarbeitung laeuft zeitlich begrenzt in einem separaten Prozess. Zu grosse oder fehlerhafte Dateien werden ohne Teilimport abgelehnt. Bestehende Termine bleiben erhalten; aeltere Datenbanksicherungen bleiben importierbar.
+
 ## Dynamische Trainingsserien im Kalender
 
 Unter **Kalender > Erstellen > Trainingsserie** einen Trainingsplan, Startdatum und Uhrzeit waehlen. Die Wiederholung **Trainingsrhythmus** erlaubt beispielsweise **2 Trainingstage, 1 Pausentag**. Die Serie laeuft unabhaengig von Wochentagen weiter; Vorschau und optionales Enddatum helfen bei der Planung. Ein vorhandener Trainingsplan mit Uebungen laesst sich unter **Stammdaten > Training** anlegen.

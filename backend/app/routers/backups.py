@@ -34,7 +34,7 @@ UNIT_CONVERSION_COLUMNS = {"default_conversion_quantity", "default_conversion_un
 # Older backups may lack inserted rest days or ordered training plans.
 CALENDAR_OPTIONAL_TABLES = {"calendar_event_shifts", "calendar_event_training_plans"}
 CALENDAR_OPTIONAL_COLUMNS = {
-    "calendar_events": {"cycle_training_days", "cycle_rest_days", "training_plan_id"},
+    "calendar_events": {"cycle_training_days", "cycle_rest_days", "training_plan_id", "ics_uid", "ics_source", "ics_timezone"},
     "training_sessions": {"calendar_event_id", "calendar_occurrence_start_at"},
 }
 MAX_SQLITE_VALUE_BYTES = 12 * 1024 * 1024

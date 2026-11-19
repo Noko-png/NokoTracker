@@ -221,6 +221,8 @@ import {
   withCalendarDate,
 } from "./calendar";
 import { CalendarRecurrenceFields } from "./CalendarRecurrenceFields";
+import { CalendarIcsTransfer } from "./CalendarIcsTransfer";
+import { getIcsOccurrences } from "./api/client";
 import { HealthTestPage } from "./HealthTestPage";
 
 type BarcodeDetectorResult = {
@@ -598,7 +600,7 @@ const macroMeta: Array<{
   { key: "carbs", label: "Kohlenhydrate", unit: "g", tone: "red" },
 ];
 
-const appVersion = "3.1.28";
+const appVersion = "3.1.29";
 const updateSourceLabel = "main / github.com/Noko-png/NokoTracker";
 
 const emptyNutrition: NutritionDay = {
@@ -1859,6 +1861,9 @@ export default function App() {
   const [shoppingList, setShoppingList] = useState<ShoppingListItem[]>([]);
   const [users, setUsers] = useState<User[]>([]);
   const [calendarEvents, setCalendarEvents] = useState<CalendarEvent[]>([]);
+  const [icsEvents, setIcsEvents] = useState<CalendarEvent[]>([]);
+  const [icsError, setIcsError] = useState("");
+  const [calendarTimezone, setCalendarTimezone] = useState(() => readStoredValue("noko.calendar.icsTimezone") || "Europe/Berlin");
   const [calendarGroups, setCalendarGroups] = useState<CalendarGroup[]>([]);
   const [warnings, setWarnings] = useState<InventoryWarnings>({
     low_stock: [],
@@ -2265,9 +2270,36 @@ export default function App() {
     ) as string[];
   }, [positiveInventory, productGroups]);
 
+  useEffect(() => {
+    writeStoredValue("noko.calendar.icsTimezone", calendarTimezone);
+  }, [calendarTimezone]);
+
+  useEffect(() => {
+    const controller = new AbortController();
+    setIcsEvents([]);
+    setIcsError("");
+    if (!calendarEvents.some(event => event.is_ics)) return;
+    const dates = getVisibleCalendarDates(calendarView, calendarDate);
+    const first = getLocalDate(dates[0]);
+    const last = getLocalDate(addDays(dates[dates.length - 1], 1));
+    const today = getLocalDate();
+    const ranges = [[first, last]];
+    if (today < first || today >= last) ranges.push([today, getLocalDate(addDays(dateFromLocalValue(today), 1))]);
+    void Promise.all(ranges.map(([start, end]) => getIcsOccurrences(`${start}T00:00:00`, `${end}T00:00:00`, calendarTimezone, controller.signal)))
+      .then(results => {
+        if (!controller.signal.aborted) {
+          const unique = new Map(results.flat().map(event => [`${event.id}:${event.start_at}`, event]));
+          setIcsEvents([...unique.values()]);
+        }
+      }).catch(error => {
+        if (!controller.signal.aborted) setIcsError(error instanceof Error ? error.message : "ICS-Termine konnten nicht geladen werden.");
+      });
+    return () => controller.abort();
+  }, [calendarEvents, calendarDate, calendarView, calendarTimezone]);
+
   const calendarVisibleEvents = useMemo(
-    () => calendarEvents.filter((event) => event.entry_type !== "task"),
-    [calendarEvents],
+    () => [...calendarEvents.filter(event => event.entry_type !== "task" && !event.is_ics), ...icsEvents],
+    [calendarEvents, icsEvents],
   );
 
   const todaysEvents = useMemo(() => {
@@ -3494,7 +3526,7 @@ export default function App() {
     await runAction(() =>
       excludeCalendarOccurrence(
         occurrence.event.id,
-        `${getLocalDate(occurrence.occurrenceStartAt)}T${formatTimeInput(
+        occurrence.event.ics_occurrence_start_utc ?? `${getLocalDate(occurrence.occurrenceStartAt)}T${formatTimeInput(
           occurrence.occurrenceStartAt,
         )}:00`,
       ),
@@ -3555,7 +3587,7 @@ export default function App() {
 
   async function removeCalendarSeries(event: CalendarEvent) {
     if (
-      event.recurrence_frequency !== "none" &&
+      (event.recurrence_frequency !== "none" || event.ics_is_series) &&
       !window.confirm(
         `Willst du wirklich ALLE Termine der Serie "${event.title}" loeschen?`,
       )
@@ -4274,6 +4306,12 @@ export default function App() {
 
         {activePage === "calendar" && (
           <CalendarPage
+            userId={userId}
+            timezone={calendarTimezone}
+            onTimezoneChange={setCalendarTimezone}
+            onImported={loadData}
+            icsError={icsError}
+            icsSources={calendarEvents.filter(event => event.is_ics)}
             events={calendarVisibleEvents}
             groups={calendarGroups}
             groupForm={calendarGroupForm}
@@ -5859,6 +5897,12 @@ function WeightPage({
 }
 
 function CalendarPage({
+  userId,
+  timezone,
+  onTimezoneChange,
+  onImported,
+  icsError,
+  icsSources,
   trainingPlans,
   trainingSessions,
   trainingScheduleBusy,
@@ -5890,6 +5934,12 @@ function CalendarPage({
   selectedDate,
   view,
 }: {
+  userId: number;
+  timezone: string;
+  onTimezoneChange: (value: string) => void;
+  onImported: () => Promise<void>;
+  icsError: string;
+  icsSources: CalendarEvent[];
   trainingPlans: TrainingPlan[];
   trainingSessions: TrainingSession[];
   trainingScheduleBusy: boolean;
@@ -6067,7 +6117,7 @@ function CalendarPage({
 
   function selectOccurrence(occurrence: CalendarOccurrence) {
     onDateChange(occurrence.date);
-    if (createPanel !== "event" || editingEventId !== null) {
+    if (!occurrence.event.is_ics && (createPanel !== "event" || editingEventId !== null)) {
       onEdit(occurrence.event);
     }
   }
@@ -6554,6 +6604,10 @@ function CalendarPage({
             </div>
           </div>
         </div>
+        <CalendarIcsTransfer groups={groups} sources={icsSources} onDeleteSource={onDeleteSeries} userId={userId} timezone={timezone} onTimezoneChange={onTimezoneChange}
+          start={`${getLocalDate(gridStart)}T00:00:00`} end={`${getLocalDate(addDays(gridDates[gridDates.length - 1], 1))}T00:00:00`}
+          onImported={onImported} />
+        {icsError && <div className="notice error" role="alert">{icsError}</div>}
         {view === "month" ? (
           <>
             <div className="calendar-weekdays" aria-hidden="true">
@@ -6818,15 +6872,16 @@ function CalendarPage({
                     </>}
                   </div>
                   <div className="agenda-actions">
-                    <button
+                    {!occurrence.event.is_ics && <button
                       className="icon-button"
                       onClick={() => onEdit(occurrence.event)}
                       title="Eintrag bearbeiten"
                       type="button"
                     >
                       <Pencil size={16} />
-                    </button>
-                    {occurrence.event.recurrence_frequency !== "none" && (
+                    </button>}
+                    {occurrence.event.is_ics && <span className="muted-line">ICS{occurrence.event.ics_is_series ? "-Serie" : "-Termin"}</span>}
+                    {(occurrence.event.recurrence_frequency !== "none" || occurrence.event.ics_is_series) && (
                       <button
                         className="icon-button danger"
                         onClick={() => onDeleteOccurrence(occurrence)}
@@ -6840,7 +6895,7 @@ function CalendarPage({
                       className="icon-button danger"
                       onClick={() => onDeleteSeries(occurrence.event)}
                       title={
-                        occurrence.event.recurrence_frequency === "none"
+                        occurrence.event.recurrence_frequency === "none" && !occurrence.event.ics_is_series
                           ? "Eintrag loeschen"
                           : "Ganze Serie loeschen"
                       }

@@ -1,12 +1,13 @@
 {
   "name": "heim-erp-frontend",
   "private": true,
-  "version": "3.1.28",
+  "version": "3.1.29",
   "type": "module",
   "scripts": {
     "dev": "vite --host 127.0.0.1",
     "test": "node --test --test-isolation=none tests/*.test.mjs",
     "test:calendar-ui": "node tests/calendar-create.browser.mjs",
+    "test:calendar-ics-ui": "node tests/calendar-ics.browser.mjs",
     "test:training-ui": "node tests/calendar-training.browser.mjs",
     "test:food-ui": "node tests/food-editing.browser.mjs",
     "test:health-ui": "node tests/health-test.browser.mjs",

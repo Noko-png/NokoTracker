@@ -5384,6 +5384,37 @@ th {
   gap: 10px;
 }
 
+.calendar-ics-transfer {
+  padding: 12px;
+  margin: 12px 0;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+}
+
+.calendar-ics-transfer summary {
+  cursor: pointer;
+  font-weight: 600;
+}
+
+.calendar-ics-transfer form {
+  margin-top: 12px;
+}
+
+.calendar-ics-transfer input[type="file"] {
+  max-width: 100%;
+  min-width: 0;
+}
+
+.calendar-ics-transfer p {
+  margin: 0;
+  color: var(--muted);
+}
+
+.calendar-ics-sources li {
+  margin-top: 8px;
+  overflow-wrap: anywhere;
+}
+
 .calendar-toolbar {
   align-items: center;
   justify-content: space-between;

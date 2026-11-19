@@ -1,5 +1,11 @@
 # Changelog
 
+## 3.1.29
+
+- Im Kalender lassen sich .ics-Dateien nach iCalendar (RFC 5545) importieren. Termine, Ganztagstermine, Zeitzonen, RRULE/RDATE/EXDATE und geaenderte oder abgesagte Einzelvorkommen bleiben erhalten. Wiederholter Import aktualisiert dieselbe UID; unveraenderte Termine werden uebersprungen.
+- Die importierten Originalregeln bleiben gespeichert und in Datenbanksicherungen enthalten. Einzelvorkommen und ganze Serien koennen geloescht werden; weitere Aenderungen erfolgen per erneutem ICS-Import.
+- Der angezeigte Kalenderzeitraum kann als standardkonforme .ics-Datei mit Einzelterminen exportiert werden. Erinnerungen werden nicht aktiviert und Anhaenge nicht abgerufen. Dateigroesse, Anzahl und Berechnungszeit sind begrenzt.
+
 ## 3.1.28
 
 - **Einkaufsliste > Aus Lagerbestand** fuellt nur bis zum Mindestbestand aus den Stammdaten auf. Bereits offene Einkaufspositionen werden mit Einheitenumrechnung angerechnet und bei Bedarf um die verbleibende Fehlmenge erhoeht.

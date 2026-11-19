@@ -336,6 +336,25 @@ class CalendarEventRead(CalendarEventBase, ORMBase):
     training_plan: Optional[CalendarTrainingPlanSummary] = None
     training_plan_ids: list[int] = Field(default_factory=list)
     training_plans: list[CalendarTrainingPlanSummary] = Field(default_factory=list)
+    ics_uid: Optional[str] = None
+    is_ics: bool = False
+    ics_is_series: bool = False
+    ics_occurrence_start_utc: Optional[datetime] = None
+
+
+class CalendarIcsImportRequest(BaseModel):
+    filename: str = Field(..., min_length=1, max_length=255)
+    content: str = Field(..., min_length=1, max_length=2_000_000)
+    timezone: str = Field("Europe/Berlin", min_length=1, max_length=64)
+    user_id: Optional[int] = None
+    group_id: Optional[int] = None
+
+
+class CalendarIcsImportResult(BaseModel):
+    imported_count: int
+    updated_count: int = 0
+    skipped_count: int
+    warnings: list[str] = Field(default_factory=list)
 
 
 class FoodConversionBase(BaseModel):
