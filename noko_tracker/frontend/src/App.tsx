@@ -276,7 +276,12 @@ type InventoryColumnKey =
 type InventoryColumnDefinition = {
   key: InventoryColumnKey;
   label: string;
-  render: (item: InventoryItem) => React.ReactNode;
+  render: (item: InventoryItem, context: InventoryDisplayContext) => React.ReactNode;
+};
+
+type InventoryDisplayContext = {
+  lowStockFoodIds: ReadonlySet<number>;
+  productUnits: ProductUnit[];
 };
 
 type InventoryForm = {
@@ -593,7 +598,7 @@ const macroMeta: Array<{
   { key: "carbs", label: "Kohlenhydrate", unit: "g", tone: "red" },
 ];
 
-const appVersion = "3.1.26";
+const appVersion = "3.1.27";
 const updateSourceLabel = "main / github.com/Noko-png/NokoTracker";
 
 const emptyNutrition: NutritionDay = {
@@ -1239,7 +1244,7 @@ function daysUntil(dateValue?: string | null) {
   return Math.ceil((target.getTime() - today.getTime()) / 86_400_000);
 }
 
-function getInventoryStatus(item: InventoryItem): {
+function getInventoryStatus(item: InventoryItem, lowStockFoodIds: ReadonlySet<number>): {
   status: InventoryStatus;
   label: string;
 } {
@@ -1250,7 +1255,7 @@ function getInventoryStatus(item: InventoryItem): {
   if (expiryDistance <= 7) {
     return { status: "expiring", label: "Laeuft bald ab" };
   }
-  if (item.quantity <= item.minimum_quantity) {
+  if (item.food_id != null ? lowStockFoodIds.has(item.food_id) : item.minimum_quantity > 0 && item.quantity < item.minimum_quantity) {
     return { status: "low", label: "Niedrig" };
   }
   return { status: "ok", label: "OK" };
@@ -1405,8 +1410,9 @@ const inventoryColumnDefinitions: InventoryColumnDefinition[] = [
   {
     key: "minimum_quantity",
     label: "Minimum",
-    render: (item) =>
-      `${formatFractionalQuantity(item.minimum_quantity)} ${item.unit}`,
+    render: (item, context) => item.food
+      ? `${formatFractionalQuantity(item.food.minimum_quantity)} ${productUnitNameForFood(item.food, context.productUnits)}`
+      : `${formatFractionalQuantity(item.minimum_quantity)} ${item.unit}`,
   },
   {
     key: "purchase_date",
@@ -1459,8 +1465,8 @@ const inventoryColumnDefinitions: InventoryColumnDefinition[] = [
   {
     key: "status",
     label: "Status",
-    render: (item) => {
-      const status = getInventoryStatus(item);
+    render: (item, context) => {
+      const status = getInventoryStatus(item, context.lowStockFoodIds);
       return <StatusBadge status={status.status} label={status.label} />;
     },
   },
@@ -2224,9 +2230,14 @@ export default function App() {
     [inventory],
   );
 
+  const lowStockFoodIds = useMemo(
+    () => new Set(warnings.low_stock.map((stock) => stock.food_id)),
+    [warnings.low_stock],
+  );
+
   const filteredInventory = useMemo(() => {
     return positiveInventory.filter((item) => {
-      const status = getInventoryStatus(item).status;
+      const status = getInventoryStatus(item, lowStockFoodIds).status;
       const productGroupName = item.product_group?.name ?? item.category ?? "";
       const matchesSearch = `${item.name} ${item.brand ?? ""} ${productGroupName} ${
         item.storage_location ?? ""
@@ -2241,7 +2252,7 @@ export default function App() {
         inventoryStatus === "all" || status === inventoryStatus;
       return matchesSearch && matchesCategory && matchesStatus;
     });
-  }, [inventoryCategory, inventorySearch, inventoryStatus, positiveInventory]);
+  }, [inventoryCategory, inventorySearch, inventoryStatus, positiveInventory, lowStockFoodIds]);
 
   const inventoryCategories = useMemo(() => {
     return Array.from(
@@ -4320,6 +4331,7 @@ export default function App() {
             inventoryError={apiError}
             inventorySearch={inventorySearch}
             inventoryStatus={inventoryStatus}
+            inventoryWarnings={warnings}
             masterProductGroupForm={masterProductGroupForm}
             masterProductUnitForm={masterProductUnitForm}
             onCancelEditingFood={cancelEditingFood}
@@ -7374,6 +7386,7 @@ function InventoryPage({
   inventoryError,
   inventorySearch,
   inventoryStatus,
+  inventoryWarnings,
   masterProductGroupForm,
   masterProductUnitForm,
   onCancelEditingFood,
@@ -7438,6 +7451,7 @@ function InventoryPage({
   inventoryError?: string | null;
   inventorySearch: string;
   inventoryStatus: string;
+  inventoryWarnings: InventoryWarnings;
   masterProductGroupForm: ProductGroupForm;
   masterProductUnitForm: ProductUnitForm;
   onCancelEditingFood: () => void;
@@ -7558,9 +7572,11 @@ function InventoryPage({
     const distance = daysUntil(item.expiry_date);
     return distance >= 0 && distance <= 5;
   }).length;
-  const lowStockCount = displayedInventory.filter(
-    (item) => item.quantity <= item.minimum_quantity,
-  ).length;
+  const lowStockCount = inventoryWarnings.low_stock.length;
+  const inventoryDisplayContext: InventoryDisplayContext = {
+    lowStockFoodIds: new Set(inventoryWarnings.low_stock.map((stock) => stock.food_id)),
+    productUnits,
+  };
   const foodOptions = foods
     .slice()
     .sort((first, second) => first.name.localeCompare(second.name, "de"));
@@ -7891,7 +7907,7 @@ function InventoryPage({
                 Produkte sind fällig innerhalb der nächsten 5 Tage
               </span>
             </div>
-            <div className="inventory-alert low">
+            <div className="inventory-alert low" title="Gesamtbestand aller aktiven Lebensmittel mit Mindestbestand aus den Stammdaten">
               <strong>{lowStockCount}</strong>
               <span className="inventory-alert-label">
                 {lowStockCount === 1 ? "Produkt ist" : "Produkte sind"} unter
@@ -7938,6 +7954,21 @@ function InventoryPage({
             )}
           </div>
         </div>
+
+        {lowStockCount > 0 && (
+          <details className="inventory-minimum-stock">
+            <summary>Mindestbestände aus Stammdaten ({lowStockCount})</summary>
+            <ul>
+              {inventoryWarnings.low_stock.map((stock) => (
+                <li key={stock.food_id}>
+                  <strong>{stock.name}{stock.brand ? ` (${stock.brand})` : ""}</strong>
+                  <span>{formatFractionalQuantity(stock.quantity)} / {formatFractionalQuantity(stock.minimum_quantity)} {stock.unit}</span>
+                  <span>Fehlen: {formatFractionalQuantity(stock.missing_quantity)} {stock.unit}</span>
+                </li>
+              ))}
+            </ul>
+          </details>
+        )}
 
         <div className="inventory-filter-row">
           <label className="inventory-search-field">
@@ -8081,7 +8112,7 @@ function InventoryPage({
                       {item.storage_location || "-"}
                     </td>
                     {visibleColumns.map((column) => (
-                      <td key={column.key}>{column.render(item)}</td>
+                      <td key={column.key}>{column.render(item, inventoryDisplayContext)}</td>
                     ))}
                   </tr>
                 ))
@@ -8552,7 +8583,12 @@ function InventoryPage({
                 </button>
               )}
             </div>
-            {!inventoryEditorIsCreate && (
+            {selectedInventoryFood ? (
+              <div className="shopping-inventory-summary">
+                <span>Mindestbestand</span>
+                <strong>{formatFractionalQuantity(selectedInventoryFood.minimum_quantity)} {selectedInventoryFoodUnit}</strong>
+              </div>
+            ) : !inventoryEditorIsCreate && (
               <FractionNumberInput
                 label="Minimumstand (optional)"
                 onChange={(minimum_quantity) =>

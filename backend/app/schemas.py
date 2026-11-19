@@ -733,8 +733,20 @@ class InventoryQuantityChange(BaseModel):
         return parse_fractional_number(value)
 
 
+class FoodStockLevelRead(BaseModel):
+    food_id: int
+    name: str
+    emoji: str
+    brand: Optional[str] = None
+    quantity: float
+    unit: str
+    minimum_quantity: float
+    missing_quantity: float
+    inventory_item_id: Optional[int] = None
+
+
 class InventoryWarningsRead(BaseModel):
-    low_stock: list[InventoryItemRead]
+    low_stock: list[FoodStockLevelRead]
     expiring_soon: list[InventoryItemRead]
     expired: list[InventoryItemRead]
 

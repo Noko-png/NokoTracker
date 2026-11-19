@@ -685,8 +685,20 @@ export type MealInventoryDeductionResult = {
   consumed: MealInventoryDeductionItem[];
 };
 
+export type FoodStockLevel = {
+  food_id: number;
+  name: string;
+  emoji: string;
+  brand?: string | null;
+  quantity: number;
+  unit: string;
+  minimum_quantity: number;
+  missing_quantity: number;
+  inventory_item_id?: number | null;
+};
+
 export type InventoryWarnings = {
-  low_stock: InventoryItem[];
+  low_stock: FoodStockLevel[];
   expiring_soon: InventoryItem[];
   expired: InventoryItem[];
 };

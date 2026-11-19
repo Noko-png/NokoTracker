@@ -9,6 +9,8 @@ from .. import crud, models, schemas
 from ..database import get_db
 from ..services.food_inventory import apply_food_inventory_values
 from ..services.inventory_stock import add_or_merge_inventory
+from ..services.food_stock import foods_below_minimum
+from ..services import nutrition_service as nutrition
 from ..services.unit_defaults import apply_product_unit_defaults
 
 
@@ -141,10 +143,13 @@ def open_duplicate_for_inventory_item(
 
 
 def quantity_to_buy(inventory_item: models.InventoryItem) -> float:
-    missing = normalized_quantity(
-        normalized_quantity(inventory_item.minimum_quantity)
-        - normalized_quantity(inventory_item.quantity)
-    )
+    food = inventory_item.food
+    if food is not None:
+        required = nutrition.food_amount_in_grams(food, food.minimum_quantity, shopping_unit_for_food(food))
+        available = sum(nutrition.food_amount_in_grams(item, item.quantity, item.unit) for item in food.inventory_items)
+        missing = normalized_quantity(nutrition.food_quantity_from_grams(inventory_item, max(0, required - available), inventory_item.unit))
+    else:
+        missing = normalized_quantity(inventory_item.minimum_quantity - inventory_item.quantity)
     return missing if missing > 0 else 1.0
 
 
@@ -309,23 +314,26 @@ def create_shopping_item(
     status_code=status.HTTP_201_CREATED,
 )
 def generate_shopping_items_from_low_stock(db: Session = Depends(get_db)):
-    low_stock_items = (
-        db.query(models.InventoryItem)
-        .filter(models.InventoryItem.quantity <= models.InventoryItem.minimum_quantity)
-        .all()
-    )
-
     created_items = []
-    for inventory_item in low_stock_items:
-        if open_duplicate_for_inventory_item(db, inventory_item) is not None:
+    for stock in foods_below_minimum(db):
+        duplicate = db.query(models.ShoppingListItem).filter(
+            models.ShoppingListItem.is_checked.is_(False),
+            or_(
+                models.ShoppingListItem.food_id == stock.food_id,
+                (models.ShoppingListItem.food_id.is_(None)
+                 & (func.lower(models.ShoppingListItem.name) == stock.name.lower())
+                 & (func.lower(models.ShoppingListItem.unit) == normalized_unit(stock.unit))),
+            ),
+        ).first()
+        if duplicate is not None:
             continue
 
         shopping_item = models.ShoppingListItem(
-            name=inventory_item.name,
-            food_id=inventory_item.food_id,
-            inventory_item_id=inventory_item.id,
-            quantity=quantity_to_buy(inventory_item),
-            unit=inventory_item.unit,
+            name=stock.name,
+            food_id=stock.food_id,
+            inventory_item_id=stock.inventory_item_id,
+            quantity=stock.missing_quantity,
+            unit=stock.unit,
             is_checked=False,
             priority=1,
             notes="Generated from low stock",

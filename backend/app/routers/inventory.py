@@ -10,6 +10,7 @@ from ..database import get_db
 from ..services import barcode_service
 from ..services.food_inventory import apply_food_inventory_values
 from ..services.inventory_stock import add_or_merge_inventory
+from ..services.food_stock import foods_below_minimum
 from ..services.unit_defaults import apply_product_unit_defaults
 
 
@@ -123,12 +124,6 @@ def normalized_quantity(value: float) -> float:
     return schemas.normalize_fractional_number(value)
 
 
-def low_stock_query(db: Session):
-    return db.query(models.InventoryItem).filter(
-        models.InventoryItem.quantity <= models.InventoryItem.minimum_quantity
-    )
-
-
 def expiring_soon_query(db: Session, days: int):
     today = date.today()
     until = today + timedelta(days=days)
@@ -161,9 +156,9 @@ def list_inventory_items(
     return crud.get_multi(db, models.InventoryItem, skip=skip, limit=limit)
 
 
-@router.get("/low-stock", response_model=list[schemas.InventoryItemRead])
+@router.get("/low-stock", response_model=list[schemas.FoodStockLevelRead])
 def list_low_stock_items(db: Session = Depends(get_db)):
-    return low_stock_query(db).all()
+    return foods_below_minimum(db)
 
 
 @router.get("/expiring-soon", response_model=list[schemas.InventoryItemRead])
@@ -185,7 +180,7 @@ def read_inventory_warnings(
     db: Session = Depends(get_db),
 ):
     return {
-        "low_stock": low_stock_query(db).all(),
+        "low_stock": foods_below_minimum(db),
         "expiring_soon": expiring_soon_query(db, days),
         "expired": expired_query(db),
     }

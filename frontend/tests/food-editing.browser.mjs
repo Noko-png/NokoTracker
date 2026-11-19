@@ -356,6 +356,40 @@ try {
       }
     }
     console.log(`PASS ${width}px unit merging: 1000 g + 1 kg becomes 2000 g, reverse order becomes 2 kg; first stock ID and metadata retained`);
+
+    const minimumFood = await request('/foods', 'POST', {
+      name: 'Mindestbestand ohne Einlagerung', product_unit_id: kilogram.id,
+      serving_size: 1000, serving_unit: 'g', minimum_quantity: 2,
+    });
+    await clickButton('.topbar-actions', 'Aktualisieren');
+    await waitFor("!document.querySelector('.loading-bar')");
+    await waitFor("document.querySelector('.inventory-alert.low strong')?.textContent === '1'");
+    await click('.inventory-minimum-stock summary');
+    assert.match(await evaluate("document.querySelector('.inventory-minimum-stock').textContent"), /Mindestbestand ohne Einlagerung/);
+    assert.match(await evaluate("document.querySelector('.inventory-minimum-stock').textContent"), /Fehlen: 2 kg/);
+    assert.equal((await request('/inventory')).some(row => row.food_id === minimumFood.id), false);
+    const planned = await request('/shopping-list/generate-from-low-stock', 'POST');
+    assert.equal(planned.length, 1);
+    assert.equal(planned[0].food_id, minimumFood.id);
+    assert.equal(planned[0].quantity, 2);
+    assert.equal(planned[0].unit, 'kg');
+    await request('/inventory', 'POST', {
+      name: minimumFood.name, food_id: minimumFood.id, quantity: 500, unit: 'g', minimum_quantity: 999,
+      purchase_date: '2026-11-18',
+    });
+    await request('/inventory', 'POST', {
+      name: minimumFood.name, food_id: minimumFood.id, quantity: .75, unit: 'kg',
+      purchase_date: '2026-11-19',
+    });
+    await clickButton('.topbar-actions', 'Aktualisieren');
+    await waitFor("!document.querySelector('.loading-bar')");
+    assert.match(await evaluate("document.querySelector('.inventory-minimum-stock').textContent"), /Fehlen: 3\/4 kg/);
+    await request(`/foods/${minimumFood.id}`, 'PATCH', { minimum_quantity: 1 });
+    await clickButton('.topbar-actions', 'Aktualisieren');
+    await waitFor("!document.querySelector('.loading-bar')");
+    await waitFor("document.querySelector('.inventory-alert.low strong')?.textContent === '0'");
+    assert.equal(await evaluate("Boolean(document.querySelector('.inventory-minimum-stock'))"), false);
+    console.log(`PASS ${width}px minimum stock: master data works without stock, lots convert into one total, changed master minimum applies immediately`);
   }
 } finally {
   await send("Page.navigate", { url: "about:blank" });

@@ -1,5 +1,11 @@
 # Changelog
 
+## 3.1.27
+
+- Mindestbestaende werden aus den Lebensmittel-Stammdaten geprueft, auch ohne vorherige Einlagerung. Alle Chargen zaehlen mit Einheitenumrechnung zum Gesamtbestand; Aenderungen der Stammdaten gelten sofort.
+- Die Bestandsuebersicht zeigt Gesamtbestand, Mindestbestand und Fehlmenge pro Lebensmittel. Die Einkaufsliste verwendet die Fehlmenge in der Stammdaten-Einheit. Archivierte Lebensmittel und Mindestbestand 0 erzeugen keine Warnung; ein genau erreichter Mindestbestand ebenfalls nicht.
+- `/inventory/low-stock` und `low_stock` in `/inventory/warnings` liefern Zusammenfassungen je Lebensmittel mit `food_id` und optionaler `inventory_item_id`.
+
 ## 3.1.26
 
 - Einlagerungen desselben Lebensmittels werden bei passenden Chargendaten mit der aeltesten Bestandsposition zusammengefuehrt. Die neue Menge wird in deren Einheit umgerechnet, zum Beispiel 1000 g + 1 kg = 2000 g.

@@ -84,6 +84,8 @@ GET /inventory/warnings
 
 `decrease` lehnt Abzuege ab, die die Menge unter `0` setzen wuerden.
 
+`low-stock` und `low_stock` in `warnings` liefern eine Zusammenfassung je aktivem Lebensmittel mit positivem Mindestbestand aus den Stammdaten. Alle Bestandspositionen werden in die Lebensmittel-Mengeneinheit umgerechnet und addiert; ohne Einlagerung gilt Bestand 0. Die Antwort enthaelt `food_id`, `name`, `emoji`, `brand`, `quantity`, `minimum_quantity`, `missing_quantity`, `unit` und eine optionale `inventory_item_id`. Genau erreichter Mindestbestand erzeugt keine Warnung.
+
 ## Einkaufsliste
 
 ```text
@@ -96,4 +98,4 @@ POST /shopping-list/{item_id}/uncheck
 POST /shopping-list/generate-from-low-stock
 ```
 
-`generate-from-low-stock` erzeugt Eintraege aus InventoryItems mit `quantity <= minimum_quantity` und ueberspringt Artikel, die bereits offen auf der Einkaufsliste stehen.
+`generate-from-low-stock` erzeugt je Lebensmittel unter seinem Stammdaten-Mindestbestand einen Eintrag ueber die Fehlmenge in dessen Mengeneinheit. Das funktioniert bereits ohne Bestandsposition. Bereits offene Einkaufspositionen desselben Lebensmittels werden unabhaengig von ihrer Einheit uebersprungen.

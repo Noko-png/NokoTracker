@@ -2776,6 +2776,26 @@ th {
   margin-top: 12px;
 }
 
+.inventory-minimum-stock {
+  padding: 12px 16px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+}
+
+.inventory-minimum-stock summary {
+  cursor: pointer;
+}
+
+.inventory-minimum-stock ul {
+  display: grid;
+  gap: 10px;
+  padding-left: 20px;
+}
+
+.inventory-minimum-stock li span {
+  display: block;
+}
+
 .inventory-warning-strip {
   position: relative;
   display: grid;

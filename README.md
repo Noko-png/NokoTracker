@@ -89,6 +89,10 @@ Einlagerungen mit passenden Chargendaten werden zur aeltesten Bestandsposition d
 
 Das gilt auch fuer Einkaufsliste, Kassenzettel, zubereitete Gerichte und Rueckbuchungen im Kalorientracker. Entnahmen fuer Gerichte und Kalorientracker beruecksichtigen alle Bestandspositionen des Lebensmittels mit Einheitenumrechnung. Die Bestandsaufnahme setzt die gezaehlte Menge der ausgewaehlten Position absolut.
 
+Der **Mindestbestand** wird unter **Stammdaten > Lebensmittel** in der Mengeneinheit des Lebensmittels festgelegt. Die Pruefung addiert alle Chargen mit Einheitenumrechnung und gilt bereits ohne erste Einlagerung (Bestand 0). Die Bestandsuebersicht zeigt die Fehlmengen; die Einkaufsliste kann sie direkt uebernehmen. Ein Mindestbestand von 0 deaktiviert die Warnung. Archivierte Lebensmittel werden ausgenommen; bei genau erreichtem Mindestbestand gibt es keine Warnung.
+
+Die API liefert unter `/inventory/low-stock` und `low_stock` in `/inventory/warnings` eine Zusammenfassung pro Lebensmittel mit `food_id`, `quantity`, `minimum_quantity`, `missing_quantity`, `unit` und optionaler `inventory_item_id`. Ohne Bestandsposition ist `inventory_item_id` null.
+
 ## Naehrwerte in den Lebensmittel-Stammdaten
 
 Ballaststoffe und Zucker werden in Gramm je 100 g gespeichert, Koffein optional in Milligramm je 100 g. Ein leeres Koffeinfeld bedeutet "nicht angegeben"; eine eingetragene 0 bleibt als bekannter Nullwert erhalten. Beim Anlegen per EAN werden verfuegbare Angaben ebenfalls uebernommen.
