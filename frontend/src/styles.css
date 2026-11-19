@@ -885,6 +885,17 @@ button {
   color: var(--text);
 }
 
+.dashboard-check-row {
+  grid-template-columns: 40px minmax(0, 1fr);
+}
+
+.dashboard-item-link {
+  min-width: 0;
+  padding: 6px;
+  border-radius: 6px;
+  background: transparent;
+}
+
 .dashboard-empty-link {
   width: 100%;
   border-style: dashed;
@@ -2002,7 +2013,8 @@ textarea {
 }
 
 .button:disabled,
-.icon-button:disabled {
+.icon-button:disabled,
+.check-button:disabled {
   cursor: not-allowed;
   opacity: 0.48;
 }

@@ -1,5 +1,10 @@
 # Changelog
 
+## 3.1.30
+
+- ToDos und Einkaufsartikel koennen direkt im Dashboard abgehakt werden. Die Aenderungen werden gespeichert und in den jeweiligen Listen uebernommen; der Eintragstext oeffnet weiterhin die zugehoerige Liste.
+- Waehrend des Speicherns ist der Abhak-Button gesperrt. Bei fehlgeschlagenen Anfragen bleibt der Eintrag offen und kann erneut gespeichert werden.
+
 ## 3.1.29
 
 - Im Kalender lassen sich .ics-Dateien nach iCalendar (RFC 5545) importieren. Termine, Ganztagstermine, Zeitzonen, RRULE/RDATE/EXDATE und geaenderte oder abgesagte Einzelvorkommen bleiben erhalten. Wiederholter Import aktualisiert dieselbe UID; unveraenderte Termine werden uebersprungen.

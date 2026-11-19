@@ -600,7 +600,7 @@ const macroMeta: Array<{
   { key: "carbs", label: "Kohlenhydrate", unit: "g", tone: "red" },
 ];
 
-const appVersion = "3.1.29";
+const appVersion = "3.1.30";
 const updateSourceLabel = "main / github.com/Noko-png/NokoTracker";
 
 const emptyNutrition: NutritionDay = {
@@ -3664,6 +3664,10 @@ export default function App() {
     );
   }
 
+  function toggleShoppingItem(item: ShoppingListItem) {
+    return runAction(() => item.is_checked ? uncheckShoppingListItem(item.id) : checkShoppingListItem(item.id));
+  }
+
   async function removeTodo(todoId: number) {
     await runAction(async () => {
       await deleteCalendarEvent(todoId);
@@ -4284,6 +4288,8 @@ export default function App() {
           <DashboardPage
             nutrition={nutrition}
             onNavigate={navigateToPage}
+            onToggleTodo={toggleTodo}
+            onCheckShopping={toggleShoppingItem}
             openShoppingList={openShoppingList}
             openTodos={openTodos}
             todaysEvents={todaysEvents}
@@ -4588,13 +4594,7 @@ export default function App() {
             form={shoppingForm}
             items={shoppingList}
             onImportToInventory={importShoppingItemsToInventory}
-            onCheck={(item) =>
-              runAction(() =>
-                item.is_checked
-                  ? uncheckShoppingListItem(item.id)
-                  : checkShoppingListItem(item.id),
-              )
-            }
+            onCheck={toggleShoppingItem}
             onDelete={(id) => runAction(() => deleteShoppingListItem(id))}
             onIncrease={increaseShoppingItemQuantity}
             onFormChange={setShoppingForm}
@@ -4648,16 +4648,35 @@ export default function App() {
 function DashboardPage({
   nutrition,
   onNavigate,
+  onToggleTodo,
+  onCheckShopping,
   openShoppingList,
   openTodos,
   todaysEvents,
 }: {
   nutrition: NutritionDay;
   onNavigate: (page: Page) => void;
+  onToggleTodo: (todo: CalendarEvent) => Promise<unknown>;
+  onCheckShopping: (item: ShoppingListItem) => Promise<unknown>;
   openShoppingList: ShoppingListItem[];
   openTodos: CalendarEvent[];
   todaysEvents: CalendarOccurrence[];
 }) {
+  const pendingRef = useRef(new Set<string>());
+  const [pending, setPending] = useState(new Set<string>());
+
+  async function complete(key: string, action: () => Promise<unknown>) {
+    if (pendingRef.current.has(key)) return;
+    pendingRef.current.add(key);
+    setPending(new Set(pendingRef.current));
+    try {
+      await action();
+    } finally {
+      pendingRef.current.delete(key);
+      setPending(new Set(pendingRef.current));
+    }
+  }
+
   return (
     <div className="page-grid dashboard-clean-page">
       <section className="section dashboard-nutrition-panel">
@@ -4747,17 +4766,17 @@ function DashboardPage({
               </button>
             ) : (
               openTodos.slice(0, 6).map((todo) => (
-                <button
-                  className="list-row dashboard-list-link"
-                  key={todo.id}
-                  onClick={() => onNavigate("todos")}
-                  type="button"
-                >
-                  <CheckCircle2 size={18} />
-                  <div>
+                <div className="list-row dashboard-check-row" key={todo.id}>
+                  <button className="check-button" type="button" title="ToDo erledigen"
+                    aria-label={`ToDo erledigen: ${todo.description ?? todo.title}`}
+                    disabled={pending.has(`todo-${todo.id}`)}
+                    onClick={() => void complete(`todo-${todo.id}`, () => onToggleTodo(todo))}>
+                    <Circle size={18} />
+                  </button>
+                  <button className="dashboard-list-link dashboard-item-link" type="button" onClick={() => onNavigate("todos")}>
                     <strong>{todo.description ?? todo.title}</strong>
-                  </div>
-                </button>
+                  </button>
+                </div>
               ))
             )}
           </div>
@@ -4775,20 +4794,20 @@ function DashboardPage({
               </button>
             ) : (
               openShoppingList.slice(0, 6).map((item) => (
-                <button
-                  className="list-row dashboard-list-link"
-                  key={item.id}
-                  onClick={() => onNavigate("shopping")}
-                  type="button"
-                >
-                  <ShoppingCart size={18} />
-                  <div>
+                <div className="list-row dashboard-check-row" key={item.id}>
+                  <button className="check-button" type="button" title="Einkaufsartikel abhaken"
+                    aria-label={`Einkaufsartikel abhaken: ${item.name}`}
+                    disabled={pending.has(`shopping-${item.id}`)}
+                    onClick={() => void complete(`shopping-${item.id}`, () => onCheckShopping(item))}>
+                    <Circle size={18} />
+                  </button>
+                  <button className="dashboard-list-link dashboard-item-link" type="button" onClick={() => onNavigate("shopping")}>
                     <strong>{item.name}</strong>
                     <span>
                       {formatFractionalQuantity(item.quantity)} {item.unit}
                     </span>
-                  </div>
-                </button>
+                  </button>
+                </div>
               ))
             )}
           </div>
