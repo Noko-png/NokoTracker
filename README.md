@@ -85,6 +85,10 @@ Unter **Stammdaten > Mengeneinheiten** eine Einheit anlegen oder bearbeiten und 
 
 Beim **Lebensmittel einlagern** werden die Naehrwerte und Umrechnungen des ausgewaehlten Lebensmittels angezeigt. Die Einheitenauswahl verwendet dessen Mengeneinheit, Umrechnungseinheit und zusaetzliche Umrechnungen. Weitere Einheiten oder geaenderte Naehrwerte unter **Stammdaten > Lebensmittel** hinterlegen.
 
+Einlagerungen mit passenden Chargendaten werden zur aeltesten Bestandsposition desselben Lebensmittels addiert. Die Menge wird in deren Einheit umgerechnet, zum Beispiel **1000 g + 1 kg = 2000 g** oder **1 kg + 1000 g = 2 kg**. Einlagerungsdatum, Haltbarkeit, Lagerort und Preis bestimmen die Zuordnung zur Charge.
+
+Das gilt auch fuer Einkaufsliste, Kassenzettel, zubereitete Gerichte und Rueckbuchungen im Kalorientracker. Entnahmen fuer Gerichte und Kalorientracker beruecksichtigen alle Bestandspositionen des Lebensmittels mit Einheitenumrechnung. Die Bestandsaufnahme setzt die gezaehlte Menge der ausgewaehlten Position absolut.
+
 ## Naehrwerte in den Lebensmittel-Stammdaten
 
 Ballaststoffe und Zucker werden in Gramm je 100 g gespeichert, Koffein optional in Milligramm je 100 g. Ein leeres Koffeinfeld bedeutet "nicht angegeben"; eine eingetragene 0 bleibt als bekannter Nullwert erhalten. Beim Anlegen per EAN werden verfuegbare Angaben ebenfalls uebernommen.

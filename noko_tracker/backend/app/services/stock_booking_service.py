@@ -1,10 +1,13 @@
 """Stock mutations without commits: the caller owns the complete transaction."""
 
+import math
+
 from fastapi import HTTPException
 from sqlalchemy.orm import Session
 
 from .. import models, schemas
 from . import nutrition_service as nutrition
+from .inventory_stock import add_or_merge_inventory
 
 
 EPSILON = 1e-9
@@ -16,11 +19,13 @@ def aggregate_requirements(requirements: list[dict]) -> list[dict]:
     for row in requirements:
         food = row["food"]
         grams = nutrition.food_amount_in_grams(food, row["quantity"], row["unit"])
-        if grams <= 0:
+        if not math.isfinite(grams) or grams <= 0:
             raise HTTPException(422, "Die zu buchende Menge muss groesser als null sein")
         if food.id not in totals:
             totals[food.id] = {"food": food, "unit": row["unit"], "grams": 0.0}
         totals[food.id]["grams"] += grams
+        if not math.isfinite(totals[food.id]["grams"]):
+            raise HTTPException(422, "Die zu buchende Gesamtmenge ist zu gross.")
     return [
         {
             "food": row["food"], "unit": row["unit"],
@@ -86,8 +91,14 @@ def restore_meal_inventory(db: Session, meal_log: models.MealLog) -> None:
         item = db.get(models.InventoryItem, entry.inventory_item_id)
         snapshot = entry.snapshot
         if item is None or any(getattr(item, field) != getattr(snapshot, field) for field in lot_fields):
-            item = models.InventoryItem(**snapshot.model_dump(exclude={"quantity"}), quantity=0.0)
-            db.add(item)
-        item.quantity = schemas.normalize_fractional_number(item.quantity + entry.quantity)
+            incoming = models.InventoryItem(
+                **snapshot.model_dump(exclude={"quantity"}), quantity=entry.quantity,
+            )
+            add_or_merge_inventory(db, incoming)
+        else:
+            quantity = item.quantity + entry.quantity
+            if not math.isfinite(quantity):
+                raise HTTPException(422, "Die rueckzubuchende Bestandsmenge ist zu gross.")
+            item.quantity = schemas.normalize_fractional_number(quantity)
     # New/recreated lots must be visible to the subsequent deduction in this transaction.
     db.flush()

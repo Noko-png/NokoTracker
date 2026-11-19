@@ -18,6 +18,7 @@ from sqlalchemy.orm import Session
 
 from .. import crud, models, schemas
 from .food_inventory import apply_food_inventory_values
+from .inventory_stock import add_or_merge_inventory
 from .unit_defaults import apply_product_unit_defaults
 
 
@@ -353,6 +354,7 @@ def book_receipt_import(
     inventory_items: list[models.InventoryItem] = []
     warnings: list[str] = []
     skipped_count = 0
+    booked_count = 0
     # The preview identifies the source receipt independently of edited rows.
     # Older API clients still receive protection against identical requests.
     receipt_id = request.receipt_id or hashlib.sha256(
@@ -397,8 +399,10 @@ def book_receipt_import(
                 product_group_id=food.product_group_id,
                 **inventory_values,
             )
-            db.add(inventory_item)
-            inventory_items.append(inventory_item)
+            inventory_item, _created = add_or_merge_inventory(db, inventory_item)
+            if inventory_item not in inventory_items:
+                inventory_items.append(inventory_item)
+            booked_count += 1
 
         if not inventory_items:
             warnings.append("Es wurden keine Kassenzettelzeilen zum Buchen ausgewaehlt")
@@ -413,7 +417,7 @@ def book_receipt_import(
         raise
 
     return schemas.ReceiptImportBookResult(
-        booked_count=len(inventory_items),
+        booked_count=booked_count,
         skipped_count=skipped_count,
         inventory_items=inventory_items,
         warnings=warnings,

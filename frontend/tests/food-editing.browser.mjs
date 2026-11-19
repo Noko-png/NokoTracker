@@ -235,17 +235,21 @@ try {
     await assertStockFoodRestrictions();
     await fill(stockForm, 'Einheit', 'Packung');
     await fill(stockForm, 'Menge', '1/2');
+    await fill(stockForm, 'Einlagerungsdatum', updatedStock.purchase_date);
     await click(`${stockForm} button[type=submit]`);
     await waitFor(`!document.querySelector('${stockForm}')`);
-    const stored = (await request('/inventory')).find(item => item.id !== stock.id);
-    assert.equal(stored.unit, 'Packung');
-    assert.equal(stored.quantity, 0.5);
+    const storedRows = (await request('/inventory')).filter(item => item.food_id === food.id);
+    assert.equal(storedRows.length, 1);
+    const stored = storedRows[0];
+    assert.equal(stored.id, stock.id);
+    assert.equal(stored.unit, 'g');
+    assert.equal(stored.quantity, 2.1);
     assert.equal(stored.calories_per_100g, 120);
     assert.equal(stored.protein_per_100g, 5);
     assert.equal(stored.fat_per_100g, 2);
     assert.equal(stored.carbs_per_100g, 20);
     assert.equal((await request('/product-units')).some(unit => unit.name === 'Packung'), false);
-    console.log(`PASS ${width}px food storage: read-only nutrients, only food-defined units, stored fractional conversion unit without a new global unit`);
+    console.log(`PASS ${width}px food storage: read-only nutrients, food-defined units, fractional conversion merged into existing stock without a new global unit`);
 
     if (!await evaluate("Boolean(document.querySelector('.sidebar-master-options'))")) {
       await click('[title="Stammdaten verwalten"]');
@@ -275,7 +279,7 @@ try {
     assert.equal(imported.serving_size, 250);
     assert.equal(imported.serving_unit, 'ml');
     assert.deepEqual(imported.barcodes, ['0012345678905']);
-    assert.equal((await request('/inventory')).length, 2);
+    assert.equal((await request('/inventory')).length, 1);
     assert.equal((await request('/meals/logs')).length, 0);
     await fill(foodForm, daysLabel, '14');
     await click(`${foodForm} button[type=submit]`);
@@ -300,6 +304,58 @@ try {
     assert.equal(await readField(foodForm, 'Name'), '');
     await click('.food-editor-modal [title="Schliessen"]');
     console.log(`PASS ${width}px EAN creation: full master data, repeated scan opens existing product, editing, error recovery and manual fallback`);
+
+    const kilogram = (await request('/product-units')).find(unit => unit.name === 'kg');
+    const mergeCases = [];
+    for (const firstUnit of ['g', 'kg']) {
+      const mergeFood = await request('/foods', 'POST', {
+        name: `Mengentest ${firstUnit} zuerst`, product_unit_id: kilogram.id,
+        serving_size: 1000, serving_unit: 'g', purchase_date: '2026-11-01',
+        expiry_days: 7, storage_location: 'Vorrat', calories_per_100g: 100,
+      });
+      mergeCases.push({ food: mergeFood, firstUnit });
+    }
+    await click('[title="Bestandsübersicht"]');
+    await clickButton('.topbar-actions', 'Aktualisieren');
+    await waitFor("!document.querySelector('.loading-bar')");
+    for (const { food: mergeFood, firstUnit } of mergeCases) {
+      let firstStock;
+      const additions = firstUnit === 'g' ? [['g', '1000'], ['kg', '1']] : [['kg', '1'], ['g', '1000']];
+      for (const [selectedUnit, quantity] of additions) {
+        await clickButton('.inventory-overview-header', 'Bestand hinzufügen');
+        await waitFor(`Array.from(document.querySelectorAll('#inventory-food-options option')).some(option => option.value.includes(${JSON.stringify(mergeFood.name)}))`);
+        await fill(stockForm, 'Lebensmittel', mergeFood.name);
+        await waitFor(`(${field(stockForm, 'Einheit')}).value === 'kg'`);
+        await assertStockFoodRestrictions(['kg', 'g']);
+        await fill(stockForm, 'Einheit', selectedUnit);
+        await fill(stockForm, 'Menge', quantity);
+        await click(`${stockForm} button[type=submit]`);
+        await waitFor(`!document.querySelector('${stockForm}')`);
+        const rows = (await request('/inventory')).filter(item => item.food_id === mergeFood.id);
+        assert.equal(rows.length, 1);
+        const row = rows[0];
+        if (!firstStock) {
+          firstStock = row;
+          assert.equal(row.unit, firstUnit);
+          assert.equal(row.quantity, Number(quantity));
+        } else {
+          const total = firstUnit === 'g' ? 2000 : 2;
+          assert.equal(row.id, firstStock.id);
+          assert.equal(row.unit, firstUnit);
+          assert.equal(row.quantity, total);
+          assert.equal(row.purchase_date, firstStock.purchase_date);
+          assert.equal(row.expiry_days, firstStock.expiry_days);
+          assert.equal(row.storage_location, firstStock.storage_location);
+          assert.equal(row.price, firstStock.price);
+          await waitFor(`(() => {
+            const cards = Array.from(document.querySelectorAll('.inventory-mobile-card'))
+              .filter(card => card.querySelector('.inventory-mobile-product')?.textContent.includes(${JSON.stringify(mergeFood.name)}));
+            return cards.length === 1 && cards[0].querySelector('.inventory-mobile-quantity')?.textContent.trim() === ${JSON.stringify(`${total} ${firstUnit}`)};
+          })()`);
+        }
+      }
+    }
+    console.log(`PASS ${width}px unit merging: 1000 g + 1 kg becomes 2000 g, reverse order becomes 2 kg; first stock ID and metadata retained`);
   }
 } finally {
   await send("Page.navigate", { url: "about:blank" });

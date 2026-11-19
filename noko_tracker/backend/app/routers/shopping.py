@@ -8,6 +8,7 @@ from sqlalchemy.orm import Session
 from .. import crud, models, schemas
 from ..database import get_db
 from ..services.food_inventory import apply_food_inventory_values
+from ..services.inventory_stock import add_or_merge_inventory
 from ..services.unit_defaults import apply_product_unit_defaults
 
 
@@ -206,7 +207,8 @@ def create_inventory_item_from_food(
     food: models.Food,
     shopping_item: models.ShoppingListItem,
     purchase_date: date,
-) -> models.InventoryItem:
+    storage_location: str | None = None,
+) -> tuple[models.InventoryItem, bool]:
     inventory_item = models.InventoryItem(
         name=food.name,
         quantity=normalized_quantity(shopping_item.quantity),
@@ -215,11 +217,11 @@ def create_inventory_item_from_food(
         notes=f"Aus Einkaufsliste uebernommen: {shopping_item.name}",
     )
     apply_default_inventory_values(inventory_item, food, purchase_date)
+    if storage_location is not None:
+        inventory_item.storage_location = storage_location
     for field, value in apply_food_inventory_values(db, food, {"unit": shopping_item.unit}).items():
         setattr(inventory_item, field, value)
-    db.add(inventory_item)
-    db.flush()
-    return inventory_item
+    return add_or_merge_inventory(db, inventory_item)
 
 
 def create_food_for_unknown_shopping_item(
@@ -378,6 +380,7 @@ def import_shopping_list_to_inventory(
     updated_inventory_items: list[models.InventoryItem] = []
     deleted_shopping_item_ids: list[int] = []
     kept_shopping_item_ids: list[int] = []
+    imported_count = 0
 
     try:
         for shopping_item in open_items:
@@ -389,14 +392,15 @@ def import_shopping_list_to_inventory(
             if food is None and request.unknown_item_action == "create":
                 food = create_food_for_unknown_shopping_item(db, shopping_item)
             if food is not None:
-                # Keep the purchased quantity in its own unit and lot. Adding it
-                # to a linked row would mix units and renew the old lot's expiry.
-                inventory_item = create_inventory_item_from_food(
+                inventory_item, created = create_inventory_item_from_food(
                     db, food, shopping_item, request.purchase_date,
+                    storage_location=linked_item.storage_location if linked_item is not None else None,
                 )
-                if linked_item is not None:
-                    inventory_item.storage_location = linked_item.storage_location or inventory_item.storage_location
-                created_inventory_items.append(inventory_item)
+                if created:
+                    created_inventory_items.append(inventory_item)
+                elif inventory_item not in created_inventory_items and inventory_item not in updated_inventory_items:
+                    updated_inventory_items.append(inventory_item)
+                imported_count += 1
                 deleted_shopping_item_ids.append(shopping_item.id)
                 db.delete(shopping_item)
             elif request.unknown_item_action == "delete":
@@ -418,7 +422,6 @@ def import_shopping_list_to_inventory(
         db.rollback()
         raise
 
-    imported_count = len(created_inventory_items) + len(updated_inventory_items)
     if imported_count:
         message = f"{imported_count} Artikel in den Bestand uebernommen."
     elif deleted_shopping_item_ids:

@@ -1,5 +1,11 @@
 # Changelog
 
+## 3.1.26
+
+- Einlagerungen desselben Lebensmittels werden bei passenden Chargendaten mit der aeltesten Bestandsposition zusammengefuehrt. Die neue Menge wird in deren Einheit umgerechnet, zum Beispiel 1000 g + 1 kg = 2000 g.
+- Einkaufsliste und Kassenzettel verwenden dieselbe Zusammenfuehrung. Unterschiedliche Einlagerungsdaten, Haltbarkeiten, Lagerorte oder Preise werden als eigene Chargen verwaltet.
+- Zubereitete Gerichte und Rueckbuchungen im Kalorientracker nutzen passende vorhandene Bestaende. Entnahmen pruefen den Gesamtbestand je Lebensmittel ueber mehrere Positionen und Einheiten hinweg; die Bestandsaufnahme korrigiert weiterhin die absolute Menge der gewaehlten Position.
+
 ## 3.1.25
 
 - Der Dialog **Bestand hinzufuegen** zeigt Naehrwerte und Umrechnungen bereits beim Oeffnen schreibgeschuetzt an. Die Einheitenauswahl wird nach der Lebensmittelauswahl freigeschaltet.

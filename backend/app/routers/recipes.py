@@ -10,6 +10,7 @@ from .. import crud, models, schemas
 from ..database import get_db
 from ..security import current_principal
 from ..services import nutrition_service, stock_booking_service as stock
+from ..services.inventory_stock import add_or_merge_inventory
 
 
 router = APIRouter(prefix="/recipes", tags=["recipes"])
@@ -518,7 +519,6 @@ def prepare_recipe_from_inventory(
         product_unit = crud.get_or_create_product_unit(db, "Portion")
         food = recipe_prepared_food(db, recipe, product_unit)
         prepared_quantity = normalized_quantity(recipe.servings)
-        # Each preparation is a separate lot with its own preparation date.
         inventory_item = models.InventoryItem(quantity=0.0, purchase_date=request.purchase_date)
 
         inventory_item.quantity = normalized_quantity(
@@ -531,7 +531,7 @@ def prepare_recipe_from_inventory(
             product_unit,
             request,
         )
-        db.add(inventory_item)
+        inventory_item, _created = add_or_merge_inventory(db, inventory_item)
         db.commit()
         db.refresh(inventory_item)
     except IntegrityError as exc:

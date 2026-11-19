@@ -92,6 +92,34 @@ class StockBookingTest(unittest.TestCase):
         self.assertEqual(first["inventory_item"].purchase_date, date(2026, 10, 20))
         self.assertEqual(item.quantity, 300)
 
+    def test_recipe_preparations_merge_compatible_portions(self):
+        food, item = self.stock(500)
+        recipe = self.recipe(food, (100, "g"))
+        first = recipes.prepare_recipe_from_inventory(recipe.id, db=self.db)
+        prepared_id = first["inventory_item"].id
+        second = recipes.prepare_recipe_from_inventory(recipe.id, db=self.db)
+        self.assertEqual(second["inventory_item"].id, prepared_id)
+        self.assertEqual((second["inventory_item"].quantity, second["inventory_item"].unit), (2, "Portion"))
+        self.assertEqual(second["prepared_quantity"], 1)
+        self.assertEqual(item.quantity, 300)
+        self.assertEqual(self.db.query(m.InventoryItem).filter_by(food_id=recipe.prepared_food_id).count(), 1)
+
+    def test_recipes_and_tracker_consume_existing_lots_in_different_units(self):
+        food, first = self.stock(100, "g", 1000, m.ProductUnit(name="kg"))
+        first.expiry_days = 1
+        second = m.InventoryItem(food=food, name=food.name, quantity=1, unit="kg", serving_size=1000,
+                                 serving_unit="g", purchase_date=date.today(), expiry_days=7)
+        self.db.add(second)
+        self.db.commit()
+        recipe = self.recipe(food, (100, "g"), (.1, "kg"))
+        recipes.prepare_recipe_from_inventory(recipe.id, db=self.db)
+        self.assertEqual(first.quantity, 0)
+        self.assertAlmostEqual(second.quantity, .9)
+        entry = self.book(food, 150)
+        self.assertAlmostEqual(second.quantity, .75)
+        meals.delete_meal_log(entry.id, self.db)
+        self.assertAlmostEqual(second.quantity, .9)
+
     def test_atomic_create_shortage_leaves_no_meal_or_partial_deduction(self):
         food, item = self.stock(60)
         request = s.MealLogCreate(food_id=food.id, quantity=100, unit="g", deduct_inventory=True, booking_key="atomic-shortage-1")
@@ -189,16 +217,27 @@ class StockBookingTest(unittest.TestCase):
         restored = self.db.query(m.InventoryItem).one()
         self.assertEqual((restored.quantity, restored.unit, restored.expiry_date), (100, "g", date(2026, 10, 27)))
 
-    def test_changed_lot_unit_does_not_mix_units_on_refund(self):
+    def test_changed_lot_unit_converts_refund_into_existing_stock(self):
         food, item = self.stock()
         entry = self.book(food)
         item.unit = "kg"
         item.quantity = .4
         self.db.commit()
         meals.delete_meal_log(entry.id, self.db)
-        self.assertEqual(item.quantity, .4)
-        restored = self.db.query(m.InventoryItem).filter_by(unit="g").one()
-        self.assertEqual(restored.quantity, 100)
+        self.assertEqual((item.quantity, item.unit), (.5, "kg"))
+        self.assertEqual(self.db.query(m.InventoryItem).count(), 1)
+
+    def test_deleted_lot_refund_reuses_compatible_existing_stock_in_another_unit(self):
+        food, first = self.stock(100, "g")
+        entry = self.book(food)
+        second = m.InventoryItem(food=food, name=food.name, quantity=1, unit="kg", serving_size=100,
+                                 serving_unit="g", purchase_date=first.purchase_date)
+        self.db.add(second)
+        self.db.commit()
+        inventory.delete_inventory_item(first.id, self.db)
+        meals.delete_meal_log(entry.id, self.db)
+        self.assertEqual((second.quantity, second.unit), (1.1, "kg"))
+        self.assertEqual(self.db.query(m.InventoryItem).count(), 1)
 
     def test_legacy_booking_without_evidence_does_not_invent_stock(self):
         food, item = self.stock(400)
@@ -222,18 +261,91 @@ class StockBookingTest(unittest.TestCase):
         inventory.replace_inventory_item(item.id, current, self.db)
         self.assertEqual((item.quantity, item.notes), (13, "Fresh edit"))
 
-    def test_recipe_shopping_import_preserves_pack_quantity_and_existing_lot(self):
+    def test_recipe_shopping_import_merges_pack_quantity_in_existing_unit(self):
         food, item = self.stock(100, "g", 500, m.ProductUnit(name="Packung"))
         recipe = self.recipe(food, (600, "g"))
         recipes.sync_missing_recipe_ingredients_to_shopping_list(recipe.id, self.db)
         result = shopping.import_shopping_list_to_inventory(db=self.db)
-        self.assertEqual(item.quantity, 100)
-        added = result["created_inventory_items"][0]
-        self.assertEqual((added.quantity, added.unit), (1, "Packung"))
+        self.assertEqual((item.quantity, item.unit), (600, "g"))
+        self.assertEqual(result["created_inventory_items"], [])
+        self.assertEqual(result["updated_inventory_items"][0].id, item.id)
         total = sum(nutrition.food_amount_in_grams(row, row.quantity, row.unit) for row in self.db.query(m.InventoryItem))
         self.assertEqual(total, 600)
         shopping.import_shopping_list_to_inventory(db=self.db)
-        self.assertEqual(self.db.query(m.InventoryItem).count(), 2)
+        self.assertEqual(self.db.query(m.InventoryItem).count(), 1)
+
+    def test_shopping_recipe_and_tracker_share_the_same_stock(self):
+        food, item = self.stock(1000, "g", 1000, m.ProductUnit(name="kg"))
+        self.db.add(m.ShoppingListItem(name=food.name, food=food, inventory_item=item, quantity=1, unit="kg"))
+        self.db.commit()
+        shopping.import_shopping_list_to_inventory(db=self.db)
+        self.assertEqual((item.quantity, item.unit), (2000, "g"))
+        recipe = self.recipe(food, (.5, "kg"))
+        recipes.prepare_recipe_from_inventory(recipe.id, db=self.db)
+        self.assertEqual(item.quantity, 1500)
+        entry = self.book(food, 250)
+        self.assertEqual(item.quantity, 1250)
+        meals.delete_meal_log(entry.id, self.db)
+        self.assertEqual(item.quantity, 1500)
+        self.assertEqual(self.db.query(m.InventoryItem).filter_by(food_id=food.id).count(), 1)
+
+    def test_shopping_merges_multiple_source_lines_and_counts_each_purchase(self):
+        food, item = self.stock(1000, "g", 1000, m.ProductUnit(name="kg"))
+        food.storage_location = "Vorrat"
+        item.storage_location = "Kueche"
+        self.db.add_all([
+            m.ShoppingListItem(name=food.name, food=food, inventory_item=item, quantity=1, unit="kg"),
+            m.ShoppingListItem(name=food.name, food=food, inventory_item=item, quantity=.5, unit="kg"),
+        ])
+        self.db.commit()
+        result = shopping.import_shopping_list_to_inventory(db=self.db)
+        self.assertEqual((item.quantity, item.unit, item.storage_location), (2500, "g", "Kueche"))
+        self.assertEqual(result["imported_count"], 2)
+        self.assertEqual(len(result["deleted_shopping_item_ids"]), 2)
+        self.assertEqual([row.id for row in result["updated_inventory_items"]], [item.id])
+        self.assertEqual(result["created_inventory_items"], [])
+        self.assertEqual(self.db.query(m.InventoryItem).count(), 1)
+
+    def test_receipt_merges_compatible_units_and_retries_do_not_add_quantity(self):
+        food, item = self.stock(1000, "g", 1000, m.ProductUnit(name="kg"))
+        request = s.ReceiptImportBookRequest(receipt_id="d" * 64, items=[
+            s.ReceiptImportBookItem(source_index=0, raw_name="Artikelzeile 1", name=food.name, food_id=food.id, quantity=1000, unit="g"),
+            s.ReceiptImportBookItem(source_index=1, raw_name="Artikelzeile 2", name=food.name, food_id=food.id, quantity=1, unit="kg"),
+        ])
+        result = receipt.book_receipt_import(self.db, request)
+        self.assertEqual(result.booked_count, 2)
+        self.assertEqual([row.id for row in result.inventory_items], [item.id])
+        self.assertEqual((item.quantity, item.unit), (3000, "g"))
+        self.assert_http(409, receipt.book_receipt_import, self.db, request)
+        self.assertEqual(item.quantity, 3000)
+        self.assertEqual(self.db.query(m.InventoryItem).count(), 1)
+
+    def test_import_batches_report_one_new_row_when_source_lines_merge(self):
+        product_unit = m.ProductUnit(name="kg")
+        for source in ("shopping", "receipt"):
+            with self.subTest(source=source):
+                food = m.Food(name=source, product_unit=product_unit, serving_size=1000, serving_unit="g")
+                self.db.add(food)
+                self.db.commit()
+                if source == "shopping":
+                    self.db.add_all([
+                        m.ShoppingListItem(name=food.name, food=food, quantity=1, unit="kg"),
+                        m.ShoppingListItem(name=food.name, food=food, quantity=500, unit="g"),
+                    ])
+                    self.db.commit()
+                    result = shopping.import_shopping_list_to_inventory(db=self.db)
+                    self.assertEqual(result["imported_count"], 2)
+                    self.assertEqual(result["updated_inventory_items"], [])
+                    rows = result["created_inventory_items"]
+                else:
+                    result = receipt.book_receipt_import(self.db, s.ReceiptImportBookRequest(items=[
+                        s.ReceiptImportBookItem(source_index=0, raw_name=food.name, name=food.name, food_id=food.id, quantity=1, unit="kg"),
+                        s.ReceiptImportBookItem(source_index=1, raw_name=food.name, name=food.name, food_id=food.id, quantity=500, unit="g"),
+                    ]))
+                    self.assertEqual(result.booked_count, 2)
+                    rows = result.inventory_items
+                self.assertEqual(len(rows), 1)
+                self.assertEqual((rows[0].quantity, rows[0].unit), (1.5, "kg"))
 
     def test_different_inventory_pack_unit_uses_saved_size_for_availability_and_booking(self):
         food, item = self.stock(1, "Beutel", 1, m.ProductUnit(name="g"))
@@ -292,28 +404,32 @@ class StockBookingTest(unittest.TestCase):
 
     def test_shopping_rejects_unattached_unit_without_partial_stock_or_new_unit(self):
         food = m.Food(name="Reis", product_unit=m.ProductUnit(name="Beutel"), serving_size=500, serving_unit="g")
+        item = m.InventoryItem(name=food.name, food=food, quantity=2, unit="Beutel", serving_size=500, serving_unit="g")
         self.db.add_all([
-            food,
+            food, item,
             m.ShoppingListItem(name=food.name, food=food, quantity=1, unit="Beutel"),
             m.ShoppingListItem(name=food.name, food=food, quantity=1, unit="Palette"),
         ])
         self.db.commit()
         self.assert_http(422, shopping.import_shopping_list_to_inventory, db=self.db)
-        self.assertEqual(self.db.query(m.InventoryItem).count(), 0)
+        self.assertEqual(self.db.query(m.InventoryItem).count(), 1)
+        self.assertEqual(item.quantity, 2)
         self.assertEqual(self.db.query(m.ShoppingListItem).count(), 2)
         self.assertIsNone(self.db.query(m.ProductUnit).filter_by(name="Palette").first())
         self.assertEqual((food.serving_size, food.serving_unit), (500, "g"))
 
     def test_receipt_rejects_unattached_unit_without_partial_stock_or_receipt_marker(self):
         food = m.Food(name="Reis", product_unit=m.ProductUnit(name="Beutel"), serving_size=500, serving_unit="g")
-        self.db.add(food)
+        item = m.InventoryItem(name=food.name, food=food, quantity=2, unit="Beutel", serving_size=500, serving_unit="g")
+        self.db.add_all([food, item])
         self.db.commit()
         request = s.ReceiptImportBookRequest(receipt_id="c" * 64, items=[
             s.ReceiptImportBookItem(source_index=0, raw_name=food.name, name=food.name, food_id=food.id, quantity=1, unit="Beutel"),
             s.ReceiptImportBookItem(source_index=1, raw_name=food.name, name=food.name, food_id=food.id, quantity=1, unit="Palette"),
         ])
         self.assert_http(422, receipt.book_receipt_import, self.db, request)
-        self.assertEqual(self.db.query(m.InventoryItem).count(), 0)
+        self.assertEqual(self.db.query(m.InventoryItem).count(), 1)
+        self.assertEqual(item.quantity, 2)
         self.assertEqual(self.db.query(m.ReceiptBooking).count(), 0)
         self.assertIsNone(self.db.query(m.ProductUnit).filter_by(name="Palette").first())
         self.assertEqual((food.serving_size, food.serving_unit), (500, "g"))
@@ -331,9 +447,11 @@ class StockBookingTest(unittest.TestCase):
         receipt.book_receipt_import(self.db, s.ReceiptImportBookRequest(items=[
             s.ReceiptImportBookItem(source_index=0, raw_name=food.name, name=food.name, food_id=food.id, quantity=1, unit="Tasse"),
         ]))
+        self.assertEqual(self.db.query(m.InventoryItem).count(), 1)
         for item in self.db.query(m.InventoryItem).all():
             self.assertEqual(item.unit, "Tasse")
-            self.assertEqual(nutrition.food_amount_in_grams(item, item.quantity, item.unit), 250)
+            self.assertEqual(item.quantity, 2)
+            self.assertEqual(nutrition.food_amount_in_grams(item, item.quantity, item.unit), 500)
             self.assertEqual(
                 (item.calories_per_100g, item.protein_per_100g, item.carbs_per_100g, item.fat_per_100g),
                 (350, 7, 78, 1),
@@ -350,7 +468,8 @@ class StockBookingTest(unittest.TestCase):
         self.assert_http(409, receipt.book_receipt_import, self.db, request)
         self.assertEqual(self.db.query(m.InventoryItem).one().quantity, 2)
         receipt.book_receipt_import(self.db, request.model_copy(update={"receipt_id": "b" * 64}))
-        self.assertEqual(self.db.query(m.InventoryItem).count(), 2)
+        self.assertEqual(self.db.query(m.InventoryItem).count(), 1)
+        self.assertEqual(self.db.query(m.InventoryItem).one().quantity, 5)
 
     def test_unknown_shopping_product_uses_unit_default_and_keeps_it_after_change(self):
         product_unit = m.ProductUnit(

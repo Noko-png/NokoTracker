@@ -611,7 +611,7 @@ class InventoryItemBase(BaseModel):
     emoji: str = Field(DEFAULT_INVENTORY_EMOJI, min_length=1, max_length=32)
     brand: Optional[str] = Field(None, max_length=160)
     category: Optional[str] = Field(None, max_length=120)
-    quantity: float = Field(0.0, ge=0)
+    quantity: float = Field(0.0, ge=0, allow_inf_nan=False)
     unit: str = Field("pcs", min_length=1, max_length=32)
     minimum_quantity: float = Field(0.0, ge=0)
     storage_location: Optional[str] = Field(None, max_length=120)
@@ -661,7 +661,7 @@ class InventoryItemUpdate(BaseModel):
     emoji: Optional[str] = Field(None, min_length=1, max_length=32)
     brand: Optional[str] = Field(None, max_length=160)
     category: Optional[str] = Field(None, max_length=120)
-    quantity: Optional[float] = Field(None, ge=0)
+    quantity: Optional[float] = Field(None, ge=0, allow_inf_nan=False)
     unit: Optional[str] = Field(None, min_length=1, max_length=32)
     minimum_quantity: Optional[float] = Field(None, ge=0)
     storage_location: Optional[str] = Field(None, max_length=120)
@@ -725,7 +725,7 @@ class InventoryItemSummary(ORMBase):
 
 
 class InventoryQuantityChange(BaseModel):
-    amount: float = Field(..., gt=0)
+    amount: float = Field(..., gt=0, allow_inf_nan=False)
 
     @field_validator("amount", mode="before")
     @classmethod

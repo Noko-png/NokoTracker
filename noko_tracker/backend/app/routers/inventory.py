@@ -1,4 +1,5 @@
 from datetime import date, timedelta, timezone
+import math
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Response, status
 from sqlalchemy.exc import IntegrityError
@@ -8,6 +9,7 @@ from .. import crud, models, schemas
 from ..database import get_db
 from ..services import barcode_service
 from ..services.food_inventory import apply_food_inventory_values
+from ..services.inventory_stock import add_or_merge_inventory
 from ..services.unit_defaults import apply_product_unit_defaults
 
 
@@ -199,9 +201,8 @@ def create_inventory_item(item_in: schemas.InventoryItemCreate, db: Session = De
     ensure_product_group_exists(db, item_in.product_group_id)
     ensure_product_unit_exists(db, item_in.product_unit_id)
     try:
-        item = models.InventoryItem()
-        apply_inventory_payload(item, inventory_payload_with_food(db, item_in, use_unit_defaults=True))
-        db.add(item)
+        item = models.InventoryItem(**inventory_payload_with_food(db, item_in, use_unit_defaults=True))
+        item, _created = add_or_merge_inventory(db, item)
         db.commit()
         db.refresh(item)
         return item
@@ -255,9 +256,12 @@ def increase_inventory_item(
     db: Session = Depends(get_db),
 ):
     item = get_item_or_404(db, item_id)
-    item.quantity = normalized_quantity(
+    quantity = normalized_quantity(
         normalized_quantity(item.quantity) + normalized_quantity(change.amount)
     )
+    if not math.isfinite(quantity):
+        raise HTTPException(422, "Die Bestandsmenge ist zu gross.")
+    item.quantity = quantity
     db.add(item)
     db.commit()
     db.refresh(item)
