@@ -1,5 +1,11 @@
 # Changelog
 
+## 3.1.31
+
+- Neue Einlagerungen und Bestandskorrekturen speichern die Standardeinheit des Lebensmittels aus den Stammdaten, zum Beispiel 800 g als 2 Dosen bei 1 Dose = 400 g. Das gilt auch fuer Einkaufsliste, Kassenzettel und neu angelegte Rueckbuchungspositionen.
+- Mengen und Preise werden passend umgerechnet. Kompatible aeltere Bestandspositionen werden beim Zusammenfuehren in die Standardeinheit ueberfuehrt; Chargendaten und Buchungsnachweise bleiben erhalten. Gerichte und Kalorientracker verwenden weiterhin die hinterlegten Umrechnungen fuer Entnahmen.
+- Der Einlagerungsdialog zeigt die Bestandseinheit an. Bei Wechsel der Eingabeeinheit wird der Preis je Einheit entsprechend umgerechnet.
+
 ## 3.1.30
 
 - ToDos und Einkaufsartikel koennen direkt im Dashboard abgehakt werden. Die Aenderungen werden gespeichert und in den jeweiligen Listen uebernommen; der Eintragstext oeffnet weiterhin die zugehoerige Liste.

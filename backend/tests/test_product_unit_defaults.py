@@ -134,12 +134,13 @@ class ProductUnitDefaultsTest(unittest.TestCase):
         self.call("PATCH", f'/foods/{food["id"]}', {
             "conversions": [{"quantity": .002, "unit": "Beutel"}],
         })
-        for selection in ({"food_id": food["id"]}, {}):
+        for index, selection in enumerate(({"food_id": food["id"]}, {})):
             with self.subTest(selection=selection):
                 item = self.call("POST", "/inventory", {
-                    "name": food["name"], "product_unit_id": bag["id"], **selection,
+                    "name": food["name"], "product_unit_id": bag["id"], "quantity": 1, **selection,
                 }, status=201)
-                self.assertEqual((item["serving_size"], item["serving_unit"]), (500, "g"))
+                self.assertEqual((item["quantity"], item["unit"], item["product_unit_id"]), (500 * (index + 1), "g", gram["id"]))
+                self.assertEqual((item["serving_size"], item["serving_unit"]), (1, "g"))
                 saved_food = self.call("GET", f'/foods/{food["id"]}')
                 self.assertEqual((saved_food["product_unit_id"], saved_food["serving_size"]), (gram["id"], 1))
 

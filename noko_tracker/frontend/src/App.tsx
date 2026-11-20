@@ -600,7 +600,7 @@ const macroMeta: Array<{
   { key: "carbs", label: "Kohlenhydrate", unit: "g", tone: "red" },
 ];
 
-const appVersion = "3.1.30";
+const appVersion = "3.1.31";
 const updateSourceLabel = "main / github.com/Noko-png/NokoTracker";
 
 const emptyNutrition: NutritionDay = {
@@ -7759,7 +7759,17 @@ function InventoryPage({
 
   function selectProductUnit(productUnitId: string) {
     if (selectedInventoryFood) {
-      onFormChange({ ...form, unit: productUnitId });
+      const previousFactor = foodQuantityToGrams(selectedInventoryFood, 1, form.unit, productUnits);
+      const nextFactor = foodQuantityToGrams(selectedInventoryFood, 1, productUnitId, productUnits);
+      const price = optionalNumber(form.price);
+      onFormChange({
+        ...form, unit: productUnitId,
+        price: price !== null && previousFactor > 0 && nextFactor > 0
+          ? String(normalizeFractionalQuantityValue(price * nextFactor / previousFactor)) : form.price,
+        minimum_quantity: previousFactor > 0 && nextFactor > 0
+          ? String(normalizeFractionalQuantityValue(toQuantityNumber(form.minimum_quantity, 0) * previousFactor / nextFactor))
+          : form.minimum_quantity,
+      });
       return;
     }
     const productUnit = productUnits.find(
@@ -8569,6 +8579,8 @@ function InventoryPage({
             {selectedInventoryFood && (
               <>
                 <div className="shopping-inventory-summary">
+                  <span>Bestandseinheit</span>
+                  <strong>{selectedInventoryFoodUnit}</strong>
                   <span>Umrechnung</span>
                   <strong>
                     {useOriginalInventoryConversion
@@ -8711,7 +8723,8 @@ function InventoryPage({
               value={form.expiry_days}
             />
             <NumberInput
-              label="Preis (optional)"
+              label={`Preis pro ${form.unit || "Einheit"} (optional)`}
+              step="any"
               onChange={(price) => onFormChange({ ...form, price })}
               value={form.price}
             />

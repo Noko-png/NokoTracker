@@ -336,12 +336,12 @@ try {
         const row = rows[0];
         if (!firstStock) {
           firstStock = row;
-          assert.equal(row.unit, firstUnit);
-          assert.equal(row.quantity, Number(quantity));
+          assert.equal(row.unit, 'kg');
+          assert.equal(row.quantity, 1);
         } else {
-          const total = firstUnit === 'g' ? 2000 : 2;
+          const total = 2;
           assert.equal(row.id, firstStock.id);
-          assert.equal(row.unit, firstUnit);
+          assert.equal(row.unit, 'kg');
           assert.equal(row.quantity, total);
           assert.equal(row.purchase_date, firstStock.purchase_date);
           assert.equal(row.expiry_days, firstStock.expiry_days);
@@ -350,12 +350,63 @@ try {
           await waitFor(`(() => {
             const cards = Array.from(document.querySelectorAll('.inventory-mobile-card'))
               .filter(card => card.querySelector('.inventory-mobile-product')?.textContent.includes(${JSON.stringify(mergeFood.name)}));
-            return cards.length === 1 && cards[0].querySelector('.inventory-mobile-quantity')?.textContent.trim() === ${JSON.stringify(`${total} ${firstUnit}`)};
+            return cards.length === 1 && cards[0].querySelector('.inventory-mobile-quantity')?.textContent.trim() === '2 kg';
           })()`);
         }
       }
     }
-    console.log(`PASS ${width}px unit merging: 1000 g + 1 kg becomes 2000 g, reverse order becomes 2 kg; first stock ID and metadata retained`);
+    console.log(`PASS ${width}px unit merging: both input orders use the food's primary kg unit; first stock ID and lot metadata retained`);
+
+    const can = await request('/product-units', 'POST', { name: 'Dose' });
+    const cannedFood = await request('/foods', 'POST', {
+      name: 'Dosentomaten fuer Standardeinheit', product_unit_id: can.id,
+      serving_size: 400, serving_unit: 'g', price: 2, conversions: [{ quantity: 2, unit: 'Portion' }],
+      calories_per_100g: 40, expiry_days: 7,
+    });
+    await clickButton('.topbar-actions', 'Aktualisieren');
+    await waitFor("!document.querySelector('.loading-bar')");
+    await clickButton('.inventory-overview-header', 'Bestand hinzufügen');
+    await fill(stockForm, 'Lebensmittel', cannedFood.name);
+    await waitFor(`(${field(stockForm, 'Einheit')}).value === 'Dose'`);
+    await assertStockFoodRestrictions(['Dose', 'g', 'Portion']);
+    assert.equal(await readField(stockForm, 'Preis pro Dose (optional)'), '2');
+    await fill(stockForm, 'Einheit', 'g');
+    await fill(stockForm, 'Menge', '800');
+    assert.equal(await readField(stockForm, 'Preis pro g (optional)'), '0.005');
+    assert.equal(await evaluate(`Array.from(document.querySelectorAll('${stockForm} .shopping-inventory-summary span'))
+      .find(label => label.textContent === 'Bestandseinheit').nextElementSibling.textContent`), 'Dose');
+    await click(`${stockForm} button[type=submit]`);
+    await waitFor(`!document.querySelector('${stockForm}')`);
+    let cannedStock = (await request('/inventory')).filter(row => row.food_id === cannedFood.id);
+    assert.equal(cannedStock.length, 1);
+    assert.equal(cannedStock[0].quantity, 2);
+    assert.equal(cannedStock[0].unit, 'Dose');
+    assert.equal(cannedStock[0].price, 2);
+    assert.equal(cannedStock[0].product_unit_id, can.id);
+    await evaluate(`Array.from(document.querySelectorAll('.inventory-mobile-card')).find(card => card.textContent.includes(${JSON.stringify(cannedFood.name)})).querySelector('.stock-action.edit').click()`);
+    await waitFor(`Boolean(document.querySelector('${stockForm}'))`);
+    await fill(stockForm, 'Einheit', 'g');
+    await fill(stockForm, 'Menge', '300');
+    await click(`${stockForm} button[type=submit]`);
+    await waitFor(`!document.querySelector('${stockForm}')`);
+    cannedStock = (await request('/inventory')).filter(row => row.food_id === cannedFood.id);
+    assert.equal(cannedStock[0].quantity, .75);
+    assert.equal(cannedStock[0].unit, 'Dose');
+    assert.equal(cannedStock[0].price, 2);
+    await request('/meals/logs', 'POST', {
+      food_id: cannedFood.id, user_id: 1, quantity: 100, unit: 'g', deduct_inventory: true,
+      booking_key: `ui-standard-dose-${width}`,
+    });
+    await clickButton('.topbar-actions', 'Aktualisieren');
+    await waitFor("!document.querySelector('.loading-bar')");
+    await waitFor(`Array.from(document.querySelectorAll('.inventory-mobile-card')).some(card => card.textContent.includes(${JSON.stringify(cannedFood.name)}) && card.querySelector('.inventory-mobile-quantity')?.textContent.trim() === '1/2 Dose')`);
+    cannedStock = (await request('/inventory')).filter(row => row.food_id === cannedFood.id);
+    assert.equal(cannedStock[0].quantity, .5);
+    assert.equal(cannedStock[0].unit, 'Dose');
+    assert.equal(cannedStock[0].serving_size, 400);
+    assert.equal(cannedStock[0].serving_unit, 'g');
+    assert.equal(cannedStock[0].food.conversions.find(conversion => conversion.unit === 'Portion').quantity, 2);
+    console.log(`PASS ${width}px primary stock unit: grams are stored as cans, prices convert, stocktaking stays in cans and tracker gram deductions preserve food conversions`);
 
     const minimumFood = await request('/foods', 'POST', {
       name: 'Mindestbestand ohne Einlagerung', product_unit_id: kilogram.id,

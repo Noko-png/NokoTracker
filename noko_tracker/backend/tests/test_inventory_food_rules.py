@@ -57,30 +57,27 @@ class InventoryFoodRulesTest(unittest.TestCase):
             "serving_size": 999, "serving_unit": "kg", "calories_per_100g": 999,
             "protein_per_100g": 999, "carbs_per_100g": 999, "fat_per_100g": 999,
         }, status=201)
-        self.assertEqual((item["name"], item["brand"], item["unit"]), ("Mehl", "Marke", "Beutel"))
-        self.assertEqual((item["serving_size"], item["serving_unit"]), (250, "g"))
-        self.assertIsNone(item["product_unit_id"])
+        self.assertEqual((item["name"], item["brand"], item["unit"]), ("Mehl", "Marke", "Packung"))
+        self.assertEqual((item["quantity"], item["serving_size"], item["serving_unit"]), (1.5, 500, "g"))
+        self.assertEqual(item["product_unit_id"], self.pack["id"])
         self.assertEqual(self.macro_values(item), self.macro_values(self.food))
         updated = self.call("PUT", f'/inventory/{item["id"]}', {
             "food_id": self.food["id"], "name": "Ueberschreiben", "unit": "g", "quantity": 700,
             "expected_updated_at": item["updated_at"], "serving_size": 1, "serving_unit": "kg",
             "calories_per_100g": 0, "protein_per_100g": 0, "carbs_per_100g": 0, "fat_per_100g": 0,
         })
-        self.assertEqual((updated["serving_size"], updated["serving_unit"]), (1, "g"))
+        self.assertEqual((updated["quantity"], updated["unit"], updated["serving_size"], updated["serving_unit"]), (1.4, "Packung", 500, "g"))
         self.assertEqual(self.macro_values(updated), self.macro_values(self.food))
         self.assertEqual(self.call("GET", f'/foods/{self.food["id"]}'), self.food)
 
     def test_only_food_units_and_same_factor_aliases_are_available(self):
-        for unit, canonical, pair in (
-            ("Packung", "Packung", (500, "g")), (" beutel ", "Beutel", (250, "g")),
-            (" GRAMM ", "g", (1, "g")),
-        ):
+        for unit in ("Packung", " beutel ", " GRAMM "):
             with self.subTest(unit=unit):
                 item = self.call("POST", "/inventory", {
                     "food_id": self.food["id"], "name": "Mehl", "unit": unit,
                 }, status=201)
-                self.assertEqual(item["unit"], canonical)
-                self.assertEqual((item["serving_size"], item["serving_unit"]), pair)
+                self.assertEqual(item["unit"], "Packung")
+                self.assertEqual((item["serving_size"], item["serving_unit"]), (500, "g"))
         before = self.call("GET", "/inventory")
         for unit in ("kg", "mg", "ml", "Flasche", "Nicht eingerichtet"):
             with self.subTest(unit=unit):
@@ -116,7 +113,7 @@ class InventoryFoodRulesTest(unittest.TestCase):
         })
         self.assertEqual(self.call("GET", f'/foods/{self.food["id"]}'), self.food)
 
-    def test_historical_stock_can_keep_its_unit_and_trusted_saved_conversion(self):
+    def test_historical_stock_uses_trusted_saved_conversion_to_reach_primary_unit(self):
         with Session(self.engine) as db:
             item = models.InventoryItem(
                 name="Mehl", food_id=self.food["id"], unit="Altbeutel", quantity=4,
@@ -131,7 +128,7 @@ class InventoryFoodRulesTest(unittest.TestCase):
             "expected_updated_at": saved["updated_at"], "serving_size": 1, "serving_unit": "kg",
             "calories_per_100g": 999,
         })
-        self.assertEqual((changed["unit"], changed["serving_size"], changed["serving_unit"]), ("Altbeutel", 125, "g"))
+        self.assertEqual((changed["quantity"], changed["unit"], changed["serving_size"], changed["serving_unit"]), (.75, "Packung", 500, "g"))
         self.assertEqual(self.macro_values(changed), self.macro_values(self.food))
         self.call("POST", "/inventory", {
             "food_id": self.food["id"], "name": "Mehl", "unit": "Altbeutel",

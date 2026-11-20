@@ -96,7 +96,7 @@ class MinimumStockTest(unittest.TestCase):
         item = self.store(500, "g", minimum_quantity=0, purchase_date="2026-11-18")
         self.store(.75, "kg", purchase_date="2026-11-19")
         purchase = self.call("POST", f'/shopping-list/from-inventory/{item["id"]}', {}, status=201)
-        self.assertEqual((purchase["quantity"], purchase["unit"]), (750, "g"))
+        self.assertEqual((purchase["quantity"], purchase["unit"]), (.75, "kg"))
 
     def test_zero_minimum_and_archived_foods_do_not_create_warnings(self):
         self.store(0, "kg", minimum_quantity=99)

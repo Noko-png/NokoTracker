@@ -296,7 +296,7 @@ class BackupTest(unittest.TestCase):
             lot = db.query(models.InventoryItem).one()
             self.assertNotEqual(lot.food_id, 1)
             self.assertEqual(lot.food.name, "Lebensmittel")
-            self.assertEqual(lot.quantity, 1)
+            self.assertEqual((lot.quantity, lot.unit), (100, "g"))
 
     def test_conflicting_legacy_ean_aborts_recipe_addition_without_changing_data(self):
         source = self.source_with_data()

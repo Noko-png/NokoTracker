@@ -26,6 +26,9 @@ def food_serving_conversion(food: models.Food, unit: str) -> tuple[float, str]:
     if physical_quantity is not None:
         target = "ml" if food_unit_key(unit) in {"ml", "l"} else "g"
         return physical_quantity, target
+    primary_unit = food.product_unit.name if food.product_unit is not None else food.serving_unit
+    if food_unit_key(unit) == food_unit_key(food.serving_unit) and food_unit_key(unit) != food_unit_key(primary_unit):
+        return 1.0, food.serving_unit
     conversion = next((row for row in food.conversions if (
         row.quantity > 0 and food_unit_key(row.unit) == food_unit_key(unit)
     )), None)

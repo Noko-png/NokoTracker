@@ -9,7 +9,7 @@ from .. import crud, models, schemas
 from ..database import get_db
 from ..services import barcode_service
 from ..services.food_inventory import apply_food_inventory_values
-from ..services.inventory_stock import add_or_merge_inventory
+from ..services.inventory_stock import add_or_merge_inventory, normalize_inventory_unit
 from ..services.food_stock import foods_below_minimum
 from ..services.unit_defaults import apply_product_unit_defaults
 
@@ -225,6 +225,7 @@ def replace_inventory_item(
     ensure_product_unit_exists(db, item_in.product_unit_id)
     try:
         apply_inventory_payload(item, inventory_payload_with_food(db, item_in, existing_item=item))
+        normalize_inventory_unit(db, item)
         db.add(item)
         db.commit()
         db.refresh(item)

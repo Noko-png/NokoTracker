@@ -9,11 +9,12 @@ from sqlalchemy import create_engine
 from sqlalchemy.orm import Session
 from sqlalchemy.pool import StaticPool
 
-from app import models, security
+from app import models, schemas, security
 from app.database import Base, get_db
-from app.routers import foods, inventory, meals, product_units
+from app.routers import foods, inventory, meals, product_units, recipes, shopping
 from app.services import nutrition_service
 from app.services.inventory_stock import add_or_merge_inventory
+from app.services.receipt_import_service import book_receipt_import
 from test_security import request
 
 
@@ -23,7 +24,7 @@ class InventoryMergingTest(unittest.TestCase):
         self.addCleanup(self.engine.dispose)
         Base.metadata.create_all(self.engine)
         self.app = FastAPI()
-        for router in (foods.router, inventory.router, meals.router, product_units.router):
+        for router in (foods.router, inventory.router, meals.router, product_units.router, recipes.router, shopping.router):
             self.app.include_router(router)
         security.install_security(self.app)
 
@@ -53,11 +54,12 @@ class InventoryMergingTest(unittest.TestCase):
             "purchase_date": "2026-11-18", **fields,
         }, status=201)
 
-    def test_grams_then_kilograms_keep_first_id_and_grams(self):
+    def test_grams_then_kilograms_use_primary_kilograms_and_keep_first_id(self):
         first = self.store(1000, "g")
         merged = self.store(1, "kg")
-        self.assertEqual((merged["id"], merged["quantity"], merged["unit"]), (first["id"], 2000, "g"))
-        self.assertEqual(merged["product_unit_id"], self.gram["id"])
+        self.assertEqual((first["quantity"], first["unit"]), (1, "kg"))
+        self.assertEqual((merged["id"], merged["quantity"], merged["unit"]), (first["id"], 2, "kg"))
+        self.assertEqual(merged["product_unit_id"], self.kilogram["id"])
         self.assertEqual(len(self.call("GET", "/inventory")), 1)
 
     def test_kilograms_then_grams_keep_first_id_and_kilograms(self):
@@ -72,15 +74,15 @@ class InventoryMergingTest(unittest.TestCase):
         self.store(1, "kg")
         current = self.call("GET", f'/inventory/{first["id"]}')
         counted = self.call("PUT", f'/inventory/{first["id"]}', {
-            **current, "quantity": 750, "expected_updated_at": current["updated_at"],
+            **current, "quantity": 750, "unit": "g", "expected_updated_at": current["updated_at"],
         })
-        self.assertEqual((counted["id"], counted["quantity"], counted["unit"]), (first["id"], 750, "g"))
-        added = self.call("POST", f'/inventory/{first["id"]}/increase', {"amount": 250})
-        self.assertEqual(added["quantity"], 1000)
-        taken = self.call("POST", f'/inventory/{first["id"]}/decrease', {"amount": 100})
-        self.assertEqual(taken["quantity"], 900)
-        self.call("POST", f'/inventory/{first["id"]}/decrease', {"amount": 901}, status=422)
-        self.assertEqual(self.call("GET", f'/inventory/{first["id"]}')["quantity"], 900)
+        self.assertEqual((counted["id"], counted["quantity"], counted["unit"]), (first["id"], .75, "kg"))
+        added = self.call("POST", f'/inventory/{first["id"]}/increase', {"amount": .25})
+        self.assertEqual(added["quantity"], 1)
+        taken = self.call("POST", f'/inventory/{first["id"]}/decrease', {"amount": .1})
+        self.assertEqual(taken["quantity"], .9)
+        self.call("POST", f'/inventory/{first["id"]}/decrease', {"amount": .901}, status=422)
+        self.assertEqual(self.call("GET", f'/inventory/{first["id"]}')["quantity"], .9)
         self.assertEqual(len(self.call("GET", "/inventory")), 1)
 
     def test_equal_names_do_not_merge_different_foods(self):
@@ -91,7 +93,7 @@ class InventoryMergingTest(unittest.TestCase):
         }, status=201)
         second = self.store(1, "kg", food_id=other["id"])
         self.assertNotEqual(first["id"], second["id"])
-        self.assertEqual(self.call("GET", f'/inventory/{first["id"]}')["quantity"], 1000)
+        self.assertEqual(self.call("GET", f'/inventory/{first["id"]}')["quantity"], 1)
 
     def test_converted_equivalent_price_notes_and_barcode_aliases_preserve_first_details(self):
         first = self.store(1000, "g", price=.004, minimum_quantity=25,
@@ -99,11 +101,12 @@ class InventoryMergingTest(unittest.TestCase):
         merged = self.store(1, "kg", price=4, minimum_quantity=99,
                             barcode="4012345678901", notes="REWE-Bon", storage_location="Vorrat")
         self.assertEqual((merged["id"], merged["quantity"], merged["price"], merged["minimum_quantity"]),
-                         (first["id"], 2000, .004, 25))
+                         (first["id"], 2, 4, .025))
+        self.assertEqual(merged["quantity"] * merged["price"], 8)
         self.assertEqual(merged["barcode"], first["barcode"])
         self.assertEqual(merged["notes"], "Erster Zugang\n\nREWE-Bon")
         repeated_note = self.store(.5, "kg", price=4, notes="REWE-Bon", storage_location="Vorrat")
-        self.assertEqual((repeated_note["quantity"], repeated_note["notes"]), (2500, merged["notes"]))
+        self.assertEqual((repeated_note["quantity"], repeated_note["notes"]), (2.5, merged["notes"]))
         food = self.call("GET", f'/foods/{self.food["id"]}')
         self.assertEqual(set(food["barcodes"]), {"0012345678905", "4012345678901"})
 
@@ -122,15 +125,16 @@ class InventoryMergingTest(unittest.TestCase):
             with self.subTest(fields=fields):
                 added = self.store(1, "kg", **fields)
                 self.assertNotEqual(added["id"], first["id"])
-        self.assertEqual(self.call("GET", f'/inventory/{first["id"]}')["quantity"], 1000)
+        self.assertEqual(self.call("GET", f'/inventory/{first["id"]}')["quantity"], 1)
 
-    def test_explicit_food_conversion_merges_but_mass_and_volume_stay_separate(self):
+    def test_explicit_food_conversion_merges_and_incompatible_dimensions_are_rejected(self):
         first = self.store(1000, "g")
         merged = self.store(1, "Beutel")
-        self.assertEqual((merged["id"], merged["quantity"]), (first["id"], 1500))
-        liquid = self.store(1000, "ml")
-        self.assertNotEqual(liquid["id"], first["id"])
-        self.assertEqual(liquid["quantity"], 1000)
+        self.assertEqual((merged["id"], merged["quantity"]), (first["id"], 1.5))
+        self.call("POST", "/inventory", {
+            "food_id": self.food["id"], "name": "Mehl", "quantity": 1000, "unit": "ml",
+        }, status=422)
+        self.assertEqual(len(self.call("GET", "/inventory")), 1)
 
     def test_changed_custom_pack_snapshot_is_not_merged_using_current_food_factor(self):
         pack = self.call("POST", "/product-units", {"name": "Packung"}, status=201)
@@ -170,10 +174,10 @@ class InventoryMergingTest(unittest.TestCase):
             "booking_key": "inventory-merge-refund",
         }, status=201)
         merged = self.store(1, "kg")
-        self.assertEqual((merged["id"], merged["quantity"]), (first["id"], 1900))
+        self.assertEqual((merged["id"], merged["quantity"]), (first["id"], 1.9))
         self.call("DELETE", f'/meals/logs/{meal["id"]}', status=204)
         final = self.call("GET", f'/inventory/{first["id"]}')
-        self.assertEqual((final["quantity"], final["unit"]), (2000, "g"))
+        self.assertEqual((final["quantity"], final["unit"]), (2, "kg"))
         self.assertEqual(len(self.call("GET", "/inventory")), 1)
 
     def test_oldest_compatible_row_is_used_without_consolidating_later_rows(self):
@@ -187,7 +191,7 @@ class InventoryMergingTest(unittest.TestCase):
             db.commit()
             later_id = later.id
         merged = self.store(1, "kg")
-        self.assertEqual((merged["id"], merged["quantity"]), (first["id"], 2000))
+        self.assertEqual((merged["id"], merged["quantity"]), (first["id"], 2))
         self.assertEqual(self.call("GET", f"/inventory/{later_id}")["quantity"], 3)
 
     def test_conversion_overflow_does_not_change_existing_quantity(self):
@@ -196,13 +200,13 @@ class InventoryMergingTest(unittest.TestCase):
             "name": "Mehl", "food_id": self.food["id"], "quantity": 1e308, "unit": "kg",
             "purchase_date": "2026-11-18",
         }, status=422)
-        self.assertEqual(self.call("GET", f'/inventory/{first["id"]}')["quantity"], 1000)
+        self.assertEqual(self.call("GET", f'/inventory/{first["id"]}')["quantity"], 1)
 
-    def test_zero_quantity_keeps_each_requested_unit_in_its_own_empty_row(self):
+    def test_zero_quantity_also_uses_primary_unit(self):
         for unit in ("g", "kg", "Beutel"):
             with self.subTest(unit=unit):
                 item = self.store(0, unit)
-                self.assertEqual((item["quantity"], item["unit"]), (0, unit))
+                self.assertEqual((item["quantity"], item["unit"]), (0, "kg"))
         self.assertEqual(len(self.call("GET", "/inventory")), 3)
 
     def test_non_finite_quantity_is_rejected_before_inserting_any_stock(self):
@@ -218,3 +222,117 @@ class InventoryMergingTest(unittest.TestCase):
                 add_or_merge_inventory(db, incoming)
             self.assertEqual(caught.exception.status_code, 422)
             self.assertEqual(db.query(models.InventoryItem).count(), 0)
+
+    def can_food(self, serving_size=400, serving_unit="g"):
+        can = self.call("POST", "/product-units", {"name": "Dose"}, status=201)
+        self.food = self.call("POST", "/foods", {
+            "name": "Dosentomaten", "product_unit_id": can["id"], "serving_size": serving_size,
+            "serving_unit": serving_unit, "conversions": [{"quantity": 2, "unit": "Portion"}],
+            "calories_per_100g": 40, "price": 2,
+        }, status=201)
+        return can
+
+    def test_grams_and_fractional_amounts_are_saved_in_cans_with_unchanged_food_conversion(self):
+        can = self.can_food()
+        first = self.store(800, "g", price=.005)
+        self.assertEqual((first["quantity"], first["unit"], first["product_unit_id"], first["price"]), (2, "Dose", can["id"], 2))
+        partial = self.store(100, "g", price=.005)
+        self.assertEqual((partial["id"], partial["quantity"], partial["unit"]), (first["id"], 2.25, "Dose"))
+        self.assertEqual((partial["serving_size"], partial["serving_unit"]), (400, "g"))
+        self.assertEqual(partial["quantity"] * partial["price"], 4.5)
+        self.assertEqual(self.call("GET", f'/foods/{self.food["id"]}'), self.food)
+
+    def test_stocktaking_in_grams_preserves_can_unit_and_stock_value(self):
+        self.can_food()
+        first = self.store(800, "g", price=.005)
+        counted = self.call("PUT", f'/inventory/{first["id"]}', {
+            "food_id": self.food["id"], "name": self.food["name"], "quantity": 300, "unit": "g", "price": .005,
+            "minimum_quantity": 200, "expected_updated_at": first["updated_at"],
+        })
+        self.assertEqual((counted["quantity"], counted["unit"], counted["price"], counted["minimum_quantity"]), (.75, "Dose", 2, .5))
+        self.assertEqual(len(self.call("GET", "/inventory")), 1)
+
+    def test_shopping_and_receipt_imports_also_store_can_units(self):
+        self.can_food()
+        first = self.store(800, "g")
+        self.call("POST", "/shopping-list", {
+            "name": self.food["name"], "food_id": self.food["id"], "quantity": 400, "unit": "g",
+        }, status=201)
+        self.call("POST", "/shopping-list/import-to-inventory", {"purchase_date": "2026-11-18"})
+        with Session(self.engine) as db:
+            result = book_receipt_import(db, schemas.ReceiptImportBookRequest(purchase_date=date(2026, 11, 18), items=[
+                schemas.ReceiptImportBookItem(source_index=0, raw_name="Tomaten", name=self.food["name"],
+                                             food_id=self.food["id"], quantity=200, unit="g"),
+            ]))
+            self.assertEqual(result.booked_count, 1)
+        row, = self.call("GET", "/inventory")
+        self.assertEqual((row["id"], row["quantity"], row["unit"]), (first["id"], 3.5, "Dose"))
+
+    def test_recipe_and_tracker_deduct_grams_from_cans_and_refund_cans(self):
+        self.can_food()
+        first = self.store(800, "g")
+        recipe = self.call("POST", "/recipes", {
+            "name": "Tomatensauce", "servings": 1, "ingredients": [
+                {"food_id": self.food["id"], "quantity": 100, "unit": "g"},
+                {"food_id": self.food["id"], "quantity": .5, "unit": "Portion"},
+            ],
+        }, status=201)
+        prepared = self.call("POST", f'/recipes/{recipe["id"]}/prepare', status=201)
+        self.assertEqual(prepared["consumed"][0]["quantity"], 200)
+        self.assertEqual(prepared["inventory_item"]["unit"], "Portion")
+        self.assertEqual(self.call("GET", f'/inventory/{first["id"]}')["quantity"], 1.5)
+        meal = self.call("POST", "/meals/logs", {
+            "food_id": self.food["id"], "quantity": 100, "unit": "g", "deduct_inventory": True,
+            "booking_key": "standard-can-refund",
+        }, status=201)
+        self.assertEqual(self.call("GET", f'/inventory/{first["id"]}')["quantity"], 1.25)
+        self.call("DELETE", f'/meals/logs/{meal["id"]}', status=204)
+        final = self.call("GET", f'/inventory/{first["id"]}')
+        self.assertEqual((final["quantity"], final["unit"], final["serving_size"], final["serving_unit"]), (1.5, "Dose", 400, "g"))
+        with Session(self.engine) as db:
+            row = db.get(models.InventoryItem, first["id"])
+            self.assertEqual(nutrition_service.food_amount_in_grams(row, row.quantity, row.unit), 600)
+
+    def test_legacy_gram_lot_and_recorded_refund_are_converted_without_losing_stock(self):
+        self.can_food()
+        with Session(self.engine) as db:
+            old = models.InventoryItem(name=self.food["name"], food_id=self.food["id"], quantity=800, unit="g",
+                                       serving_size=1, serving_unit="g", price=.005, minimum_quantity=100,
+                                       purchase_date=date(2026, 11, 18))
+            db.add(old)
+            db.commit()
+            old_id = old.id
+        meal = self.call("POST", "/meals/logs", {
+            "food_id": self.food["id"], "quantity": 100, "unit": "g", "deduct_inventory": True,
+            "booking_key": "legacy-gram-can-refund",
+        }, status=201)
+        merged = self.store(400, "g", price=.005)
+        self.assertEqual((merged["id"], merged["quantity"], merged["unit"], merged["price"]), (old_id, 2.75, "Dose", 2))
+        self.assertEqual(merged["minimum_quantity"], .25)
+        self.call("DELETE", f'/meals/logs/{meal["id"]}', status=204)
+        final, = self.call("GET", "/inventory")
+        self.assertEqual((final["id"], final["quantity"], final["unit"], final["price"]), (old_id, 3, "Dose", 2))
+
+    def test_count_based_food_conversion_is_preserved(self):
+        self.can_food(serving_size=4, serving_unit="Stueck")
+        first = self.store(8, "Stueck")
+        self.assertEqual((first["quantity"], first["unit"], first["serving_size"], first["serving_unit"]), (2, "Dose", 4, "Stueck"))
+
+    def test_zero_amount_uses_can_unit_and_unrepresentable_fraction_is_rejected(self):
+        self.can_food()
+        self.assertEqual(self.store(0, "g")["unit"], "Dose")
+        self.call("PATCH", f'/foods/{self.food["id"]}', {"serving_size": 1e10})
+        self.call("POST", "/inventory", {
+            "food_id": self.food["id"], "name": self.food["name"], "quantity": 1e-10, "unit": "g",
+        }, status=422)
+        self.assertEqual(len(self.call("GET", "/inventory")), 1)
+
+    def test_merging_cannot_overflow_the_underlying_amount_in_grams(self):
+        self.can_food()
+        for _ in range(4):
+            first = self.store(1e305, "Dose")
+        self.call("POST", "/inventory", {
+            "food_id": self.food["id"], "name": self.food["name"], "quantity": 1e305, "unit": "Dose",
+            "purchase_date": "2026-11-18",
+        }, status=422)
+        self.assertEqual(self.call("GET", f'/inventory/{first["id"]}')["quantity"], 4e305)
