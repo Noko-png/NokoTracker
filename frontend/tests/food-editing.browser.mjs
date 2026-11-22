@@ -638,6 +638,42 @@ try {
     await clickButton('.recipe-card', 'Nährwerte');
     await waitFor("document.querySelector('.recipe-card .nutrition-mini strong')?.textContent === '40'");
     console.log(`PASS ${width}px recipes: only ingredient units are offered and nutrition follows draft servings in new and saved recipes without writing changes`);
+
+    const [imageWidth, imageHeight] = width < 760 ? [720, 1280] : [1280, 720];
+    const imagePath = await evaluate(`(() => {
+      const canvas = document.createElement('canvas');
+      canvas.width = ${imageWidth};
+      canvas.height = ${imageHeight};
+      const context = canvas.getContext('2d');
+      context.fillStyle = '#194b73';
+      context.fillRect(0, 0, canvas.width, canvas.height);
+      return canvas.toDataURL('image/png');
+    })()`);
+    const steps = Array.from({ length: 12 }, (_, index) => `Testschritt ${index + 1}`);
+    await request(`/recipes/${recipe.id}`, 'PATCH', {
+      image_path: imagePath, description: 'Beschreibung unter dem Rezeptbild', instructions: steps.join('\n'),
+    });
+    await clickButton('.topbar-actions', 'Aktualisieren');
+    await waitFor("document.querySelector('.recipe-card-image img')?.naturalWidth > 0");
+    await clickButton('.recipe-card', 'Zubereiten');
+    await waitFor("document.querySelector('.prepare-image img')?.naturalWidth > 0");
+    const layout = await evaluate(`(() => {
+      const panel = document.querySelector('.prepare-panel');
+      const image = panel.querySelector('.prepare-image');
+      const description = panel.querySelector('.prepare-section');
+      const imageBottom = image.getBoundingClientRect().bottom;
+      const descriptionTop = description.getBoundingClientRect().top;
+      panel.scrollTop = panel.scrollHeight;
+      return {
+        imageBottom,
+        descriptionTop,
+        scrolled: panel.scrollTop > 0,
+        lastStepVisible: panel.querySelector('.prepare-step:last-child').getBoundingClientRect().bottom <= panel.getBoundingClientRect().bottom,
+      };
+    })()`);
+    assert.ok(layout.imageBottom <= layout.descriptionTop, `Recipe image overlaps the description: ${JSON.stringify(layout)}`);
+    assert.ok(layout.scrolled && layout.lastStepVisible, 'Preparation steps must remain reachable by scrolling');
+    console.log(`PASS ${width}px recipe preparation: the image has its own space and all steps remain reachable`);
   }
 } finally {
   await send("Page.navigate", { url: "about:blank" });

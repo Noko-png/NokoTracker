@@ -1,5 +1,9 @@
 # Changelog
 
+## 3.1.34
+
+- Das Rezeptbild in der Zubereitungsansicht wird vollständig oberhalb von Beschreibung, Zutaten und Schritten angezeigt. Lange Rezepte lassen sich im Dialog scrollen.
+
 ## 3.1.33
 
 - Würde eine Entnahme oder Bestandskorrektur die Menge unter 0 setzen, bietet die Bestandsübersicht an, die betroffene Position zu löschen. Der Bestand wird erst nach Bestätigung gelöscht. Eine zwischenzeitliche Änderung der Position verhindert das Löschen.

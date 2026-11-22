@@ -3393,6 +3393,7 @@ th {
 
 .prepare-panel {
   display: grid;
+  grid-auto-rows: max-content;
   gap: 18px;
   width: min(760px, 100%);
   max-height: min(840px, calc(100vh - 36px));
@@ -3419,7 +3420,6 @@ th {
 
 .prepare-image {
   overflow: hidden;
-  aspect-ratio: 16 / 9;
   border: 1px solid var(--line);
   border-radius: 8px;
   background: var(--surface-soft);
@@ -3428,8 +3428,9 @@ th {
 .prepare-image img {
   display: block;
   width: 100%;
-  height: 100%;
-  object-fit: cover;
+  height: auto;
+  max-height: min(360px, 50dvh);
+  object-fit: contain;
 }
 
 .prepare-section {
