@@ -85,6 +85,24 @@ class InventoryMergingTest(unittest.TestCase):
         self.assertEqual(self.call("GET", f'/inventory/{first["id"]}')["quantity"], .9)
         self.assertEqual(len(self.call("GET", "/inventory")), 1)
 
+    def test_stock_underflow_and_confirmed_removal_do_not_overwrite_newer_stock(self):
+        first = self.store(.9999999, "kg", storage_location="Kueche")
+        reserve = self.store(1, "kg", storage_location="Vorrat")
+        path = f'/inventory/{first["id"]}'
+        failed = self.call("POST", f"{path}/decrease", {"amount": 1}, status=422)
+        self.assertEqual(failed["detail"], "Quantity cannot fall below 0")
+        self.assertEqual(self.call("GET", path), first)
+
+        updated = self.call("POST", f"{path}/increase", {"amount": .1})
+        self.call("DELETE", f'{path}?expected_updated_at={first["updated_at"]}', status=409)
+        self.assertEqual(self.call("GET", path), updated)
+
+        remaining = self.call("POST", f"{path}/decrease", {"amount": .1})
+        self.call("POST", f"{path}/decrease", {"amount": 1}, status=422)
+        self.call("DELETE", f'{path}?expected_updated_at={remaining["updated_at"]}', status=204)
+        self.assertEqual(self.call("GET", "/inventory"), [reserve])
+        self.assertEqual(self.call("GET", f'/foods/{self.food["id"]}'), self.food)
+
     def test_equal_names_do_not_merge_different_foods(self):
         first = self.store(1000, "g")
         other = self.call("POST", "/foods", {
@@ -255,9 +273,10 @@ class InventoryMergingTest(unittest.TestCase):
     def test_shopping_and_receipt_imports_also_store_can_units(self):
         self.can_food()
         first = self.store(800, "g")
-        self.call("POST", "/shopping-list", {
+        purchase = self.call("POST", "/shopping-list", {
             "name": self.food["name"], "food_id": self.food["id"], "quantity": 400, "unit": "g",
         }, status=201)
+        self.call("POST", f'/shopping-list/{purchase["id"]}/check')
         self.call("POST", "/shopping-list/import-to-inventory", {"purchase_date": "2026-11-18"})
         with Session(self.engine) as db:
             result = book_receipt_import(db, schemas.ReceiptImportBookRequest(purchase_date=date(2026, 11, 18), items=[
@@ -267,6 +286,37 @@ class InventoryMergingTest(unittest.TestCase):
             self.assertEqual(result.booked_count, 1)
         row, = self.call("GET", "/inventory")
         self.assertEqual((row["id"], row["quantity"], row["unit"]), (first["id"], 3.5, "Dose"))
+
+    def test_shopping_import_books_only_checked_purchases_and_asks_only_about_checked_unknowns(self):
+        food_id = self.food["id"]
+        purchased = self.call("POST", "/shopping-list", {
+            "name": self.food["name"], "food_id": food_id, "quantity": .5, "unit": "kg",
+        }, status=201)
+        open_unknown = self.call("POST", "/shopping-list", {"name": "Noch zu kaufen"}, status=201)
+        empty = self.call("POST", "/shopping-list/import-to-inventory", {"unknown_item_action": "create"})
+        self.assertEqual(empty["imported_count"], 0)
+        self.assertEqual(self.call("GET", "/inventory"), [])
+        self.assertEqual(self.call("GET", "/shopping-list"), [purchased, open_unknown])
+
+        self.call("POST", f'/shopping-list/{purchased["id"]}/check')
+        open_known = self.call("POST", "/shopping-list", {
+            "name": self.food["name"], "food_id": food_id, "quantity": 2, "unit": "kg",
+        }, status=201)
+        checked_unknown = self.call("POST", "/shopping-list", {
+            "name": "Unbekannter Kauf", "is_checked": True,
+        }, status=201)
+        preview = self.call("POST", "/shopping-list/import-to-inventory")
+        self.assertTrue(preview["requires_decision"])
+        self.assertEqual(preview["unknown_items"], [checked_unknown])
+        self.assertEqual(self.call("GET", "/inventory"), [])
+
+        result = self.call("POST", "/shopping-list/import-to-inventory", {"unknown_item_action": "delete"})
+        self.assertEqual(result["imported_count"], 1)
+        self.assertEqual(result["deleted_shopping_item_ids"], [purchased["id"], checked_unknown["id"]])
+        row, = self.call("GET", "/inventory")
+        self.assertEqual((row["food_id"], row["quantity"], row["unit"]), (food_id, .5, "kg"))
+        self.assertEqual(self.call("GET", "/shopping-list"), [open_unknown, open_known])
+        self.assertEqual(self.call("POST", "/shopping-list/import-to-inventory")["imported_count"], 0)
 
     def test_recipe_and_tracker_deduct_grams_from_cans_and_refund_cans(self):
         self.can_food()

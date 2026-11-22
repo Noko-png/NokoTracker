@@ -1,4 +1,4 @@
-from datetime import date, timedelta, timezone
+from datetime import date, datetime, timedelta, timezone
 import math
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Response, status
@@ -22,6 +22,14 @@ def get_item_or_404(db: Session, item_id: int) -> models.InventoryItem:
     if item is None:
         raise HTTPException(status_code=404, detail="Inventory item not found")
     return item
+
+
+def ensure_inventory_item_version(item: models.InventoryItem, expected_updated_at: datetime) -> None:
+    def utc_naive(value: datetime) -> datetime:
+        return value.astimezone(timezone.utc).replace(tzinfo=None) if value.tzinfo else value
+
+    if utc_naive(item.updated_at) != utc_naive(expected_updated_at):
+        raise HTTPException(409, "Der Bestand wurde inzwischen geändert. Bitte den Eintrag erneut prüfen.")
 
 
 def ensure_product_group_exists(db: Session, product_group_id: int | None) -> None:
@@ -216,11 +224,7 @@ def replace_inventory_item(
     db: Session = Depends(get_db),
 ):
     item = get_item_or_404(db, item_id)
-    def utc_naive(value):
-        return value.astimezone(timezone.utc).replace(tzinfo=None) if value.tzinfo else value
-    if utc_naive(item.updated_at) != utc_naive(item_in.expected_updated_at):
-        raise HTTPException(409, "Der Bestand wurde inzwischen geaendert. Bitte neu laden und den Eintrag erneut bearbeiten.")
-
+    ensure_inventory_item_version(item, item_in.expected_updated_at)
     ensure_product_group_exists(db, item_in.product_group_id)
     ensure_product_unit_exists(db, item_in.product_unit_id)
     try:
@@ -239,8 +243,14 @@ def replace_inventory_item(
 
 
 @router.delete("/{item_id}", status_code=status.HTTP_204_NO_CONTENT)
-def delete_inventory_item(item_id: int, db: Session = Depends(get_db)):
+def delete_inventory_item(
+    item_id: int,
+    db: Session = Depends(get_db),
+    expected_updated_at: datetime | None = None,
+):
     item = get_item_or_404(db, item_id)
+    if expected_updated_at is not None:
+        ensure_inventory_item_version(item, expected_updated_at)
     crud.delete(db, item)
     return Response(status_code=status.HTTP_204_NO_CONTENT)
 
@@ -274,8 +284,6 @@ def decrease_inventory_item(
     next_quantity = normalized_quantity(
         normalized_quantity(item.quantity) - normalized_quantity(change.amount)
     )
-    if next_quantity < 0 and abs(next_quantity) <= 0.000001:
-        next_quantity = 0.0
     if next_quantity < 0:
         raise HTTPException(status_code=422, detail="Quantity cannot fall below 0")
 

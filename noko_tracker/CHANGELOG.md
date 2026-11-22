@@ -1,5 +1,11 @@
 # Changelog
 
+## 3.1.33
+
+- Würde eine Entnahme oder Bestandskorrektur die Menge unter 0 setzen, bietet die Bestandsübersicht an, die betroffene Position zu löschen. Der Bestand wird erst nach Bestätigung gelöscht. Eine zwischenzeitliche Änderung der Position verhindert das Löschen.
+- **In Bestand übernehmen** bucht nur abgehakte Einkaufsartikel. Offene Artikel bleiben auf der Einkaufsliste.
+- Beim Hinzufügen von Zutaten stehen nur die Einheiten des ausgewählten Lebensmittels zur Verfügung. Die Nährwerte pro Portion aktualisieren sich direkt beim Ändern der Portionszahl im Rezepteditor.
+
 ## 3.1.32
 
 - Unter **Stammdaten > Produktgruppen** lässt sich die Einkaufspriorität einstellen. Höhere Werte erscheinen in der Einkaufsliste zuerst. Bei gleicher Priorität gilt die Reihenfolge des Hinzufügens.

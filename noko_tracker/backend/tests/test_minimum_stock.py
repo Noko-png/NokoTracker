@@ -57,6 +57,10 @@ class MinimumStockTest(unittest.TestCase):
     def generate(self):
         return self.call("POST", "/shopping-list/generate-from-low-stock", status=201)
 
+    def book_purchase(self, purchase):
+        self.call("POST", f'/shopping-list/{purchase["id"]}/check')
+        return self.call("POST", "/shopping-list/import-to-inventory")
+
     def test_food_without_any_stock_is_reported_and_can_be_purchased(self):
         warning, = self.warnings()
         self.assertEqual((warning["food_id"], warning["quantity"], warning["minimum_quantity"], warning["missing_quantity"], warning["unit"]),
@@ -68,7 +72,7 @@ class MinimumStockTest(unittest.TestCase):
         self.assertIsNone(purchase["inventory_item_id"])
         self.assertEqual(self.generate(), [])
         self.assertEqual(self.call("GET", "/inventory"), [])
-        self.call("POST", "/shopping-list/import-to-inventory")
+        self.book_purchase(purchase)
         self.assertEqual(self.warnings(), [])
         self.assertEqual(len(self.call("GET", "/inventory")), 1)
 
@@ -80,7 +84,7 @@ class MinimumStockTest(unittest.TestCase):
                          (1.25, 2, .75, "kg"))
         purchase, = self.generate()
         self.assertEqual((purchase["quantity"], purchase["unit"]), (.75, "kg"))
-        self.call("POST", "/shopping-list/import-to-inventory")
+        self.book_purchase(purchase)
         self.assertEqual(self.warnings(), [])
 
     def test_master_changes_take_effect_without_editing_existing_lots(self):
@@ -162,7 +166,7 @@ class MinimumStockTest(unittest.TestCase):
         self.assertIn("Manuell vorgemerkt", updated["notes"])
         self.assertEqual(self.generate(), [])
         self.assertEqual(len(self.call("GET", "/shopping-list")), 1)
-        self.call("POST", "/shopping-list/import-to-inventory")
+        self.book_purchase(updated)
         self.assertEqual(self.warnings(), [])
         self.assertEqual(self.call("GET", "/inventory")[0]["quantity"], 2)
 
@@ -191,7 +195,7 @@ class MinimumStockTest(unittest.TestCase):
         updated, = self.generate()
         self.assertEqual((updated["id"], updated["quantity"], updated["unit"]), (planned["id"], 2.5, "Beutel"))
         self.assertEqual(self.generate(), [])
-        self.call("POST", "/shopping-list/import-to-inventory")
+        self.book_purchase(updated)
         self.assertEqual(self.warnings(), [])
 
     def test_existing_purchase_above_target_is_preserved_without_new_items(self):

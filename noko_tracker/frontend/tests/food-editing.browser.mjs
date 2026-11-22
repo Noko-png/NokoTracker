@@ -78,14 +78,17 @@ async function click(selector) {
 function field(scope, label) {
   return `Array.from(document.querySelectorAll(${JSON.stringify(`${scope} label`)})).find(el => el.querySelector('span')?.textContent === ${JSON.stringify(label)}).querySelector('input, select')`;
 }
-async function fill(scope, label, value) {
+async function setInputValue(expression, value) {
   await evaluate(`(() => {
-    const input = ${field(scope, label)};
+    const input = ${expression};
     const prototype = input.tagName === 'SELECT' ? HTMLSelectElement.prototype : HTMLInputElement.prototype;
     Object.getOwnPropertyDescriptor(prototype, 'value').set.call(input, ${JSON.stringify(value)});
     input.dispatchEvent(new Event('input', { bubbles: true }));
     input.dispatchEvent(new Event('change', { bubbles: true }));
   })()`);
+}
+async function fill(scope, label, value) {
+  await setInputValue(field(scope, label), value);
 }
 async function readField(scope, label) {
   return evaluate(`${field(scope, label)}.value`);
@@ -362,7 +365,7 @@ try {
     const cannedFood = await request('/foods', 'POST', {
       name: 'Dosentomaten fuer Standardeinheit', product_unit_id: can.id,
       serving_size: 400, serving_unit: 'g', price: 2, conversions: [{ quantity: 2, unit: 'Portion' }],
-      calories_per_100g: 40, expiry_days: 7,
+      calories_per_100g: 40, protein_per_100g: 3, fat_per_100g: 1, carbs_per_100g: 4, expiry_days: 7,
     });
     await clickButton('.topbar-actions', 'Aktualisieren');
     await waitFor("!document.querySelector('.loading-bar')");
@@ -502,6 +505,139 @@ try {
     await waitFor(`${shoppingNames}.length === 4`);
     assert.deepEqual(await evaluate(shoppingNames), [food.name, apple.name, minimumFood.name, shoppingFood.name]);
     console.log(`PASS ${width}px shopping order: group priority can be set and updated, existing items follow the new order`);
+
+    const openTextItem = await request('/shopping-list', 'POST', { name: 'Offener Freitext für später' });
+    await clickButton('.topbar-actions', 'Aktualisieren');
+    await waitFor(`${shoppingNames}.includes(${JSON.stringify(openTextItem.name)})`);
+    const bookButton = "document.querySelector('.shopping-header-actions .button.primary')";
+    assert.equal(await evaluate(`${bookButton}.disabled`), true);
+    await evaluate(`Array.from(document.querySelectorAll('.shopping-item')).find(row => row.textContent.includes(${JSON.stringify(shoppingFood.name)})).querySelector('.check-button').click()`);
+    await waitFor(`${bookButton}.disabled === false`);
+    await clickButton('.shopping-header-actions', 'In Bestand übernehmen');
+    await waitFor(`!${shoppingNames}.includes(${JSON.stringify(shoppingFood.name)})`);
+    assert.equal(await evaluate(`${bookButton}.disabled`), true);
+    assert.deepEqual(await evaluate(shoppingNames), [food.name, apple.name, minimumFood.name, openTextItem.name]);
+    const bookedStock = (await request('/inventory')).filter(row => row.food_id === shoppingFood.id);
+    assert.equal(bookedStock.reduce((total, row) => total + row.quantity, 0), 2);
+    console.log(`PASS ${width}px shopping import: the button requires a checked item and open food and text entries remain on the list`);
+
+    const makeStock = (name, quantity) => request('/inventory', 'POST', {
+      name, quantity, product_unit_id: kilogram.id, unit: 'kg', storage_location: 'Testlager', expiry_days: 7,
+    });
+    const smallLot = await makeStock('Teilmenge zum Entnehmen', .5);
+    const exactLot = await makeStock('Genau eine Einheit', 1);
+    const countedLot = await makeStock('Position für Bestandskorrektur', .5);
+    const inventoryRow = (name) => `Array.from(document.querySelectorAll('.inventory-table tbody tr, .inventory-mobile-card'))
+      .find(row => row.getClientRects().length && row.textContent.includes(${JSON.stringify(name)}))`;
+    const stockButton = (name, action) => `${inventoryRow(name)}?.querySelector('.stock-action.${action}')`;
+    const clickStockButton = async (name, action) => {
+      const button = stockButton(name, action);
+      await waitFor(`${button}?.disabled === false`);
+      await evaluate(`${button}.click()`);
+    };
+    const removalDialog = '.inventory-underflow-dialog[open]';
+    const dialogOpen = `document.querySelector('${removalDialog}') !== null`;
+    await click('[title="Bestandsübersicht"]');
+    await clickButton('.topbar-actions', 'Aktualisieren');
+    await waitFor("!document.querySelector('.loading-bar')");
+
+    await clickStockButton(exactLot.name, 'decrement');
+    await waitFor(`!(${inventoryRow(exactLot.name)})`);
+    assert.equal(await evaluate(dialogOpen), false);
+    assert.equal((await request(`/inventory/${exactLot.id}`)).quantity, 0);
+
+    await clickStockButton(smallLot.name, 'decrement');
+    await waitFor(dialogOpen);
+    assert.match(await evaluate(`document.querySelector('${removalDialog}').textContent`), /Teilmenge zum Entnehmen.*Testlager.*unter 0/s);
+    assert.equal(await evaluate('document.activeElement.textContent.trim()'), 'Abbrechen');
+    await clickButton(removalDialog, 'Abbrechen');
+    await waitFor(`!(${dialogOpen})`);
+    assert.equal((await request(`/inventory/${smallLot.id}`)).quantity, .5);
+
+    await clickStockButton(smallLot.name, 'decrement');
+    await waitFor(dialogOpen);
+    await request(`/inventory/${smallLot.id}/increase`, 'POST', { amount: .25 });
+    await clickButton(removalDialog, 'Bestand löschen');
+    await waitFor("document.querySelector('.notice.error')?.textContent.includes('inzwischen geändert')");
+    assert.equal((await request(`/inventory/${smallLot.id}`)).quantity, .75);
+    await clickStockButton(smallLot.name, 'decrement');
+    await waitFor(dialogOpen);
+    await clickButton(removalDialog, 'Bestand löschen');
+    await waitFor(`!(${inventoryRow(smallLot.name)}) && !(${dialogOpen})`);
+    assert.equal((await request('/inventory')).some(row => row.id === smallLot.id), false);
+
+    await clickStockButton(countedLot.name, 'edit');
+    await fill(stockForm, 'Menge', '-1/2');
+    await click(`${stockForm} button[type=submit]`);
+    await waitFor(dialogOpen);
+    await clickButton(removalDialog, 'Abbrechen');
+    await waitFor(`!(${dialogOpen})`);
+    assert.equal(await readField(stockForm, 'Menge'), '-1/2');
+    assert.equal((await request(`/inventory/${countedLot.id}`)).quantity, .5);
+    await click(`${stockForm} button[type=submit]`);
+    await waitFor(dialogOpen);
+    await clickButton(removalDialog, 'Bestand löschen');
+    await waitFor(`!(${dialogOpen}) && !document.querySelector('${stockForm}')`);
+    assert.equal((await request('/inventory')).some(row => row.id === countedLot.id), false);
+    assert.equal((await request(`/foods/${countedLot.food_id}`)).name, countedLot.name);
+    console.log(`PASS ${width}px stock underflow: zero is saved, cancel leaves stock unchanged, changed stock is protected and only confirmation removes a lot`);
+
+    const liter = await request('/product-units', 'POST', { name: 'l' });
+    const broth = await request('/foods', 'POST', {
+      name: 'Brühe mit Litereinheit', product_unit_id: liter.id, serving_unit: 'ml', serving_size: 1000,
+    });
+    await clickButton('.topbar-actions', 'Aktualisieren');
+    await waitFor("!document.querySelector('.loading-bar')");
+    await click('[title="Gerichte"]');
+    await clickButton('.recipes-page .section-header', 'Gericht erstellen');
+    await click('[title="Zutat hinzufuegen"]');
+    const ingredientForm = '.recipe-builder-add-ingredient';
+    const ingredientUnit = field(ingredientForm, 'Einheit');
+    const ingredientUnits = `Array.from((${ingredientUnit}).options, option => option.value).filter(Boolean)`;
+    assert.equal(await evaluate(`(${ingredientUnit}).disabled`), true);
+    await fill(ingredientForm, 'Lebensmittel', cannedFood.name);
+    assert.deepEqual(await evaluate(ingredientUnits), ['Dose', 'g', 'Portion']);
+    await fill(ingredientForm, 'Einheit', 'Portion');
+    await fill(ingredientForm, 'Lebensmittel', broth.name);
+    assert.deepEqual(await evaluate(ingredientUnits), ['l', 'ml']);
+    assert.equal(await evaluate(`(${ingredientUnit}).value`), 'l');
+    await fill(ingredientForm, 'Lebensmittel', cannedFood.name);
+    assert.deepEqual(await evaluate(ingredientUnits), ['Dose', 'g', 'Portion']);
+    await click(`${ingredientForm} button[type=submit]`);
+
+    const macroCards = "Array.from(document.querySelectorAll('.recipe-builder-nutrition-card > span'), el => el.textContent.trim())";
+    const servingInput = "document.querySelector('input[aria-label=\"Serving Quantity\"]')";
+    await waitFor(`${macroCards}[0] === '160 kcal per serving'`);
+    await setInputValue(servingInput, '2');
+    assert.deepEqual(await evaluate(macroCards), ['80 kcal per serving', '6 g per serving', '2 g per serving', '8 g per serving']);
+    await setInputValue("document.querySelector('input[aria-label=Rezeptname]')", 'Tomaten als Testgericht');
+    await clickButton('.recipe-builder-footer', 'Rezept anlegen');
+    await waitFor("!document.querySelector('.recipe-builder-page')");
+    const recipe = (await request('/recipes')).find(row => row.name === 'Tomaten als Testgericht');
+    assert.equal(recipe.servings, 2);
+    assert.equal(recipe.ingredients[0].unit, 'Dose');
+
+    await clickButton('.recipe-card', 'Nährwerte');
+    await waitFor("document.querySelector('.recipe-card .nutrition-mini') !== null");
+    await click('[title="Gericht bearbeiten"]');
+    await waitFor(`${macroCards}[0] === '80 kcal per serving'`);
+    await setInputValue(servingInput, '4');
+    assert.deepEqual(await evaluate(macroCards), ['40 kcal per serving', '3 g per serving', '1 g per serving', '4 g per serving']);
+    await setInputValue(servingInput, '1/2');
+    assert.equal(await evaluate(`${macroCards}[0]`), '320 kcal per serving');
+    await setInputValue(servingInput, '');
+    assert.equal(await evaluate(`${macroCards}[0]`), '—');
+    assert.equal((await request(`/recipes/${recipe.id}`)).servings, 2);
+    await click('[title="Zutat hinzufuegen"]');
+    await fill(ingredientForm, 'Lebensmittel', cannedFood.name);
+    assert.deepEqual(await evaluate(ingredientUnits), ['Dose', 'g', 'Portion']);
+    await setInputValue(servingInput, '4');
+    await clickButton('.recipe-builder-footer', 'Rezept speichern');
+    await waitFor("!document.querySelector('.recipe-builder-page')");
+    assert.equal(await evaluate("document.querySelector('.recipe-card .nutrition-mini') === null"), true);
+    await clickButton('.recipe-card', 'Nährwerte');
+    await waitFor("document.querySelector('.recipe-card .nutrition-mini strong')?.textContent === '40'");
+    console.log(`PASS ${width}px recipes: only ingredient units are offered and nutrition follows draft servings in new and saved recipes without writing changes`);
   }
 } finally {
   await send("Page.navigate", { url: "about:blank" });

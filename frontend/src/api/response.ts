@@ -1,3 +1,12 @@
+export class ApiResponseError extends Error {
+  readonly status: number;
+
+  constructor(message: string, status: number) {
+    super(message);
+    this.status = status;
+  }
+}
+
 export async function readJsonResponse<T>(response: Response): Promise<T> {
   if (response.ok && response.status === 204) return undefined as T;
 
@@ -18,7 +27,7 @@ export async function readJsonResponse<T>(response: Response): Promise<T> {
   }
   if (!response.ok) {
     const detail = payload !== null && typeof payload === "object" && "detail" in payload ? payload.detail : null;
-    throw new Error(typeof detail === "string" ? detail : status);
+    throw new ApiResponseError(typeof detail === "string" ? detail : status, response.status);
   }
   return payload as T;
 }

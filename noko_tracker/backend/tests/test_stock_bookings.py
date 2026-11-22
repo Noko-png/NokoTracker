@@ -264,7 +264,8 @@ class StockBookingTest(unittest.TestCase):
     def test_recipe_shopping_import_merges_in_primary_pack_unit(self):
         food, item = self.stock(100, "g", 500, m.ProductUnit(name="Packung"))
         recipe = self.recipe(food, (600, "g"))
-        recipes.sync_missing_recipe_ingredients_to_shopping_list(recipe.id, self.db)
+        sync_result = recipes.sync_missing_recipe_ingredients_to_shopping_list(recipe.id, self.db)
+        shopping.check_shopping_item(sync_result["missing"][0]["shopping_item"].id, self.db)
         result = shopping.import_shopping_list_to_inventory(db=self.db)
         self.assertEqual((item.quantity, item.unit), (1.2, "Packung"))
         self.assertEqual(result["created_inventory_items"], [])
@@ -276,7 +277,7 @@ class StockBookingTest(unittest.TestCase):
 
     def test_shopping_recipe_and_tracker_share_the_same_stock(self):
         food, item = self.stock(1000, "g", 1000, m.ProductUnit(name="kg"))
-        self.db.add(m.ShoppingListItem(name=food.name, food=food, inventory_item=item, quantity=1, unit="kg"))
+        self.db.add(m.ShoppingListItem(name=food.name, food=food, inventory_item=item, quantity=1, unit="kg", is_checked=True))
         self.db.commit()
         shopping.import_shopping_list_to_inventory(db=self.db)
         self.assertEqual((item.quantity, item.unit), (2, "kg"))
@@ -321,8 +322,8 @@ class StockBookingTest(unittest.TestCase):
         food.storage_location = "Vorrat"
         item.storage_location = "Kueche"
         self.db.add_all([
-            m.ShoppingListItem(name=food.name, food=food, inventory_item=item, quantity=1, unit="kg"),
-            m.ShoppingListItem(name=food.name, food=food, inventory_item=item, quantity=.5, unit="kg"),
+            m.ShoppingListItem(name=food.name, food=food, inventory_item=item, quantity=1, unit="kg", is_checked=True),
+            m.ShoppingListItem(name=food.name, food=food, inventory_item=item, quantity=.5, unit="kg", is_checked=True),
         ])
         self.db.commit()
         result = shopping.import_shopping_list_to_inventory(db=self.db)
@@ -356,8 +357,8 @@ class StockBookingTest(unittest.TestCase):
                 self.db.commit()
                 if source == "shopping":
                     self.db.add_all([
-                        m.ShoppingListItem(name=food.name, food=food, quantity=1, unit="kg"),
-                        m.ShoppingListItem(name=food.name, food=food, quantity=500, unit="g"),
+                        m.ShoppingListItem(name=food.name, food=food, quantity=1, unit="kg", is_checked=True),
+                        m.ShoppingListItem(name=food.name, food=food, quantity=500, unit="g", is_checked=True),
                     ])
                     self.db.commit()
                     result = shopping.import_shopping_list_to_inventory(db=self.db)
@@ -421,7 +422,7 @@ class StockBookingTest(unittest.TestCase):
         food.expiry_days = 5
         item.purchase_date = date.today() - timedelta(days=10)
         item.expiry_days = 5
-        self.db.add(m.ShoppingListItem(name=food.name, food=food, inventory_item=item, quantity=1, unit="pcs"))
+        self.db.add(m.ShoppingListItem(name=food.name, food=food, inventory_item=item, quantity=1, unit="pcs", is_checked=True))
         self.db.commit()
         old_expiry = item.expiry_date
         result = shopping.import_shopping_list_to_inventory(db=self.db)
@@ -434,8 +435,8 @@ class StockBookingTest(unittest.TestCase):
         item = m.InventoryItem(name=food.name, food=food, quantity=2, unit="Beutel", serving_size=500, serving_unit="g")
         self.db.add_all([
             food, item,
-            m.ShoppingListItem(name=food.name, food=food, quantity=1, unit="Beutel"),
-            m.ShoppingListItem(name=food.name, food=food, quantity=1, unit="Palette"),
+            m.ShoppingListItem(name=food.name, food=food, quantity=1, unit="Beutel", is_checked=True),
+            m.ShoppingListItem(name=food.name, food=food, quantity=1, unit="Palette", is_checked=True),
         ])
         self.db.commit()
         self.assert_http(422, shopping.import_shopping_list_to_inventory, db=self.db)
@@ -468,7 +469,7 @@ class StockBookingTest(unittest.TestCase):
             conversions=[m.FoodConversion(quantity=2, unit="Tasse")],
         )
         self.db.add(food)
-        self.db.add(m.ShoppingListItem(name=food.name, food=food, quantity=1, unit="tasse"))
+        self.db.add(m.ShoppingListItem(name=food.name, food=food, quantity=1, unit="tasse", is_checked=True))
         self.db.commit()
         shopping.import_shopping_list_to_inventory(db=self.db)
         receipt.book_receipt_import(self.db, s.ReceiptImportBookRequest(items=[
@@ -503,7 +504,7 @@ class StockBookingTest(unittest.TestCase):
             name="Beutel", default_conversion_quantity=500, default_conversion_unit="g",
         )
         self.db.add(product_unit)
-        self.db.add(m.ShoppingListItem(name="Reis", quantity=2, unit="Beutel"))
+        self.db.add(m.ShoppingListItem(name="Reis", quantity=2, unit="Beutel", is_checked=True))
         self.db.commit()
         result = shopping.import_shopping_list_to_inventory(
             s.ShoppingListInventoryImportRequest(unknown_item_action="create"), self.db,
@@ -515,7 +516,7 @@ class StockBookingTest(unittest.TestCase):
         self.assertEqual(nutrition.food_amount_in_grams(food, 2, "Beutel"), 1000)
 
         product_unit.default_conversion_quantity = 750
-        self.db.add(m.ShoppingListItem(name="Reis", quantity=1, unit="Beutel"))
+        self.db.add(m.ShoppingListItem(name="Reis", quantity=1, unit="Beutel", is_checked=True))
         self.db.commit()
         shopping.import_shopping_list_to_inventory(db=self.db)
         self.assertEqual((food.serving_size, food.serving_unit), (500, "g"))

@@ -289,7 +289,8 @@ class BarcodeTest(unittest.TestCase):
             shopping.create_shopping_item(s.ShoppingListItemCreate(
                 name=scanned.name, food_id=scanned.id, quantity=100, unit="g",
             ), self.db)
-        self.assertEqual(self.db.query(m.ShoppingListItem).count(), 1)
+        purchase = self.db.query(m.ShoppingListItem).one()
+        shopping.check_shopping_item(purchase.id, self.db)
         result = shopping.import_shopping_list_to_inventory(db=self.db)
         item = result["created_inventory_items"][0]
         self.assertEqual((item.food_id, item.quantity), (food.id, 200))

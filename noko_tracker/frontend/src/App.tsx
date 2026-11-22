@@ -1,7 +1,9 @@
 import { addFoodBarcode, foodBarcodes, foodMatchesSearch, normalizeBarcodes } from "./barcodes";
+import { ApiResponseError } from "./api/response";
 import { DatabaseImportForm } from "./DatabaseImportForm";
 import { DatabaseReset } from "./DatabaseReset";
 import { foodInventoryUnitNames } from "./foodInventory";
+import { InventoryUnderflowDialog } from "./InventoryUnderflowDialog";
 import { resolveProfileId } from "./profileSelection";
 import {
   configuredConversionUnitNames,
@@ -600,7 +602,7 @@ const macroMeta: Array<{
   { key: "carbs", label: "Kohlenhydrate", unit: "g", tone: "red" },
 ];
 
-const appVersion = "3.1.32";
+const appVersion = "3.1.33";
 const updateSourceLabel = "main / github.com/Noko-png/NokoTracker";
 
 const emptyNutrition: NutritionDay = {
@@ -722,7 +724,7 @@ const initialRecipeIngredientForm: RecipeIngredientForm = {
   food_id: "",
   food_query: "",
   quantity: "1",
-  unit: "g",
+  unit: "",
   notes: "",
 };
 
@@ -886,7 +888,7 @@ function parseNumberInput(value: string) {
       return Number.NaN;
     }
     const fraction = numerator / denominator;
-    return whole < 0 ? whole - fraction : whole + fraction;
+    return mixedFractionMatch[1].startsWith("-") ? whole - fraction : whole + fraction;
   }
 
   const fractionMatch = trimmed.match(
@@ -1900,6 +1902,12 @@ export default function App() {
     number | null
   >(null);
   const [inventoryCreateOpen, setInventoryCreateOpen] = useState(false);
+  const [inventoryRemoval, setInventoryRemoval] = useState<{
+    item: InventoryItem;
+    expectedUpdatedAt: string;
+  } | null>(null);
+  const inventoryDecreaseInFlight = useRef(false);
+  const [inventoryDecreaseBusy, setInventoryDecreaseBusy] = useState(false);
   const [productGroupForm, setProductGroupForm] = useState<ProductGroupForm>(
     initialProductGroupForm,
   );
@@ -2371,6 +2379,12 @@ export default function App() {
     event.preventDefault();
     try {
       setApiError(null);
+      if (editingInventoryItemId !== null && parseQuantityInput(inventoryForm.quantity) < 0) {
+        const item = inventory.find((row) => row.id === editingInventoryItemId);
+        if (!item) throw new Error("Die Bestandsposition ist nicht mehr vorhanden.");
+        setInventoryRemoval({ item, expectedUpdatedAt: inventoryForm.expected_updated_at });
+        return;
+      }
       const payload = createInventoryPayload(inventoryForm, productGroups, foods, productUnits);
       if (editingInventoryItemId === null) {
         await createInventoryItem(payload);
@@ -2446,16 +2460,42 @@ export default function App() {
     }
   }
 
-  async function removeInventoryItem(id: number) {
+  async function decreaseInventory(item: InventoryItem) {
+    if (inventoryDecreaseInFlight.current || inventoryRemoval) return;
+    inventoryDecreaseInFlight.current = true;
+    setInventoryDecreaseBusy(true);
     try {
       setApiError(null);
-      await deleteInventoryItem(id);
+      await decreaseInventoryItem(item.id, 1);
+      await loadData();
+    } catch (error) {
+      if (error instanceof ApiResponseError && error.status === 422 && error.message === "Quantity cannot fall below 0") {
+        setInventoryRemoval({ item, expectedUpdatedAt: item.updated_at });
+      } else {
+        setApiError(apiErrorMessage(error));
+      }
+    } finally {
+      inventoryDecreaseInFlight.current = false;
+      setInventoryDecreaseBusy(false);
+    }
+  }
+
+  async function removeInventoryItem(id: number, expectedUpdatedAt?: string) {
+    try {
+      setApiError(null);
+      await deleteInventoryItem(id, expectedUpdatedAt);
       if (editingInventoryItemId === id) {
         cancelEditingInventoryItem();
       }
       await loadData();
+      return true;
     } catch (error) {
-      setApiError(error instanceof Error ? error.message : "API-Fehler");
+      if (expectedUpdatedAt && error instanceof ApiResponseError && (error.status === 404 || error.status === 409)) {
+        setInventoryRemoval(null);
+        await loadData();
+      }
+      setApiError(apiErrorMessage(error));
+      return false;
     }
   }
 
@@ -2771,6 +2811,12 @@ export default function App() {
         });
       } else {
         await updateRecipe(editingRecipeId, payload);
+        setRecipeNutrition((current) => {
+          if (!(editingRecipeId in current)) return current;
+          const next = { ...current };
+          delete next[editingRecipeId];
+          return next;
+        });
       }
       await loadData();
       closeRecipeEditor();
@@ -2885,11 +2931,15 @@ export default function App() {
       );
       return;
     }
+    if (!foodInventoryUnitNames(selectedFood, productUnits).includes(form.unit)) {
+      setApiError("Bitte eine hinterlegte Mengeneinheit des Lebensmittels auswählen.");
+      return;
+    }
 
     const ingredientPayload = {
       food_id: selectedFood.id,
       quantity: toQuantityNumber(form.quantity, 1),
-      unit: form.unit || selectedFood.serving_unit || "g",
+      unit: form.unit,
       notes: optionalText(form.notes),
     };
 
@@ -4375,6 +4425,7 @@ export default function App() {
             inventory={filteredInventory}
             inventoryCategory={inventoryCategory}
             inventoryCreateOpen={inventoryCreateOpen}
+            inventoryDecreaseBusy={inventoryDecreaseBusy}
             inventoryError={apiError}
             inventorySearch={inventorySearch}
             inventoryStatus={inventoryStatus}
@@ -4393,7 +4444,7 @@ export default function App() {
             onDeleteProductGroup={removeProductGroup}
             onDeleteProductUnit={removeProductUnit}
             onDeleteStorageLocation={removeStorageLocation}
-            onDecrease={(id) => runAction(() => decreaseInventoryItem(id, 1))}
+            onDecrease={decreaseInventory}
             onEdit={startEditingInventoryItem}
             onEditFood={startEditingFood}
             onEditProductGroup={startEditingProductGroup}
@@ -4426,6 +4477,15 @@ export default function App() {
             productUnits={productUnits}
             storageLocationForm={storageLocationForm}
             storageLocations={storageLocations}
+          />
+        )}
+
+        {inventoryRemoval && (
+          <InventoryUnderflowDialog
+            item={inventoryRemoval.item}
+            error={apiError}
+            onCancel={() => setInventoryRemoval(null)}
+            onConfirm={() => removeInventoryItem(inventoryRemoval.item.id, inventoryRemoval.expectedUpdatedAt)}
           />
         )}
 
@@ -7460,6 +7520,7 @@ function InventoryPage({
   inventory,
   inventoryCategory,
   inventoryCreateOpen,
+  inventoryDecreaseBusy,
   inventoryError,
   inventorySearch,
   inventoryStatus,
@@ -7525,6 +7586,7 @@ function InventoryPage({
   inventory: InventoryItem[];
   inventoryCategory: string;
   inventoryCreateOpen: boolean;
+  inventoryDecreaseBusy: boolean;
   inventoryError?: string | null;
   inventorySearch: string;
   inventoryStatus: string;
@@ -7543,7 +7605,7 @@ function InventoryPage({
   onDeleteProductGroup: (id: number) => void;
   onDeleteProductUnit: (id: number) => void;
   onDeleteStorageLocation: (id: number) => void;
-  onDecrease: (id: number) => void;
+  onDecrease: (item: InventoryItem) => void;
   onEdit: (item: InventoryItem) => void;
   onEditFood: (food: Food) => void;
   onEditProductGroup: (group: ProductGroup) => void;
@@ -8151,7 +8213,8 @@ function InventoryPage({
                       <div className="inventory-action-cluster">
                         <button
                           className="stock-action decrement"
-                          onClick={() => onDecrease(item.id)}
+                          disabled={inventoryDecreaseBusy}
+                          onClick={() => onDecrease(item)}
                           title="Menge reduzieren"
                           type="button"
                         >
@@ -8223,7 +8286,8 @@ function InventoryPage({
                 <div className="inventory-mobile-actions">
                   <button
                     className="stock-action decrement"
-                    onClick={() => onDecrease(item.id)}
+                    disabled={inventoryDecreaseBusy}
+                    onClick={() => onDecrease(item)}
                     title="Menge reduzieren"
                     type="button"
                   >
@@ -8639,6 +8703,7 @@ function InventoryPage({
               </div>
             )}
             <FractionNumberInput
+              allowNegative={!inventoryEditorIsCreate}
               label="Menge"
               onChange={(quantity) => onFormChange({ ...form, quantity })}
               value={form.quantity}
@@ -10526,12 +10591,7 @@ function updateIngredientFoodSearch(
     ...form,
     food_id: selectedFood ? String(selectedFood.id) : "",
     food_query: query,
-    unit: selectedFood
-      ? selectedFood.serving_unit ||
-        productUnitNameForFood(selectedFood, productUnits) ||
-        form.unit ||
-        "g"
-      : form.unit || "g",
+    unit: selectedFood ? foodInventoryUnitNames(selectedFood, productUnits)[0] ?? "" : "",
   };
 }
 
@@ -10798,20 +10858,6 @@ function getIngredientCalories(
   );
 }
 
-function getRecipeMacroPreview(
-  recipe?: Recipe | null,
-  pendingIngredients: PendingRecipeIngredient[] = [],
-  servings = 1,
-  productUnits: ProductUnit[] = [],
-) {
-  const ingredients = recipe?.ingredients ?? pendingIngredients;
-  return getIngredientMacroPreview(
-    ingredients,
-    recipe?.servings || servings,
-    productUnits,
-  );
-}
-
 function RecipesPage({
   editingRecipeId,
   editorOpen,
@@ -10904,30 +10950,20 @@ function RecipesPage({
   const ingredientForm =
     ingredientForms[ingredientFormKey] ?? initialRecipeIngredientForm;
   const selectedIngredientFood = findFoodByIngredientForm(foods, ingredientForm);
-  const ingredientUnitOptions = foodUnitOptions(
-    selectedIngredientFood,
-    productUnits,
-    ingredientForm.unit,
-  );
+  const ingredientUnits = selectedIngredientFood
+    ? foodInventoryUnitNames(selectedIngredientFood, productUnits)
+    : [];
+  const ingredientUnit = ingredientUnits.includes(ingredientForm.unit) ? ingredientForm.unit : "";
   const ingredientWeight = getRecipeIngredientWeight(
     editingRecipe,
     pendingIngredients,
     productUnits,
   );
-  const servingCount = toQuantityNumber(form.servings, 1);
-  const perServingWeight = servingCount > 0 ? ingredientWeight / servingCount : 0;
-  const recipePreviewNutrition =
-    editingRecipe && recipeNutrition[editingRecipe.id]
-      ? {
-          per_serving: recipeNutrition[editingRecipe.id].per_serving,
-          total: recipeNutrition[editingRecipe.id].total,
-        }
-      : getRecipeMacroPreview(
-          editingRecipe,
-          pendingIngredients,
-          servingCount,
-          productUnits,
-        );
+  const servingCount = parseQuantityInput(form.servings);
+  const perServingWeight = servingCount > 0 ? ingredientWeight / servingCount : null;
+  const perServingNutrition = servingCount > 0
+    ? getIngredientMacroPreview(editingRecipe?.ingredients ?? pendingIngredients, servingCount, productUnits).per_serving
+    : null;
   const recipeSteps = splitRecipeSteps(form.instructions);
   const [ingredientEditorOpen, setIngredientEditorOpen] = useState(false);
   const [preparingRecipeId, setPreparingRecipeId] = useState<number | null>(null);
@@ -10958,7 +10994,7 @@ function RecipesPage({
     return new Map(
       recipes.map((recipe) => [
         recipe.id,
-        getRecipeMacroPreview(recipe, [], recipe.servings, productUnits)
+        getIngredientMacroPreview(recipe.ingredients, recipe.servings, productUnits)
           .per_serving.calories,
       ]),
     );
@@ -11276,6 +11312,7 @@ function RecipesPage({
                 <small>Required</small>
               </div>
               <input
+                aria-label="Serving Quantity"
                 inputMode="decimal"
                 onChange={(event) =>
                   onFormChange({ ...form, servings: event.target.value })
@@ -11292,9 +11329,9 @@ function RecipesPage({
                   <input readOnly value={formatNumber(ingredientWeight)} />
                   <strong>g</strong>
                 </div>
-                <small>
-                  Per serving weight will be {formatNumber(perServingWeight)} g
-                </small>
+                {perServingWeight !== null && (
+                  <small>Per serving weight will be {formatNumber(perServingWeight)} g</small>
+                )}
               </label>
             </section>
 
@@ -11435,6 +11472,7 @@ function RecipesPage({
                       <label>
                         <span>Einheit</span>
                         <select
+                          disabled={!selectedIngredientFood}
                           onChange={(event) =>
                             onIngredientFormChange(draftRecipeIngredientKey, {
                               ...ingredientForm,
@@ -11442,12 +11480,12 @@ function RecipesPage({
                             })
                           }
                           required
-                          value={ingredientUnitOptions.some((option) => option.value === ingredientForm.unit) ? ingredientForm.unit : ""}
+                          value={ingredientUnit}
                         >
-                          <option value="">Einheit auswählen</option>
-                          {ingredientUnitOptions.map(({ value, label }) => (
-                            <option key={value} value={value}>
-                              {label}
+                          <option value="">{selectedIngredientFood ? "Einheit auswählen" : "Zuerst Lebensmittel auswählen"}</option>
+                          {ingredientUnits.map((unit) => (
+                            <option key={unit} value={unit}>
+                              {unit}
                             </option>
                           ))}
                         </select>
@@ -11577,6 +11615,7 @@ function RecipesPage({
                       <label>
                         <span>Einheit</span>
                         <select
+                          disabled={!selectedIngredientFood}
                           onChange={(event) =>
                             onIngredientFormChange(editingRecipeId, {
                               ...ingredientForm,
@@ -11584,12 +11623,12 @@ function RecipesPage({
                             })
                           }
                           required
-                          value={ingredientUnitOptions.some((option) => option.value === ingredientForm.unit) ? ingredientForm.unit : ""}
+                          value={ingredientUnit}
                         >
-                          <option value="">Einheit auswählen</option>
-                          {ingredientUnitOptions.map(({ value, label }) => (
-                            <option key={value} value={value}>
-                              {label}
+                          <option value="">{selectedIngredientFood ? "Einheit auswählen" : "Zuerst Lebensmittel auswählen"}</option>
+                          {ingredientUnits.map((unit) => (
+                            <option key={unit} value={unit}>
+                              {unit}
                             </option>
                           ))}
                         </select>
@@ -11605,32 +11644,22 @@ function RecipesPage({
             </section>
 
             <section className="recipe-builder-section">
-              <div className="recipe-builder-section-head">
-                <h3>Nutrition</h3>
-                {editingRecipeId !== null && (
-                  <button
-                    className="recipe-builder-pill"
-                    onClick={() => onCalculate(editingRecipeId)}
-                    type="button"
-                  >
-                    Serving
-                  </button>
-                )}
-              </div>
+              <h3>Nutrition</h3>
               <div className="recipe-builder-nutrition-grid">
                 {macroMeta.map((macro) => (
                   <article className="recipe-builder-nutrition-card" key={macro.key}>
                     <strong>{macro.label}</strong>
                     <span>
-                      {formatNumber(recipePreviewNutrition.per_serving[macro.key])}{" "}
-                      {macro.key === "calories" ? "kcal" : "g"} per serving
+                      {perServingNutrition === null
+                        ? "—"
+                        : `${formatNumber(perServingNutrition[macro.key])} ${macro.key === "calories" ? "kcal" : "g"} per serving`}
                     </span>
                     <div className="recipe-builder-meter">
                       <span
                         className={macro.tone}
                         style={{
                           width: `${Math.min(
-                            recipePreviewNutrition.per_serving[macro.key],
+                            perServingNutrition?.[macro.key] ?? 0,
                             100,
                           )}%`,
                         }}
@@ -13657,7 +13686,7 @@ function ShoppingPage({
       foodMatchesSearch(food, normalizedFoodSearch),
     )
     .slice(0, 10);
-  const openItems = items.filter((item) => !item.is_checked);
+  const checkedCount = items.filter((item) => item.is_checked).length;
 
   useEffect(() => {
     if (form.source !== "food") {
@@ -13736,18 +13765,19 @@ function ShoppingPage({
       <section className="section wide">
         <div className="section-header">
           <div>
-            <p className="eyebrow">{items.filter((item) => !item.is_checked).length} offen</p>
+            <p className="eyebrow">{items.length - checkedCount} offen · {checkedCount} abgehakt</p>
             <h2>Einkaufsliste</h2>
           </div>
           <div className="shopping-header-actions">
             <button
               className="button primary"
-              disabled={openItems.length === 0 || inventoryImportBusy}
+              disabled={checkedCount === 0 || inventoryImportBusy}
               onClick={() => void importToInventory()}
+              title="Nur abgehakte Artikel werden in den Bestand übernommen"
               type="button"
             >
               <Database size={16} />
-              {inventoryImportBusy ? "Wird uebernommen" : "In Bestand uebernehmen"}
+              {inventoryImportBusy ? "Wird übernommen" : "In Bestand übernehmen"}
             </button>
             <button className="button secondary" onClick={onGenerate} title="Nur Fehlmengen bis zum Mindestbestand ergänzen; offene Einkaufspositionen werden angerechnet" type="button">
               <RefreshCw size={16} />
@@ -14689,17 +14719,20 @@ function DecimalNumberInput({
   );
 }
 
-const fractionNumberPattern =
-  "\\s*\\d+(?:[,.]\\d+)?" +
+const fractionNumberFormat =
+  "\\d+(?:[,.]\\d+)?" +
   "(?:\\s+\\d+(?:[,.]\\d+)?\\s*/\\s*\\d+(?:[,.]\\d+)?|" +
-  "\\s*/\\s*\\d+(?:[,.]\\d+)?)?\\s*";
+  "\\s*/\\s*\\d+(?:[,.]\\d+)?)?";
+const fractionNumberPattern = `\\s*${fractionNumberFormat}\\s*`;
 
 function FractionNumberInput({
+  allowNegative = false,
   label,
   onChange,
   required,
   value,
 }: {
+  allowNegative?: boolean;
   label: string;
   onChange: (value: string) => void;
   required?: boolean;
@@ -14710,7 +14743,7 @@ function FractionNumberInput({
       inputMode="decimal"
       label={label}
       onChange={onChange}
-      pattern={fractionNumberPattern}
+      pattern={allowNegative ? `\\s*-?${fractionNumberFormat}\\s*` : fractionNumberPattern}
       required={required}
       title="Zahl oder Bruch, z.B. 2/3"
       value={value}

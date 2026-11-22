@@ -886,8 +886,9 @@ export function updateInventoryItem(
   });
 }
 
-export function deleteInventoryItem(id: number) {
-  return request<void>(`/inventory/${id}`, {
+export function deleteInventoryItem(id: number, expectedUpdatedAt?: string) {
+  const query = expectedUpdatedAt ? `?${new URLSearchParams({ expected_updated_at: expectedUpdatedAt })}` : "";
+  return request<void>(`/inventory/${id}${query}`, {
     method: "DELETE",
   });
 }

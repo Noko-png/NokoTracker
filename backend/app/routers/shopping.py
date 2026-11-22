@@ -400,18 +400,18 @@ def import_shopping_list_to_inventory(
     db: Session = Depends(get_db),
 ):
     request = import_in or schemas.ShoppingListInventoryImportRequest()
-    open_items = (
+    checked_items = (
         db.query(models.ShoppingListItem)
-        .filter(models.ShoppingListItem.is_checked.is_(False))
+        .filter(models.ShoppingListItem.is_checked.is_(True))
         .order_by(models.ShoppingListItem.id)
         .all()
     )
-    if not open_items:
-        return empty_import_result("Keine offenen Einkaufsartikel zum Einlagern vorhanden.")
+    if not checked_items:
+        return empty_import_result("Keine abgehakten Einkaufsartikel zum Einlagern vorhanden.")
 
     unknown_items = [
         item
-        for item in open_items
+        for item in checked_items
         if item.inventory_item is None and food_for_shopping_item(db, item) is None
     ]
     if unknown_items and request.unknown_item_action == "ask":
@@ -430,7 +430,7 @@ def import_shopping_list_to_inventory(
     imported_count = 0
 
     try:
-        for shopping_item in open_items:
+        for shopping_item in checked_items:
             linked_item = shopping_item.inventory_item
             food = food_for_shopping_item(db, shopping_item)
             if food is None and linked_item is not None:
