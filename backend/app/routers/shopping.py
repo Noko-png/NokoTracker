@@ -283,10 +283,19 @@ def list_shopping_items(
     include_checked: bool = True,
     db: Session = Depends(get_db),
 ):
-    query = db.query(models.ShoppingListItem)
+    item = models.ShoppingListItem
+    stock = models.InventoryItem
+    food = models.Food
+    group = models.ProductGroup
+    query = (
+        db.query(item)
+        .outerjoin(stock, item.inventory_item_id == stock.id)
+        .outerjoin(food, func.coalesce(item.food_id, stock.food_id) == food.id)
+        .outerjoin(group, func.coalesce(food.product_group_id, stock.product_group_id) == group.id)
+    )
     if not include_checked:
-        query = query.filter(models.ShoppingListItem.is_checked.is_(False))
-    return query.offset(skip).limit(limit).all()
+        query = query.filter(item.is_checked.is_(False))
+    return query.order_by(func.coalesce(group.priority, 0).desc(), item.id).offset(skip).limit(limit).all()
 
 
 @router.post("", response_model=schemas.ShoppingListItemRead, status_code=status.HTTP_201_CREATED)

@@ -282,6 +282,10 @@ def migrate_sqlite_product_group_schema() -> None:
 
     columns = {column["name"] for column in inspector.get_columns("product_groups")}
     migrations = {
+        "priority": (
+            "ALTER TABLE product_groups ADD COLUMN priority INTEGER NOT NULL DEFAULT 0 "
+            "CONSTRAINT ck_product_group_priority_non_negative CHECK (priority >= 0)"
+        ),
         "default_expiry_days": (
             "ALTER TABLE product_groups ADD COLUMN default_expiry_days INTEGER"
         ),
@@ -936,7 +940,7 @@ ensure_default_user()
 app = FastAPI(
     title="Heim-ERP Backend",
     description="Backend API fuer ein privates Heim-ERP mit Kalender, Vorrat, Rezepten, Mahlzeiten und Einkaufsliste.",
-    version="3.1.31",
+    version="3.1.32",
     docs_url=None,
     redoc_url=None,
 )

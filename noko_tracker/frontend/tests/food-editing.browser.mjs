@@ -206,6 +206,7 @@ try {
     assert.equal(updatedStock.expiry_days, 21);
     assert.equal(updatedStock.purchase_date, "2026-10-25");
     assert.equal(updatedStock.expiry_date, "2026-11-15");
+    await waitFor("!document.querySelector('.loading-bar')");
     await click('.stock-action.edit');
     assert.equal(await readField(stockForm, daysLabel), "21");
     await fill(stockForm, daysLabel, "0");
@@ -468,6 +469,39 @@ try {
     assert.equal(shoppingRows[0].quantity, 1000);
     assert.equal(shoppingRows[0].unit, 'g');
     console.log(`PASS ${width}px shopping from stock: adds only remaining shortage, converts existing purchase units and repeated clicks keep the same quantity`);
+
+    const groupForm = '.group-master-view .master-data-form';
+    const priorityLabel = 'Einkaufspriorität (höhere Werte zuerst)';
+    const shoppingNames = "Array.from(document.querySelectorAll('.shopping-item strong'), el => el.textContent)";
+    await clickButton('.sidebar-master-options', 'Produktgruppen');
+    await clickButton('.group-master-header', 'Hinzufügen');
+    assert.equal(await readField(groupForm, priorityLabel), '0');
+    await fill(groupForm, 'Name', 'Frische Ware');
+    await fill(groupForm, priorityLabel, '5');
+    await click(`${groupForm} button[type=submit]`);
+    await waitFor(`!document.querySelector('${groupForm}')`);
+    const freshGroup = (await request('/product-groups')).find(row => row.name === 'Frische Ware');
+    assert.equal(freshGroup.priority, 5);
+    const apple = await request('/foods', 'POST', { name: 'Apfel', product_group_id: freshGroup.id });
+    await request('/shopping-list', 'POST', { name: food.name, food_id: food.id });
+    await request('/shopping-list', 'POST', { name: apple.name, food_id: apple.id });
+    await clickButton('.topbar-actions', 'Aktualisieren');
+    await waitFor("!document.querySelector('.loading-bar')");
+    await click('[title="Einkaufsliste"]');
+    await waitFor(`${shoppingNames}.length === 4`);
+    assert.deepEqual(await evaluate(shoppingNames), [apple.name, minimumFood.name, shoppingFood.name, food.name]);
+
+    await clickButton('.sidebar-master-options', 'Produktgruppen');
+    await evaluate("Array.from(document.querySelectorAll('.group-master-table tbody tr')).find(row => row.cells[1].textContent === 'Testgruppe').querySelector('[title=\"Produktgruppe bearbeiten\"]').click()");
+    assert.equal(await readField(groupForm, priorityLabel), '0');
+    await fill(groupForm, priorityLabel, '8');
+    await click(`${groupForm} button[type=submit]`);
+    await waitFor(`!document.querySelector('${groupForm}')`);
+    assert.equal((await request(`/product-groups/${group.id}`)).priority, 8);
+    await click('[title="Einkaufsliste"]');
+    await waitFor(`${shoppingNames}.length === 4`);
+    assert.deepEqual(await evaluate(shoppingNames), [food.name, apple.name, minimumFood.name, shoppingFood.name]);
+    console.log(`PASS ${width}px shopping order: group priority can be set and updated, existing items follow the new order`);
   }
 } finally {
   await send("Page.navigate", { url: "about:blank" });

@@ -142,6 +142,7 @@ export type FoodCreatePayload = Omit<
 export type ProductGroup = {
   id: number;
   name: string;
+  priority: number;
   default_expiry_days?: number | null;
   default_storage_location?: string | null;
   created_at: string;
@@ -910,7 +911,7 @@ export function getInventoryWarnings(days = 7) {
 }
 
 export function getProductGroups() {
-  return request<ProductGroup[]>("/product-groups");
+  return loadAllPages((skip, limit) => request<ProductGroup[]>(`/product-groups?skip=${skip}&limit=${limit}`));
 }
 
 export function createProductGroup(group: ProductGroupCreate) {
@@ -1271,7 +1272,7 @@ export function getTrainingExerciseResults(
 }
 
 export function getShoppingList() {
-  return request<ShoppingListItem[]>("/shopping-list");
+  return loadAllPages((skip, limit) => request<ShoppingListItem[]>(`/shopping-list?skip=${skip}&limit=${limit}`));
 }
 
 export function createShoppingListItem(

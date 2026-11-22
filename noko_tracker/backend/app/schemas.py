@@ -528,6 +528,7 @@ class FoodSummary(ORMBase):
 
 class ProductGroupBase(BaseModel):
     name: str = Field(..., min_length=1, max_length=120)
+    priority: int = Field(0, ge=0, le=2_147_483_647)
     default_expiry_days: Optional[int] = Field(None, ge=0)
     default_storage_location: Optional[str] = Field(None, max_length=120)
 
@@ -538,6 +539,7 @@ class ProductGroupCreate(ProductGroupBase):
 
 class ProductGroupUpdate(BaseModel):
     name: Optional[str] = Field(None, min_length=1, max_length=120)
+    priority: int = Field(0, ge=0, le=2_147_483_647)
     default_expiry_days: Optional[int] = Field(None, ge=0)
     default_storage_location: Optional[str] = Field(None, max_length=120)
 

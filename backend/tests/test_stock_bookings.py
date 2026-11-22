@@ -8,7 +8,7 @@ from sqlalchemy.orm import Session
 
 from app import models as m, schemas as s
 from app.database import Base
-from app.routers import inventory, meals, recipes, shopping
+from app.routers import inventory, meals, product_groups, recipes, shopping
 from app.services import nutrition_service as nutrition, receipt_import_service as receipt
 
 
@@ -288,6 +288,33 @@ class StockBookingTest(unittest.TestCase):
         meals.delete_meal_log(entry.id, self.db)
         self.assertEqual(item.quantity, 1.5)
         self.assertEqual(self.db.query(m.InventoryItem).filter_by(food_id=food.id).count(), 1)
+
+    def test_shopping_order_uses_current_group_priorities_before_pagination(self):
+        pantry = product_groups.create_product_group(s.ProductGroupCreate(name="Vorrat"), self.db)
+        fresh = product_groups.create_product_group(s.ProductGroupCreate(name="Frisch", priority=5), self.db)
+        self.assertEqual(pantry.priority, 0)
+
+        oats = m.Food(name="Haferflocken", product_group=pantry)
+        old_lot = m.InventoryItem(name=oats.name, food=oats, product_group=fresh)
+        loose_lot = m.InventoryItem(name="Birnen", product_group=fresh)
+        apples = m.Food(name="Äpfel", product_group=fresh)
+        self.db.add_all([old_lot, loose_lot, apples])
+        self.db.commit()
+
+        oats_row = shopping.add_inventory_item_to_shopping_list(old_lot.id, s.ShoppingListInventoryItemCreate(), self.db)
+        text_row = shopping.create_shopping_item(s.ShoppingListItemCreate(name="Alufolie", priority=10), self.db)
+        pear_row = shopping.add_inventory_item_to_shopping_list(loose_lot.id, s.ShoppingListInventoryItemCreate(), self.db)
+        apple_row = shopping.create_shopping_item(s.ShoppingListItemCreate(name=apples.name, food_id=apples.id), self.db)
+        shopping.check_shopping_item(apple_row.id, self.db)
+
+        first_page = shopping.list_shopping_items(skip=0, limit=2, db=self.db)
+        second_page = shopping.list_shopping_items(skip=2, limit=2, db=self.db)
+        self.assertEqual([row.id for row in first_page], [pear_row.id, apple_row.id])
+        self.assertEqual([row.id for row in second_page], [oats_row.id, text_row.id])
+
+        product_groups.update_product_group(pantry.id, s.ProductGroupUpdate(priority=8), self.db)
+        open_items = shopping.list_shopping_items(skip=0, limit=10, include_checked=False, db=self.db)
+        self.assertEqual([row.id for row in open_items], [oats_row.id, pear_row.id, text_row.id])
 
     def test_shopping_merges_multiple_source_lines_and_counts_each_purchase(self):
         food, item = self.stock(1000, "g", 1000, m.ProductUnit(name="kg"))

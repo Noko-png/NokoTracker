@@ -1,5 +1,9 @@
 # Changelog
 
+## 3.1.32
+
+- Unter **Stammdaten > Produktgruppen** lässt sich die Einkaufspriorität einstellen. Höhere Werte erscheinen in der Einkaufsliste zuerst. Bei gleicher Priorität gilt die Reihenfolge des Hinzufügens.
+
 ## 3.1.31
 
 - Neue Einlagerungen und Bestandskorrekturen speichern die Standardeinheit des Lebensmittels aus den Stammdaten, zum Beispiel 800 g als 2 Dosen bei 1 Dose = 400 g. Das gilt auch fuer Einkaufsliste, Kassenzettel und neu angelegte Rueckbuchungspositionen.

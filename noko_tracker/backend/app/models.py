@@ -335,6 +335,7 @@ class ProductGroup(TimestampMixin, Base):
 
     id = Column(Integer, primary_key=True, index=True)
     name = Column(String(120), nullable=False, unique=True, index=True)
+    priority = Column(Integer, nullable=False, server_default="0")
     default_expiry_days = Column(Integer, nullable=True)
     default_storage_location = Column(String(120), nullable=True, index=True)
 
@@ -342,6 +343,7 @@ class ProductGroup(TimestampMixin, Base):
     inventory_items = relationship("InventoryItem", back_populates="product_group")
 
     __table_args__ = (
+        CheckConstraint("priority >= 0", name="ck_product_group_priority_non_negative"),
         CheckConstraint(
             "default_expiry_days IS NULL OR default_expiry_days >= 0",
             name="ck_product_group_default_expiry_days_non_negative",

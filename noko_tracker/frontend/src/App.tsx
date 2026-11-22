@@ -94,7 +94,6 @@ import {
   type NutritionDay,
   type ProductGroup,
   type ProductGroupCreate,
-  type ProductGroupUpdate,
   type ProductUnit,
   type ProductUnitCreate,
   type ProductUnitUpdate,
@@ -354,6 +353,7 @@ type StorageLocationForm = {
 
 type ProductGroupForm = {
   name: string;
+  priority: string;
   default_expiry_days: string;
   default_storage_location: string;
 };
@@ -600,7 +600,7 @@ const macroMeta: Array<{
   { key: "carbs", label: "Kohlenhydrate", unit: "g", tone: "red" },
 ];
 
-const appVersion = "3.1.31";
+const appVersion = "3.1.32";
 const updateSourceLabel = "main / github.com/Noko-png/NokoTracker";
 
 const emptyNutrition: NutritionDay = {
@@ -695,6 +695,7 @@ const initialStorageLocationForm: StorageLocationForm = {
 
 const initialProductGroupForm: ProductGroupForm = {
   name: "",
+  priority: "0",
   default_expiry_days: "",
   default_storage_location: "",
 };
@@ -1371,6 +1372,15 @@ function formatServingConversion(
         `${formatFractionalQuantity(conversion.quantity)} ${conversion.unit}`,
     );
   return [`1 ${productUnit}`, mainConversion, ...extraConversions].join(" = ");
+}
+
+function createProductGroupPayload(form: ProductGroupForm): ProductGroupCreate {
+  return {
+    name: form.name,
+    priority: optionalNumber(form.priority) ?? 0,
+    default_expiry_days: optionalInteger(form.default_expiry_days),
+    default_storage_location: optionalText(form.default_storage_location),
+  };
 }
 
 function createProductUnitPayload(form: ProductUnitForm): ProductUnitCreate {
@@ -2451,15 +2461,16 @@ export default function App() {
 
   async function submitProductGroup(event: FormEvent) {
     event.preventDefault();
-    await createProductGroup({
-      name: productGroupForm.name,
-      default_expiry_days: optionalInteger(productGroupForm.default_expiry_days),
-      default_storage_location: optionalText(
-        productGroupForm.default_storage_location,
-      ),
-    } satisfies ProductGroupCreate);
-    setProductGroupForm(initialProductGroupForm);
-    await loadData();
+    try {
+      setApiError(null);
+      await createProductGroup(createProductGroupPayload(productGroupForm));
+      setProductGroupForm(initialProductGroupForm);
+      await loadData();
+      return true;
+    } catch (error) {
+      setApiError(error instanceof Error ? error.message : "API-Fehler");
+      return false;
+    }
   }
 
   async function submitProductUnit(event: FormEvent) {
@@ -2599,34 +2610,26 @@ export default function App() {
     event.preventDefault();
     try {
       setApiError(null);
-      const payload = {
-        name: masterProductGroupForm.name,
-        default_expiry_days: optionalInteger(
-          masterProductGroupForm.default_expiry_days,
-        ),
-        default_storage_location: optionalText(
-          masterProductGroupForm.default_storage_location,
-        ),
-      } satisfies ProductGroupCreate;
+      const payload = createProductGroupPayload(masterProductGroupForm);
       if (editingProductGroupId === null) {
         await createProductGroup(payload);
       } else {
-        await updateProductGroup(
-          editingProductGroupId,
-          payload satisfies ProductGroupUpdate,
-        );
+        await updateProductGroup(editingProductGroupId, payload);
       }
       setMasterProductGroupForm(initialProductGroupForm);
       setEditingProductGroupId(null);
       await loadData();
+      return true;
     } catch (error) {
       setApiError(error instanceof Error ? error.message : "API-Fehler");
+      return false;
     }
   }
 
   function startEditingProductGroup(group: ProductGroup) {
     setMasterProductGroupForm({
       name: group.name,
+      priority: String(group.priority ?? 0),
       default_expiry_days: toFormValue(group.default_expiry_days),
       default_storage_location: group.default_storage_location ?? "",
     });
@@ -7550,10 +7553,10 @@ function InventoryPage({
   onFormChange: (value: InventoryForm) => void;
   onGroupDelete: (id: number) => void;
   onGroupFormChange: (value: ProductGroupForm) => void;
-  onGroupSubmit: (event: FormEvent) => Promise<void> | void;
+  onGroupSubmit: (event: FormEvent) => Promise<boolean>;
   onIncrease: (id: number) => void;
   onMasterProductGroupFormChange: (value: ProductGroupForm) => void;
-  onMasterProductGroupSubmit: (event: FormEvent) => Promise<void> | void;
+  onMasterProductGroupSubmit: (event: FormEvent) => Promise<boolean>;
   onMasterProductUnitFormChange: (value: ProductUnitForm) => void;
   onMasterProductUnitSubmit: (event: FormEvent) => Promise<boolean>;
   onReceiptBook: (
@@ -7788,9 +7791,10 @@ function InventoryPage({
     });
   }
 
-  function submitProductGroupAndClose(event: FormEvent) {
-    void onGroupSubmit(event);
-    setProductGroupUiOpen(false);
+  async function submitProductGroupAndClose(event: FormEvent) {
+    if (await onGroupSubmit(event)) {
+      setProductGroupUiOpen(false);
+    }
   }
 
   async function submitProductUnitAndClose(event: FormEvent) {
@@ -8787,6 +8791,13 @@ function InventoryPage({
                   value={productGroupForm.name}
                 />
                 <NumberInput
+                  label="Einkaufspriorität (höhere Werte zuerst)"
+                  min="0"
+                  onChange={(priority) => onGroupFormChange({ ...productGroupForm, priority })}
+                  step="1"
+                  value={productGroupForm.priority}
+                />
+                <NumberInput
                   label="Standardhaltbarkeit (Tage)"
                   min="0"
                   onChange={(default_expiry_days) =>
@@ -8994,7 +9005,7 @@ function MasterDataPanel({
   onFoodFormChange: (value: FoodForm) => void;
   onFoodSubmit: (event: FormEvent) => Promise<boolean>;
   onProductGroupFormChange: (value: ProductGroupForm) => void;
-  onProductGroupSubmit: (event: FormEvent) => Promise<void> | void;
+  onProductGroupSubmit: (event: FormEvent) => Promise<boolean>;
   onProductUnitFormChange: (value: ProductUnitForm) => void;
   onProductUnitSubmit: (event: FormEvent) => Promise<boolean>;
   onStoreFood: (food: Food) => void;
@@ -10280,6 +10291,7 @@ function MasterDataPanel({
                     <Eye size={16} />
                   </th>
                   <th>Name</th>
+                  <th>Einkaufspriorität</th>
                   <th>Standardstandort</th>
                   <th>Standardhaltbarkeit</th>
                 </tr>
@@ -10287,7 +10299,7 @@ function MasterDataPanel({
               <tbody>
                 {productGroups.length === 0 ? (
                   <tr>
-                    <td colSpan={4}>
+                    <td colSpan={5}>
                       <EmptyState label="Keine Produktgruppen vorhanden" />
                     </td>
                   </tr>
@@ -10316,6 +10328,7 @@ function MasterDataPanel({
                         </button>
                       </td>
                       <td>{group.name}</td>
+                      <td>{group.priority ?? 0}</td>
                       <td>{group.default_storage_location ?? "-"}</td>
                       <td>
                         {group.default_expiry_days === null ||
@@ -10358,10 +10371,10 @@ function MasterDataPanel({
                 </div>
                 <form
                   className="master-data-form"
-                  onSubmit={(event) => {
-                    void Promise.resolve(onProductGroupSubmit(event)).then(
-                      () => setProductGroupEditorOpen(false),
-                    );
+                  onSubmit={async (event) => {
+                    if (await onProductGroupSubmit(event)) {
+                      setProductGroupEditorOpen(false);
+                    }
                   }}
                 >
                   <TextInput
@@ -10371,6 +10384,13 @@ function MasterDataPanel({
                     }
                     required
                     value={productGroupForm.name}
+                  />
+                  <NumberInput
+                    label="Einkaufspriorität (höhere Werte zuerst)"
+                    min="0"
+                    onChange={(priority) => onProductGroupFormChange({ ...productGroupForm, priority })}
+                    step="1"
+                    value={productGroupForm.priority}
                   />
                   <label>
                     <span>Standardstandort</span>

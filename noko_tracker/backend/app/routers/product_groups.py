@@ -34,7 +34,7 @@ def list_product_groups(
     limit: int = Query(100, ge=1, le=500),
     db: Session = Depends(get_db),
 ):
-    return crud.get_multi(db, models.ProductGroup, skip=skip, limit=limit)
+    return db.query(models.ProductGroup).order_by(models.ProductGroup.id).offset(skip).limit(limit).all()
 
 
 @router.get("/{group_id}", response_model=schemas.ProductGroupRead)
