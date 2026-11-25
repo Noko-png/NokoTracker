@@ -243,8 +243,33 @@ try {
     await screenshot(`frontend-screenshot-training-rotation-completed-${width}.png`, ".selected-day");
     assert.equal(mutations.filter((item) => item.url.endsWith("/skip") && item.method === "POST").length, 2);
     assert.equal(mutations.filter((item) => item.url.includes("/shifts/") && item.method === "DELETE").length, 1);
+
+    for (const offset of [-21, -7, -300, -14, -3, -35]) {
+      await request("/training/sessions", "POST", {
+        trained_at: `${dateAfter(offset)}T12:00:00`, plan_id: planA.id, user_id: 1,
+        sets: [{ exercise_id: planA.exercises[0].id, reps: 11, weight_kg: 67.5, notes: offset === -300 ? "Erster Satz im Verlauf" : null }],
+      });
+    }
+    await clickText(".nav-list", "Training");
+    await clickText(".topbar-actions", "Aktualisieren");
+    const historyDates = "Array.from(document.querySelectorAll('.training-page .training-session-meta strong'), date => date.textContent)";
+    const expectedDates = [2, -3, -7, -14, -21, -35, -300].map(offset =>
+      dateFromLocalValue(dateAfter(offset)).toLocaleDateString("de-DE", { dateStyle: "medium" }),
+    );
+    await waitFor(`${historyDates}.length === 5`);
+    assert.deepEqual(await evaluate(historyDates), expectedDates.slice(0, 5));
+    await clickText(".training-page", "Alle Einheiten anzeigen");
+    await waitFor(`${historyDates}.length === 7`);
+    assert.deepEqual(await evaluate(historyDates), expectedDates);
+    const oldest = await evaluate("Array.from(document.querySelectorAll('.training-page .training-session-item')).at(-1).textContent");
+    assert.ok(oldest.includes(planA.name));
+    assert.ok(oldest.includes(planA.exercises[0].name));
+    assert.match(oldest, /67,5 kg.*11 Wdh\..*Erster Satz im Verlauf/);
+    await clickText(".training-page", "Weniger anzeigen");
+    await waitFor(`${historyDates}.length === 5`);
+    assert.deepEqual(await evaluate(historyDates), expectedDates.slice(0, 5));
     assert.deepEqual(browserErrors, []);
-    console.log(`PASS ${width}px: reorder linked plans, keep rotation through skips and undo, log plan B and verify calendar completion`);
+    console.log(`PASS ${width}px: training rotation, calendar completion and the complete training history`);
     await send("Page.navigate", { url: "about:blank" });
   }
 } finally {

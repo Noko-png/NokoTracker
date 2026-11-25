@@ -1242,12 +1242,19 @@ export function deleteTrainingExercise(id: number) {
   });
 }
 
-export function getTrainingSessions(limit = 500, userId?: number) {
+export function getTrainingSessions(limit = 500, userId?: number, skip?: number) {
   const params = new URLSearchParams({ limit: String(limit) });
   if (userId !== undefined) {
     params.set("user_id", String(userId));
   }
+  if (skip !== undefined) {
+    params.set("skip", String(skip));
+  }
   return request<TrainingSession[]>(`/training/sessions?${params.toString()}`);
+}
+
+export function getAllTrainingSessions(userId: number) {
+  return loadAllPages((skip, limit) => getTrainingSessions(limit, userId, skip));
 }
 
 export function createTrainingSession(session: TrainingSessionCreate) {

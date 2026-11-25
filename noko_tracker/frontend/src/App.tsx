@@ -180,7 +180,7 @@ import {
   getShoppingList,
   getStorageLocations,
   getTrainingPlans,
-  getTrainingSessions,
+  getAllTrainingSessions,
   getUsers,
   getWeightEntries,
   importDatabaseBackup,
@@ -591,7 +591,7 @@ const macroMeta: Array<{
   { key: "carbs", label: "Kohlenhydrate", unit: "g", tone: "red" },
 ];
 
-const appVersion = "3.1.40";
+const appVersion = "3.1.41";
 const updateSourceLabel = "main / github.com/Noko-png/NokoTracker";
 
 const emptyNutrition: NutritionDay = {
@@ -2069,7 +2069,7 @@ export default function App() {
       load(getMealLogs(), setMealLogs),
       load(getWeightEntries(500, effectiveUserId), setWeightEntries),
       load(getTrainingPlans(500, effectiveUserId), setTrainingPlans),
-      load(getTrainingSessions(500, effectiveUserId), setTrainingSessions),
+      load(getAllTrainingSessions(effectiveUserId), setTrainingSessions),
       load(getShoppingList(), setShoppingList),
       load(getCalendarEvents(), setCalendarEvents),
       load(getCalendarGroups(), setCalendarGroups),
@@ -5475,6 +5475,8 @@ function TrainingPage({
   const [openTrainingSetNotes, setOpenTrainingSetNotes] = useState<Set<string>>(
     () => new Set(),
   );
+  const [showAllSessions, setShowAllSessions] = useState(false);
+  const sortedSessions = useMemo(() => sortTrainingSessionsNewestFirst(sessions), [sessions]);
   const selectedPlan =
     plans.find((plan) => String(plan.id) === sessionForm.plan_id) ?? null;
   const previousSetResults = useMemo(() => {
@@ -5489,7 +5491,7 @@ function TrainingPage({
     const cutoffTime = Number.isFinite(parsedCutoffTime)
       ? parsedCutoffTime
       : Number.POSITIVE_INFINITY;
-    for (const session of sortTrainingSessionsNewestFirst(sessions)) {
+    for (const session of sortedSessions) {
       const trainedAt = new Date(session.trained_at).getTime();
       if (session.plan_id !== selectedPlan.id || trainedAt > cutoffTime) {
         continue;
@@ -5510,12 +5512,10 @@ function TrainingPage({
     }
 
     return results;
-  }, [selectedPlan, sessionForm.date, sessions]);
-  const recentSessions = useMemo(
-    () => sortTrainingSessionsNewestFirst(sessions).slice(0, 5),
-    [sessions],
-  );
-  const latestSession = recentSessions[0] ?? null;
+  }, [selectedPlan, sessionForm.date, sortedSessions]);
+  const recentSessionCount = 5;
+  const visibleSessions = showAllSessions ? sortedSessions : sortedSessions.slice(0, recentSessionCount);
+  const latestSession = sortedSessions[0] ?? null;
 
   function changeSessionPlan(planId: string) {
     const plan = plans.find((item) => String(item.id) === planId) ?? null;
@@ -5788,11 +5788,24 @@ function TrainingPage({
             </form>
           </Panel>
 
-          <Panel title="Letzte Einheiten">
+          <Panel
+            className="training-history-panel"
+            title="Trainingsverlauf"
+            actions={sortedSessions.length > recentSessionCount && (
+              <button
+                aria-expanded={showAllSessions}
+                className="button secondary"
+                onClick={() => setShowAllSessions((open) => !open)}
+                type="button"
+              >
+                {showAllSessions ? "Weniger anzeigen" : "Alle Einheiten anzeigen"}
+              </button>
+            )}
+          >
             <TrainingSessionList
               emptyLabel="Noch keine Trainingseinheiten"
               onDeleteSession={onDeleteSession}
-              sessions={recentSessions}
+              sessions={visibleSessions}
             />
           </Panel>
         </div>

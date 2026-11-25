@@ -1184,6 +1184,10 @@ button {
   border-bottom: 1px solid color-mix(in srgb, var(--line) 72%, transparent);
 }
 
+.training-history-panel .panel-header {
+  flex-wrap: wrap;
+}
+
 .training-page .panel h2 {
   font-size: 1.08rem;
   line-height: 1.2;

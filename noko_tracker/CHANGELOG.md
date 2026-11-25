@@ -1,5 +1,9 @@
 # Changelog
 
+## 3.1.41
+
+- Im Trainingstab zeigt **Alle Einheiten anzeigen** den vollständigen Trainingsverlauf des ausgewählten Profils mit Übungen und Sätzen. Die kompakte Ansicht zeigt die fünf neuesten Einheiten.
+
 ## 3.1.40
 
 - Das Test Health dashboard ist für Administratoren unter **Stammdaten verwalten > Beta** erreichbar.
