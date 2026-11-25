@@ -556,6 +556,11 @@ export type MealLog = MealLogCreate & {
 
 export type MealLogUpdate = Partial<MealLogCreate>;
 
+export type MealPrepSelection = {
+  day: string;
+  meal_type: "breakfast" | "lunch" | "dinner";
+};
+
 export type WeightEntry = {
   id: number;
   measured_at: string;
@@ -1118,8 +1123,18 @@ export function createMealLog(mealLog: MealLogCreate) {
   });
 }
 
-export function getMealLogs(limit = 500) {
-  return request<MealLog[]>(`/meals/logs?limit=${limit}`);
+export function getMealLogs() {
+  return loadAllPages((skip, limit) => request<MealLog[]>(`/meals/logs?skip=${skip}&limit=${limit}`));
+}
+
+export function planPreparedMeals(plan: {
+  recipe_id: number;
+  inventory_item_id: number;
+  user_id: number;
+  start_date: string;
+  slots: MealPrepSelection[];
+}) {
+  return request<MealLog[]>("/meals/logs/plan-prepared", { method: "POST", body: plan });
 }
 
 export function updateMealLog(id: number, mealLog: MealLogUpdate) {

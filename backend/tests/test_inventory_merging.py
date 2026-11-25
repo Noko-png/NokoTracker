@@ -346,6 +346,54 @@ class InventoryMergingTest(unittest.TestCase):
             row = db.get(models.InventoryItem, first["id"])
             self.assertEqual(nutrition_service.food_amount_in_grams(row, row.quantity, row.unit), 600)
 
+    def test_prepared_portions_can_be_planned_across_seven_days_without_replacing_meals(self):
+        self.store(1, "kg")
+        recipe = self.call("POST", "/recipes", {
+            "name": "Brot", "servings": 3,
+            "ingredients": [{"food_id": self.food["id"], "quantity": 1, "unit": "kg"}],
+        }, status=201)
+        prepared = self.call("POST", f'/recipes/{recipe["id"]}/prepare', status=201)["inventory_item"]
+        with Session(self.engine) as db:
+            user = models.User(username="Mealprep")
+            db.add(user)
+            db.commit()
+            user_id = user.id
+        occupied = self.call("POST", "/meals/logs", {
+            "food_id": self.food["id"], "user_id": user_id, "quantity": 1, "unit": "kg",
+            "eaten_at": "2026-11-25T08:00:00", "meal_type": "Fruehstueck", "meal_source": "mealprep",
+        }, status=201)
+
+        path = "/meals/logs/plan-prepared"
+        plan = {
+            "recipe_id": recipe["id"], "inventory_item_id": prepared["id"], "user_id": user_id,
+            "start_date": "2026-11-25",
+        }
+        breakfast = {"day": "2026-11-26", "meal_type": "breakfast"}
+        lunch = {"day": "2026-11-25", "meal_type": "lunch"}
+        dinner = {"day": "2026-12-01", "meal_type": "dinner"}
+        self.call("POST", path, {**plan, "slots": [lunch, {**breakfast, "day": "2026-11-25"}]}, status=409)
+        self.call("POST", path, {**plan, "slots": [lunch, lunch]}, status=422)
+        self.call("POST", path, {**plan, "slots": [{**dinner, "day": "2026-12-02"}]}, status=422)
+        self.call("POST", path, {**plan, "slots": [breakfast, lunch, dinner, {**dinner, "day": "2026-11-30"}]}, status=409)
+        self.assertEqual(self.call("GET", "/meals/logs"), [occupied])
+
+        selection = {**plan, "slots": [breakfast, lunch, dinner]}
+        logs = self.call("POST", path, selection, status=201)
+        self.assertEqual([(row["meal_type"], row["eaten_at"]) for row in logs], [
+            ("Frühstück", "2026-11-26T08:00:00"),
+            ("Mittagessen", "2026-11-25T12:30:00"),
+            ("Abendessen", "2026-12-01T18:30:00"),
+        ])
+        for row in logs:
+            self.assertEqual((row["food_id"], row["user_id"], row["quantity"], row["unit"]),
+                             (prepared["food_id"], user_id, 1, "Portion"))
+            self.assertEqual(row["meal_source"], "mealprep")
+            self.assertTrue(row["planned_inventory_deduction"])
+            self.assertIsNone(row["inventory_deducted_at"])
+        self.call("POST", path, selection, status=409)
+        self.assertEqual(self.call("GET", "/meals/logs"), [occupied, *logs])
+        self.assertEqual(self.call("GET", f'/inventory/{prepared["id"]}')["quantity"], 3)
+
     def test_inventory_reads_an_existing_large_recipe_image(self):
         stored = self.store(1, "kg")
         with Session(self.engine) as db:

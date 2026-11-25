@@ -674,6 +674,61 @@ try {
     assert.ok(layout.imageBottom <= layout.descriptionTop, `Recipe image overlaps the description: ${JSON.stringify(layout)}`);
     assert.ok(layout.scrolled && layout.lastStepVisible, 'Preparation steps must remain reachable by scrolling');
     console.log(`PASS ${width}px recipe preparation: the image has its own space and all steps remain reachable`);
+
+    const days = await evaluate(`Array.from({ length: 7 }, (_, index) => {
+      const date = new Date();
+      date.setDate(date.getDate() + index);
+      return [date.getFullYear(), date.getMonth() + 1, date.getDate()]
+        .map(value => String(value).padStart(2, '0')).join('-');
+    })`);
+    const occupied = await request('/meals/logs', 'POST', {
+      food_id: food.id, user_id: 1, quantity: 100, unit: 'g', meal_source: 'mealprep',
+      meal_type: 'Fruehstueck', eaten_at: `${days[0]}T08:00:00`,
+    });
+    await request('/inventory', 'POST', { food_id: cannedFood.id, name: cannedFood.name, quantity: 2, unit: 'Dose' });
+    await clickButton('.prepare-panel', 'Gericht zubereiten');
+    await waitFor("document.querySelector('.prepare-stock-result.complete')?.textContent.includes('4 Portion eingelagert')");
+    const prepared = (await request('/inventory')).find(row => row.name === recipe.name && row.unit === 'Portion');
+    assert.equal(prepared.quantity, 4);
+
+    const planner = '.prepared-meal-dialog[open]';
+    const plannerOpen = `document.querySelector('${planner}') !== null`;
+    const planButton = (day, meal) => `${planner} tbody tr:nth-child(${day + 1}) [data-meal-type="${meal}"]`;
+    const preparedMeals = async () => (await request('/meals/logs')).filter(row => row.food_id === prepared.food_id);
+    await clickButton('.prepare-panel', 'Portionen einplanen');
+    await waitFor(plannerOpen);
+    assert.deepEqual(await evaluate(`Array.from(document.querySelectorAll('${planner} time'), date => date.dateTime)`), days);
+    assert.deepEqual(await evaluate(`Array.from(document.querySelectorAll('${planner} thead th'), heading => heading.textContent)`),
+      ['Tag', 'Frühstück', 'Mittagessen', 'Abendessen']);
+    assert.equal(await evaluate(`document.querySelector('${planButton(0, 'breakfast')}').disabled`), true);
+    assert.equal(await evaluate(`document.querySelector('${planner}').scrollWidth <= document.querySelector('${planner}').clientWidth`), true);
+    assert.equal(await evaluate(`document.querySelector('${planner} [type=submit]').disabled`), true);
+    await click(planButton(0, 'lunch'));
+    await click(planButton(3, 'breakfast'));
+    await click(planButton(6, 'dinner'));
+    await waitFor(`document.querySelector('${planner} .prepared-meal-count').textContent === '3 von 4 Portionen ausgewählt'`);
+    assert.deepEqual(await preparedMeals(), []);
+    await screenshot(`prepared-meal-plan-${width}.png`);
+    await clickButton(planner, 'Plan speichern');
+    await waitFor(`!(${plannerOpen}) && document.querySelector('.prepare-schedule-message')?.textContent.includes('3 Portionen')`);
+    const plannedPortions = await preparedMeals();
+    assert.deepEqual(plannedPortions.map(row => [row.meal_type, row.eaten_at]), [
+      ['Mittagessen', `${days[0]}T12:30:00`], ['Frühstück', `${days[3]}T08:00:00`], ['Abendessen', `${days[6]}T18:30:00`],
+    ]);
+    assert.ok(plannedPortions.every(row => row.quantity === 1 && row.unit === 'Portion' && row.meal_source === 'mealprep'
+      && row.planned_inventory_deduction && !row.inventory_deducted_at));
+    assert.deepEqual(await request(`/meals/logs/${occupied.id}`), occupied);
+    assert.equal((await request(`/inventory/${prepared.id}`)).quantity, 4);
+
+    await clickButton('.prepare-panel', 'Portionen einplanen');
+    await waitFor(plannerOpen);
+    await click(planButton(0, 'dinner'));
+    await waitFor(`document.querySelector('${planner} .prepared-meal-count').textContent === '1 von 1 Portion ausgewählt'`);
+    assert.equal(await evaluate(`document.querySelector('${planButton(1, 'breakfast')}').disabled`), true);
+    await clickButton(planner, 'Abbrechen');
+    await waitFor(`!(${plannerOpen})`);
+    assert.deepEqual(await preparedMeals(), plannedPortions);
+    console.log(`PASS ${width}px prepared meal plan: seven days from today, mixed meals, occupied slots preserved and remaining portions limited`);
   }
 } finally {
   await send("Page.navigate", { url: "about:blank" });

@@ -1033,6 +1033,19 @@ class MealLogRead(MealLogBase, ORMBase):
     recipe: Optional[RecipeSummary] = None
 
 
+class MealPrepSlot(BaseModel):
+    day: date
+    meal_type: Literal["breakfast", "lunch", "dinner"]
+
+
+class PreparedMealPlanCreate(BaseModel):
+    recipe_id: int = Field(gt=0)
+    inventory_item_id: int = Field(gt=0)
+    user_id: int = Field(gt=0)
+    start_date: date
+    slots: list[MealPrepSlot] = Field(min_length=1, max_length=21)
+
+
 class MealInventoryDeductionItem(BaseModel):
     food_id: int
     name: str

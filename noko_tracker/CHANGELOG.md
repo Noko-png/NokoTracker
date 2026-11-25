@@ -1,5 +1,9 @@
 # Changelog
 
+## 3.1.36
+
+- Nach dem Zubereiten öffnet **Portionen einplanen** eine Auswahl für heute und die nächsten sechs Tage. Je Mahlzeit lässt sich eine Portion als Frühstück, Mittagessen oder Abendessen im Mealprep-Kalender eintragen. Belegte Mahlzeiten bleiben erhalten.
+
 ## 3.1.35
 
 - Eingebettete Rezeptbilder in zubereiteten Bestandspositionen verursachen beim Laden des Bestands und beim Zubereiten keinen HTTP-500-Fehler mehr. Bereits gespeicherte Bilder bleiben beim Laden, Bearbeiten und Rückbuchen erhalten.

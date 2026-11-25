@@ -1,9 +1,10 @@
 import hashlib
 import json
-from datetime import datetime
+from datetime import datetime, time
 from fractions import Fraction
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Response, status
+from sqlalchemy import or_
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
@@ -16,6 +17,17 @@ router = APIRouter(prefix="/meals/logs", tags=["meals"])
 
 MEALPREP_SOURCE = "mealprep"
 PREPARED_FOOD_BRAND = "Zubereitet"
+MEALPREP_TIMES = {
+    "breakfast": ("Frühstück", time(8)),
+    "lunch": ("Mittagessen", time(12, 30)),
+    "dinner": ("Abendessen", time(18, 30)),
+}
+MEALPREP_TYPES = {
+    **{meal_type: meal_type for meal_type in MEALPREP_TIMES},
+    **{label.lower(): meal_type for meal_type, (label, _) in MEALPREP_TIMES.items()},
+    "fruehstueck": "breakfast",
+    "mittag": "lunch",
+}
 
 
 def get_meal_log_or_404(db: Session, meal_log_id: int) -> models.MealLog:
@@ -286,13 +298,56 @@ def create_meal_log(meal_log_in: schemas.MealLogCreate, db: Session = Depends(ge
         raise
 
 
+@router.post("/plan-prepared", response_model=list[schemas.MealLogRead], status_code=status.HTTP_201_CREATED)
+def plan_prepared_meals(plan: schemas.PreparedMealPlanCreate, db: Session = Depends(get_db)):
+    slots = {(slot.day, slot.meal_type) for slot in plan.slots}
+    if len(slots) != len(plan.slots) or any(not 0 <= (day - plan.start_date).days < 7 for day, _ in slots):
+        raise HTTPException(422, "Bitte verschiedene Mahlzeiten innerhalb der angezeigten sieben Tage auswählen.")
+
+    ensure_reference_exists(db, models.User, plan.user_id, "User")
+    recipe = db.get(models.Recipe, plan.recipe_id)
+    item = db.get(models.InventoryItem, plan.inventory_item_id)
+    if recipe is None or item is None or item.food_id is None or recipe.prepared_food_id != item.food_id:
+        raise HTTPException(409, "Die zubereitete Bestandsposition ist nicht mehr vorhanden.")
+    if item.quantity < len(slots):
+        raise HTTPException(409, "Für die Auswahl sind nicht mehr genug Portionen im Bestand.")
+
+    first_day = min(day for day, _ in slots)
+    last_day = max(day for day, _ in slots)
+    existing = db.query(models.MealLog).filter(
+        or_(models.MealLog.user_id == plan.user_id, models.MealLog.user_id.is_(None)),
+        models.MealLog.meal_source == MEALPREP_SOURCE,
+        models.MealLog.eaten_at >= datetime.combine(first_day, time.min),
+        models.MealLog.eaten_at <= datetime.combine(last_day, time.max),
+    ).all()
+    if any((meal.eaten_at.date(), MEALPREP_TYPES.get(normalized_unit(meal.meal_type))) in slots for meal in existing):
+        raise HTTPException(409, "Mindestens eine ausgewählte Mahlzeit ist bereits belegt. Bitte die Auswahl prüfen.")
+
+    meals = []
+    for slot in plan.slots:
+        label, meal_time = MEALPREP_TIMES[slot.meal_type]
+        meals.append(models.MealLog(
+            eaten_at=datetime.combine(slot.day, meal_time), meal_type=label,
+            quantity=1, unit=item.unit, food_id=item.food_id, user_id=plan.user_id,
+            notes=f"Mealprep: {item.name} als fertiges Gericht",
+            meal_source=MEALPREP_SOURCE, planned_inventory_deduction=True,
+        ))
+    try:
+        db.add_all(meals)
+        db.commit()
+    except IntegrityError as exc:
+        db.rollback()
+        raise HTTPException(409, "Die Portionen konnten nicht geplant werden.") from exc
+    return meals
+
+
 @router.get("", response_model=list[schemas.MealLogRead])
 def list_meal_logs(
     skip: int = Query(0, ge=0),
     limit: int = Query(100, ge=1, le=500),
     db: Session = Depends(get_db),
 ):
-    return crud.get_multi(db, models.MealLog, skip=skip, limit=limit)
+    return db.query(models.MealLog).order_by(models.MealLog.id).offset(skip).limit(limit).all()
 
 
 @router.get("/{meal_log_id}", response_model=schemas.MealLogRead)
