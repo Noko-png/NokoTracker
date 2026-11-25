@@ -75,6 +75,12 @@ async function clickText(label) {
   await waitFor(`Array.from(document.querySelectorAll('button')).some(el => el.textContent.trim() === ${value})`);
   await evaluate(`Array.from(document.querySelectorAll('button')).find(el => el.textContent.trim() === ${value}).click()`);
 }
+async function clickOccurrenceAction(title) {
+  const selector = JSON.stringify(`button[title=${JSON.stringify(title)}]`);
+  const action = `Array.from(document.querySelectorAll(${selector})).find(button => button.getClientRects().length)`;
+  await waitFor(`Boolean(${action})`);
+  await evaluate(`${action}.click()`);
+}
 async function fill(label, value) {
   await evaluate(`(() => {
     const label = Array.from(document.querySelectorAll('form.calendar-form label')).find(el => el.querySelector('span')?.textContent === ${JSON.stringify(label)});
@@ -104,6 +110,8 @@ try {
     { name: "mobile-date-input", width: 390, tap: false },
     { name: "mobile-all-day-tap", width: 390, tap: true, allDay: true },
     { name: "mobile-validation-error", width: 390, tap: true, failOnce: true },
+    { name: "desktop-occurrence-replacement", width: 1440, replaceOccurrence: true },
+    { name: "mobile-hour-replacement", width: 390, replaceOccurrence: true, allDay: true, timed: true },
   ]) {
     const reset = await (await fetch(`${api}/__calendar_test__/reset`, { method: "POST" })).json();
     assert.equal(reset.fixture, "calendar-create-memory", "Only use the in-memory calendar fixture");
@@ -117,7 +125,7 @@ try {
         recurrence_until: `${workUntil}T23:59:59`, group_id: 1, user_id: 1,
       }),
     })).json();
-    const holidayDay = getLocalDate(addDays(monday, scenario.tap ? 3 : 1));
+    const holidayDay = getLocalDate(addDays(monday, scenario.tap || scenario.replaceOccurrence ? 3 : 1));
     requests.length = 0;
     await send("Emulation.setDeviceMetricsOverride", {
       width: scenario.width, height: 900, deviceScaleFactor: 1, mobile: scenario.width < 760,
@@ -127,17 +135,40 @@ try {
     await clickText("Kalender");
     await clickText("Woche");
     await waitFor("Array.from(document.querySelectorAll('[title]')).filter(el => el.title.startsWith('Arbeit |')).length === 5");
-    await clickText("Erstellen");
-    await clickText("Termin");
-    await fill("Titel", "Urlaub");
-    await fill("Gruppe", "2");
-    await evaluate("Array.from(document.querySelectorAll('form.calendar-form label')).find(el => el.textContent.trim() === 'Ganztagig').querySelector('input').click()");
-    if (scenario.tap) {
-      await evaluate("Array.from(document.querySelectorAll('[title]')).filter(el => el.title.startsWith('Arbeit |'))[3].click()");
+    const workEntries = "Array.from(document.querySelectorAll('.calendar-time-grid [title]')).filter(el => el.title.startsWith('Arbeit |'))";
+    const allDayCheckbox = "Array.from(document.querySelectorAll('form.calendar-form label')).find(el => el.textContent.trim() === 'Ganztagig').querySelector('input')";
+    if (scenario.replaceOccurrence) {
+      await evaluate(`${workEntries}[3].click()`);
+      assert.equal(await evaluate("Boolean(document.querySelector('form.calendar-form'))"), false);
+      await clickOccurrenceAction("Verdrängenden Termin anlegen");
+      await waitFor("Boolean(document.querySelector('form.calendar-form'))");
+      assert.equal(await readField("Gruppe"), "2");
+      assert.equal(await readField("Datum"), holidayDay);
+      assert.equal(await readField("Bis"), holidayDay);
+      assert.equal(await evaluate(`${allDayCheckbox}.checked`), Boolean(scenario.allDay));
+      if (!scenario.allDay) {
+        assert.equal(await readField("Anfang"), "06:00");
+        assert.equal(await readField("Ende"), "15:00");
+      }
+      await fill("Titel", "Urlaub");
+      await evaluate(`${allDayCheckbox}.click()`);
+      if (scenario.timed) {
+        await fill("Anfang", "09:00");
+        await fill("Ende", "11:00");
+      }
     } else {
-      // Moving backwards must not turn one holiday into a multi-day range.
-      await fill("Datum", getLocalDate(addDays(monday, 4)));
-      await fill("Datum", holidayDay);
+      await clickText("Erstellen");
+      await clickText("Termin");
+      await fill("Titel", "Urlaub");
+      await fill("Gruppe", "2");
+      await evaluate(`${allDayCheckbox}.click()`);
+      if (scenario.tap) {
+        await evaluate(`${workEntries}[3].click()`);
+      } else {
+        // Moving backwards must not turn one holiday into a multi-day range.
+        await fill("Datum", getLocalDate(addDays(monday, 4)));
+        await fill("Datum", holidayDay);
+      }
     }
     assert.equal(await readField("Titel"), "Urlaub");
     assert.equal(await readField("Gruppe"), "2");
@@ -158,7 +189,21 @@ try {
     assert.equal(requests.at(-1).method, "POST", "Creating a holiday must not patch the work series");
     assert.deepEqual(stored.find((event) => event.id === originalWork.id), originalWork);
     assert.equal(stored.length, 2);
-    await waitFor("Array.from(document.querySelectorAll('[title]')).filter(el => el.title.startsWith('Arbeit |')).length === 4");
+    const replacement = stored.find((event) => event.id !== originalWork.id);
+    assert.equal(replacement.recurrence_frequency, "none");
+    assert.equal(replacement.all_day, !scenario.timed);
+    assert.equal(replacement.start_at, `${holidayDay}T${scenario.timed ? "09:00" : "00:00"}:00`);
+    assert.equal(replacement.end_at, `${holidayDay}T${scenario.timed ? "11:00" : "23:59"}:00`);
+    await waitFor(`${workEntries}.length === ${scenario.timed ? 6 : 4}`);
+    if (scenario.timed) {
+      const remainingHours = ["00:00 - 09:00", "11:00 - 23:59"];
+      assert.deepEqual(await evaluate(`${workEntries}.filter(el => el.matches('.time-grid-entry')).map(el => el.title)`),
+        remainingHours.map((time) => `Arbeit | ${time}`));
+      assert.equal(await evaluate(`${workEntries}.filter(el => el.matches('.all-day-grid-entry')).length`), 4);
+      assert.deepEqual(await evaluate(`Array.from(document.querySelectorAll('.agenda-item'))
+        .filter(row => row.querySelector('strong')?.textContent === 'Arbeit')
+        .map(row => row.querySelector('strong').nextElementSibling.textContent.split(' | ')[0])`), remainingHours);
+    }
     assert.equal(await evaluate("document.documentElement.scrollWidth <= window.innerWidth"), true);
     if (process.env.CALENDAR_TEST_SCREENSHOTS) {
       await writeFile(
@@ -166,10 +211,34 @@ try {
         Buffer.from((await send("Page.captureScreenshot", { format: "png" })).data, "base64"),
       );
     }
-    // After creation closes, clicking an existing event must still open normal editing.
-    await evaluate("Array.from(document.querySelectorAll('[title]')).find(el => el.title.startsWith('Arbeit |')).click()");
+    // Series have their own editing action after selecting a day.
+    await evaluate(`${workEntries}[0].click()`);
+    await clickOccurrenceAction("Serie bearbeiten");
     await waitFor("document.querySelector('form.calendar-form') !== null");
     assert.equal(await readField("Titel"), "Arbeit");
+    if (scenario.name === "desktop-occurrence-replacement") {
+      const requestCount = requests.length;
+      const friday = addDays(monday, 4);
+      const dateLabel = new Intl.DateTimeFormat("de-DE", { dateStyle: "medium" }).format(friday);
+      const slot = `document.querySelector(${JSON.stringify(`.time-grid-slot[aria-label="${dateLabel} 17:30"]`)})`;
+      await evaluate(`${slot}.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true, pointerType: 'mouse' }))`);
+      await waitFor(`${slot}.classList.contains('selecting')`);
+      await evaluate(`${slot}.dispatchEvent(new PointerEvent('pointerup', { bubbles: true, pointerType: 'mouse' }))`);
+      await waitFor("document.querySelector('form.calendar-form button[type=submit]').innerText.includes('Anlegen')");
+      assert.equal(await readField("Titel"), "");
+      assert.equal(await readField("Wiederholung"), "none");
+      assert.equal(await readField("Datum"), getLocalDate(friday));
+      assert.equal(await readField("Bis"), getLocalDate(friday));
+      assert.equal(await readField("Anfang"), "17:30");
+      assert.equal(await readField("Ende"), "18:00");
+      assert.equal(requests.length, requestCount);
+      await evaluate("document.querySelector('form.calendar-form').closest('.panel').querySelector('[title=Schliessen]').click()");
+      await waitFor("!document.querySelector('form.calendar-form')");
+      await evaluate(`${workEntries}[0].click()`);
+      await clickOccurrenceAction("Serie bearbeiten");
+      await waitFor("document.querySelector('form.calendar-form') !== null");
+      assert.equal(await readField("Titel"), "Arbeit");
+    }
     await fill("Titel", "Arbeit bearbeitet");
     await submit();
     await waitFor("!document.querySelector('form.calendar-form')");
@@ -237,6 +306,7 @@ try {
     assert.equal(stored[0].recurrence_until, `${until}T23:59:59`);
     await waitFor("Array.from(document.querySelectorAll('[title]')).filter(el => el.title.startsWith('Wiederholungstest |')).length === 2");
     await evaluate("Array.from(document.querySelectorAll('[title]')).find(el => el.title.startsWith('Wiederholungstest |')).click()");
+    await clickOccurrenceAction("Serie bearbeiten");
     await waitFor("document.querySelector('form.calendar-form') !== null");
     assert.equal(await readField("Wiederholen alle"), "2");
     assert.equal(await readField("Wiederholen bis (optional)"), until);

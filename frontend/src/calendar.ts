@@ -7,6 +7,7 @@ export type CalendarOccurrence = {
   occurrenceStartAt: Date;
   trainingPlanId: number | null;
   trainingPlanName: string | null;
+  allDay: boolean;
   startAt: Date;
   endAt: Date | null;
 };
@@ -385,16 +386,7 @@ export function getCalendarOccurrences(
         source.event.id !== target.event.id &&
         source.startAt < target.endAt && target.startAt < source.endAt,
       )
-      .map((source): Interval => {
-        if (!target.event.all_day) {
-          return [source.startAt.getTime(), source.endAt.getTime()];
-        }
-        const endDay = startOfDay(source.endAt);
-        return [
-          startOfDay(source.startAt).getTime(),
-          (source.endAt > endDay ? addDays(endDay, 1) : endDay).getTime(),
-        ];
-      });
+      .map((source): Interval => [source.startAt.getTime(), source.endAt.getTime()]);
 
     for (const [start, end] of subtractIntervals(target, blocked)) {
       let day = startOfDay(new Date(Math.max(start, rangeStart.getTime())));
@@ -414,6 +406,7 @@ export function getCalendarOccurrences(
           occurrenceStartAt: target.occurrenceStartAt,
           trainingPlanId: target.trainingPlanId,
           trainingPlanName: target.trainingPlanName,
+          allDay: target.event.all_day && start <= day.getTime() && end >= nextDay.getTime(),
           startAt: segmentStart,
           endAt: unchangedOpenEnd
             ? null

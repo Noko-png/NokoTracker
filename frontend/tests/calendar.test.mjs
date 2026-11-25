@@ -208,17 +208,23 @@ test("open-ended overnight appointments keep their one-hour duration", () => {
   ]);
 });
 
-test("all-day targets lose only the overlapping days", () => {
+test("timed blockers leave timed segments on an otherwise all-day occurrence", () => {
   const target = event(1, {
     start_at: "2026-09-21T00:00:00", end_at: "2026-09-23T23:59:00",
-    all_day: true, recurrence_frequency: "none",
+    all_day: true, recurrence_frequency: "weekly",
   });
   const blocker = event(2, {
     start_at: "2026-09-22T06:00:00", end_at: "2026-09-22T10:00:00",
   });
-  assert.deepEqual(workTimes([target, blocker], "2026-09-21", "2026-09-23"), [
-    ["2026-09-21", "00:00", "23:59"], ["2026-09-23", "00:00", "23:59"],
+  const work = occurrences([target, blocker], "2026-09-21", "2026-09-28").filter((item) => item.event.id === 1);
+  assert.deepEqual(work.map((item) => [item.date, time(item.startAt), time(item.endAt), item.allDay]), [
+    ["2026-09-21", "00:00", "23:59", true],
+    ["2026-09-22", "00:00", "06:00", false],
+    ["2026-09-22", "10:00", "23:59", false],
+    ["2026-09-23", "00:00", "23:59", true],
+    ["2026-09-28", "00:00", "23:59", true],
   ]);
+  assert.ok(work.every((item) => item.event === target && item.event.all_day));
 });
 
 test("all-day events and alternating workweeks keep their local dates across DST", () => {

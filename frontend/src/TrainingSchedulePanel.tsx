@@ -99,7 +99,7 @@ export function TrainingSchedulePanel({ events, groups, plans, sessions, busy, o
       {upcoming.map((occurrence) => <article className="training-upcoming-item" key={occurrence.key}>
         <div><strong>{occurrence.event.title}</strong>
           <span>{occurrence.startAt.toLocaleDateString("de-DE", { weekday: "short", day: "2-digit", month: "2-digit" })}
-            {occurrence.event.all_day ? " · Ganztägig" : ` · ${occurrence.startAt.toLocaleTimeString("de-DE", { hour: "2-digit", minute: "2-digit" })}`}
+            {occurrence.allDay ? " · Ganztägig" : ` · ${occurrence.startAt.toLocaleTimeString("de-DE", { hour: "2-digit", minute: "2-digit" })}`}
             {occurrence.trainingPlanName && occurrence.trainingPlanName !== occurrence.event.title ? ` · ${occurrence.trainingPlanName}` : ""}</span>
         </div>
         <TrainingOccurrenceActions occurrence={occurrence} sessions={sessions} busy={busy} onStart={onStart} onSkip={onSkip} />

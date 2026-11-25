@@ -1,5 +1,10 @@
 # Changelog
 
+## 3.1.38
+
+- Beim Antippen eines Serienvorkommens lässt sich für dessen Datum ein verdrängender Einzeltermin anlegen. **Serie bearbeiten** öffnet die Wiederholungsregel gezielt.
+- Die Kalenderverdrängung zieht nur die tatsächliche Überschneidung ab, auch bei ganztägigen Serien. Die übrigen Stunden und Vorkommen bleiben sichtbar.
+
 ## 3.1.37
 
 - Mealprep im Kalorientracker zeigt beim Öffnen den ausgewählten Tag und die sechs darauffolgenden Tage an.

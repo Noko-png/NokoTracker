@@ -31,6 +31,7 @@ import {
   Apple,
   BarChart3,
   CalendarDays,
+  CalendarPlus,
   Camera,
   Check,
   CheckCircle2,
@@ -593,7 +594,7 @@ const macroMeta: Array<{
   { key: "carbs", label: "Kohlenhydrate", unit: "g", tone: "red" },
 ];
 
-const appVersion = "3.1.37";
+const appVersion = "3.1.38";
 const updateSourceLabel = "main / github.com/Noko-png/NokoTracker";
 
 const emptyNutrition: NutritionDay = {
@@ -1115,7 +1116,7 @@ function occurrenceStartSlot(occurrence: CalendarOccurrence) {
 }
 
 function occurrenceEndSlot(occurrence: CalendarOccurrence) {
-  if (occurrence.event.all_day) {
+  if (occurrence.allDay) {
     return 48;
   }
 
@@ -1197,13 +1198,17 @@ function formatOccurrenceTitle(occurrence: CalendarOccurrence) {
 }
 
 function formatOccurrenceTime(occurrence: CalendarOccurrence) {
-  if (occurrence.event.all_day) {
+  if (occurrence.allDay) {
     return "Ganztagig";
   }
   if (occurrence.endAt) {
     return `${formatCalendarTime(occurrence.startAt)} - ${formatCalendarTime(occurrence.endAt)}`;
   }
   return formatCalendarTime(occurrence.startAt);
+}
+
+function isCalendarSeries(event: CalendarEvent) {
+  return event.recurrence_frequency !== "none" || Boolean(event.ics_is_series);
 }
 
 function createCalendarFormFromEvent(event: CalendarEvent): CalendarForm {
@@ -3570,7 +3575,7 @@ export default function App() {
 
   async function removeCalendarSeries(event: CalendarEvent) {
     if (
-      (event.recurrence_frequency !== "none" || event.ics_is_series) &&
+      isCalendarSeries(event) &&
       !window.confirm(
         `Willst du wirklich ALLE Termine der Serie "${event.title}" loeschen?`,
       )
@@ -6001,9 +6006,10 @@ function CalendarPage({
     createMenuOpen,
     () => setCreateMenuOpen(false),
   );
-  const [createPanel, setCreatePanel] = useState<"event" | "group" | null>(
+  const [createPanel, setCreatePanel] = useState<"event" | "group" | "occurrence" | null>(
     form.recurrence_frequency === "cycle" ? "event" : null,
   );
+  const [selectedOccurrenceKey, setSelectedOccurrenceKey] = useState<string | null>(null);
   const [calendarGroupsOpen, setCalendarGroupsOpen] = useState(false);
 
   useEffect(() => {
@@ -6053,6 +6059,8 @@ function CalendarPage({
   }
   const timeGridRowOffset = 3;
   const selectedOccurrences = occurrencesByDate.get(selectedDate) ?? [];
+  const selectedOccurrence = selectedOccurrences.find((item) => item.key === selectedOccurrenceKey);
+  const editingEvent = events.find((entry) => entry.id === editingEventId);
   const selectedMonth = dateFromLocalValue(selectedDate).getMonth();
   const miniMonthDates = monthGridDates(selectedDate);
   const today = getLocalDate();
@@ -6131,9 +6139,35 @@ function CalendarPage({
 
   function selectOccurrence(occurrence: CalendarOccurrence) {
     onDateChange(occurrence.date);
-    if (!occurrence.event.is_ics && (createPanel !== "event" || editingEventId !== null)) {
+    if (createPanel === "event" && editingEventId === null) return;
+    if (isCalendarSeries(occurrence.event)) {
+      if (occurrence.event.is_ics && !getSuppressingGroup(occurrence)) return;
+      if (editingEventId !== null) onCancelEdit();
+      setSelectedOccurrenceKey(occurrence.key);
+      setCreatePanel("occurrence");
+    } else if (!occurrence.event.is_ics) {
       onEdit(occurrence.event);
     }
+  }
+
+  function getSuppressingGroup(occurrence: CalendarOccurrence) {
+    const targetGroupId = occurrence.event.group_id;
+    if (targetGroupId == null) return undefined;
+    return groups.find((group) => group.id !== targetGroupId && group.suppresses_group_ids?.includes(targetGroupId));
+  }
+
+  function openSuppressionDraft(occurrence: CalendarOccurrence) {
+    const group = getSuppressingGroup(occurrence);
+    if (!group) return;
+    const draft = createCalendarForm(occurrence.date);
+    if (!occurrence.allDay) {
+      draft.start_time = formatTimeInput(occurrence.startAt);
+      draft.end_time = occurrence.endAt ? formatTimeInput(occurrence.endAt) : "";
+    }
+    onCancelEdit();
+    onFormChange({ ...draft, all_day: occurrence.allDay, group_id: String(group.id) });
+    setCreateMenuOpen(false);
+    setCreatePanel("event");
   }
 
   async function submitEntryForm(event: FormEvent) {
@@ -6230,15 +6264,21 @@ function CalendarPage({
       Math.max(timeSelection.startSlot, timeSelection.endSlot) + 1,
       48,
     );
+    const draft = createPanel === "event" && editingEventId === null
+      ? form
+      : createCalendarForm(date);
+    if (editingEventId !== null) onCancelEdit();
     onDateChange(date);
     onFormChange({
-      ...form,
+      ...draft,
       date,
       end_date: date,
       start_time: timeSlotLabel(startSlot),
       end_time: timeSlotEndLabel(endSlot),
       all_day: false,
     });
+    setCreatePanel("event");
+    setCreateMenuOpen(false);
     setTimeSelection(null);
   }
 
@@ -6726,7 +6766,7 @@ function CalendarPage({
             {gridDates.map((date, dayIndex) => {
               const dateValue = getLocalDate(date);
               const allDayOccurrences = (occurrencesByDate.get(dateValue) ?? []).filter(
-                (occurrence) => occurrence.event.all_day,
+                (occurrence) => occurrence.allDay,
               );
               return (
                 <div
@@ -6785,7 +6825,7 @@ function CalendarPage({
             )}
             {gridDates.map((date, dayIndex) =>
               (occurrencesByDate.get(getLocalDate(date)) ?? [])
-                .filter((occurrence) => !occurrence.event.all_day)
+                .filter((occurrence) => !occurrence.allDay)
                 .map((occurrence) => (
                   <button
                     className={`time-grid-entry ${occurrence.event.entry_type} ${
@@ -6886,16 +6926,26 @@ function CalendarPage({
                     </>}
                   </div>
                   <div className="agenda-actions">
+                    {getSuppressingGroup(occurrence) && (
+                      <button
+                        className="icon-button"
+                        onClick={() => openSuppressionDraft(occurrence)}
+                        title="Verdrängenden Termin anlegen"
+                        type="button"
+                      >
+                        <CalendarPlus size={16} />
+                      </button>
+                    )}
                     {!occurrence.event.is_ics && <button
                       className="icon-button"
                       onClick={() => onEdit(occurrence.event)}
-                      title="Eintrag bearbeiten"
+                      title={isCalendarSeries(occurrence.event) ? "Serie bearbeiten" : "Eintrag bearbeiten"}
                       type="button"
                     >
                       <Pencil size={16} />
                     </button>}
                     {occurrence.event.is_ics && <span className="muted-line">ICS{occurrence.event.ics_is_series ? "-Serie" : "-Termin"}</span>}
-                    {(occurrence.event.recurrence_frequency !== "none" || occurrence.event.ics_is_series) && (
+                    {isCalendarSeries(occurrence.event) && (
                       <button
                         className="icon-button danger"
                         onClick={() => onDeleteOccurrence(occurrence)}
@@ -6909,9 +6959,7 @@ function CalendarPage({
                       className="icon-button danger"
                       onClick={() => onDeleteSeries(occurrence.event)}
                       title={
-                        occurrence.event.recurrence_frequency === "none" && !occurrence.event.ics_is_series
-                          ? "Eintrag loeschen"
-                          : "Ganze Serie loeschen"
+                        isCalendarSeries(occurrence.event) ? "Ganze Serie loeschen" : "Eintrag loeschen"
                       }
                       type="button"
                     >
@@ -6985,6 +7033,35 @@ function CalendarPage({
           )}
         </div>
 
+        {createPanel === "occurrence" && selectedOccurrence && (
+          <Panel
+            title={formatOccurrenceTitle(selectedOccurrence)}
+            actions={(
+              <button className="icon-button" onClick={closeCreatePanel} title="Schliessen" type="button">
+                <X size={18} />
+              </button>
+            )}
+          >
+            <p className="muted-line">{formatDate(selectedOccurrence.date)} · {formatOccurrenceTime(selectedOccurrence)}</p>
+            <div className="form-actions">
+              {getSuppressingGroup(selectedOccurrence) && (
+                <button className="button primary" onClick={() => openSuppressionDraft(selectedOccurrence)}
+                  title="Verdrängenden Termin anlegen" type="button">
+                  <CalendarPlus size={16} />
+                  Verdrängenden Termin anlegen
+                </button>
+              )}
+              {!selectedOccurrence.event.is_ics && (
+                <button className="button secondary" onClick={() => onEdit(selectedOccurrence.event)}
+                  title="Serie bearbeiten" type="button">
+                  <Pencil size={16} />
+                  Serie bearbeiten
+                </button>
+              )}
+            </div>
+          </Panel>
+        )}
+
         {createPanel === "event" && (
           <Panel
             actions={
@@ -7001,7 +7078,9 @@ function CalendarPage({
             }
             title={
               editingEventId !== null
-                ? "Eintrag bearbeiten"
+                ? editingEvent && isCalendarSeries(editingEvent)
+                  ? "Serie bearbeiten"
+                  : "Eintrag bearbeiten"
                 : "Termin anlegen"
             }
           >
@@ -7087,7 +7166,7 @@ function CalendarPage({
               />
               <CalendarRecurrenceFields
                 form={form}
-                shifts={events.find((event) => event.id === editingEventId)?.shifts}
+                shifts={editingEvent?.shifts}
                 planNames={form.training_plan_ids.map((id) => trainingPlans.find((plan) => String(plan.id) === id)?.name)}
                 onChange={(change) => onFormChange({ ...form, ...change })}
               />
