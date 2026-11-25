@@ -485,6 +485,22 @@ button {
   background: linear-gradient(90deg, var(--primary), var(--green));
 }
 
+.calendar-loading-bar {
+  position: relative;
+  height: 0;
+  margin: 0;
+  pointer-events: none;
+}
+
+.calendar-loading-bar::before {
+  position: absolute;
+  inset: -8px 0 auto;
+  height: 4px;
+  border-radius: inherit;
+  background: inherit;
+  content: "";
+}
+
 .page-grid {
   display: grid;
   gap: 18px;
@@ -5739,6 +5755,7 @@ th {
 
 .time-grid-header {
   display: grid;
+  grid-row: 1;
   place-items: center;
   gap: 5px;
   min-width: 0;
@@ -5803,6 +5820,7 @@ th {
   left: 0;
   z-index: 5;
   display: grid;
+  grid-column: 1;
   align-items: center;
   padding: 6px 8px 6px 0;
   color: var(--muted);
@@ -5879,18 +5897,27 @@ th {
 }
 
 .time-grid-entry {
+  --calendar-entry-gap: 4px;
+  --calendar-entry-lane: 0;
+  --calendar-entry-lanes: 1;
+
   z-index: 2;
   display: grid;
   align-content: start;
+  justify-self: start;
   gap: 2px;
   overflow: hidden;
-  min-height: 24px;
-  margin: 2px 4px;
+  width: calc(100% / var(--calendar-entry-lanes) - 2 * var(--calendar-entry-gap));
+  min-width: 0;
+  min-height: 0;
+  margin: 2px 0;
+  margin-inline-start: calc(100% / var(--calendar-entry-lanes) * var(--calendar-entry-lane) + var(--calendar-entry-gap));
   padding: 5px 6px;
   border: 0;
   border-left: 5px solid transparent;
   border-radius: 7px;
   color: var(--text);
+  line-height: 1.2;
   text-align: left;
 }
 
@@ -5907,7 +5934,7 @@ th {
 }
 
 .time-grid-entry.preview {
-  z-index: 3;
+  z-index: 1;
   border: 1px dashed var(--primary);
   border-left: 5px solid var(--primary);
   background: var(--blue-soft);
@@ -5930,6 +5957,15 @@ th {
 .time-grid-entry span {
   color: var(--muted);
   font-size: 0.68rem;
+}
+
+.time-grid-entry.compact {
+  align-content: center;
+  padding-block: 0;
+}
+
+.time-grid-entry.compact span {
+  display: none;
 }
 
 .agenda-item {
@@ -8317,10 +8353,17 @@ th {
   }
 
   .time-grid-entry {
-    margin: 1px;
-    padding: 3px 3px;
+    --calendar-entry-gap: 1px;
+
+    margin-block: 1px;
+    padding-inline: 3px;
+    padding-block: 3px;
     border-left-width: 3px;
     border-radius: 4px;
+  }
+
+  .time-grid-entry.compact {
+    padding-block: 0;
   }
 
   .time-grid-entry strong {

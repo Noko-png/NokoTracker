@@ -329,6 +329,73 @@ try {
     console.log(`PASS ${width}px recurrence: previews, intervals, validation, save/reopen, disabling and month/leap dates`);
     await send("Page.navigate", { url: "about:blank" });
   }
+  for (const width of [390, 1440]) {
+    const reset = await (await fetch(`${api}/__calendar_test__/reset`, { method: "POST" })).json();
+    assert.equal(reset.fixture, "calendar-create-memory");
+    const date = getLocalDate();
+    for (const [title, start, end] of [
+      ["A", "15:00", "15:30"],
+      ["B", "15:00", "15:30"],
+      ["Kurz", "16:05", "16:20"],
+    ]) {
+      const response = await fetch(`${api}/calendar/events`, {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ title, start_at: `${date}T${start}:00`, end_at: `${date}T${end}:00`, user_id: 1 }),
+      });
+      assert.equal(response.status, 201);
+    }
+    await send("Emulation.setDeviceMetricsOverride", {
+      width, height: 900, deviceScaleFactor: 1, mobile: width < 760,
+    });
+    await send("Page.navigate", { url: frontend });
+    await waitFor("document.body.innerText.includes('Kalendertest')");
+    await clickText("Kalender");
+    await clickText("Woche");
+    await waitFor("document.querySelectorAll('.time-grid-entry.event:not(.preview)').length === 3");
+    assert.equal(await evaluate("document.querySelector('.time-grid-entry.preview') === null"), true);
+
+    const cards = await evaluate(`(() => {
+      const dateLabel = new Intl.DateTimeFormat('de-DE', { dateStyle: 'medium' })
+        .format(new Date(${JSON.stringify(`${date}T12:00:00`)}));
+      return Array.from(document.querySelectorAll('.time-grid-entry.event:not(.preview)'), card => {
+        const title = card.querySelector('strong');
+        const text = document.createRange();
+        text.selectNodeContents(title);
+        const label = text.getBoundingClientRect();
+        const rect = card.getBoundingClientRect();
+        const time = title.textContent === 'Kurz' ? '16:00' : '15:00';
+        const slot = Array.from(document.querySelectorAll('.time-grid-slot'))
+          .find(cell => cell.getAttribute('aria-label') === dateLabel + ' ' + time).getBoundingClientRect();
+        return {
+          title: title.textContent, left: rect.left, right: rect.right, top: rect.top, bottom: rect.bottom,
+          labelTop: label.top, labelBottom: label.bottom, slotTop: slot.top, slotBottom: slot.bottom,
+        };
+      });
+    })()`);
+    for (const card of cards) {
+      const label = `${width}px ${JSON.stringify(card)}`;
+      assert.ok(card.bottom > card.top && card.top >= card.slotTop - 1 && card.bottom <= card.slotBottom + 1, label);
+      assert.ok(card.labelBottom > card.labelTop && card.labelTop >= card.top - 1 && card.labelBottom <= card.bottom + 1, label);
+    }
+    const overlapping = cards.filter(card => card.title === "A" || card.title === "B").sort((a, b) => a.left - b.left);
+    assert.equal(overlapping.length, 2);
+    assert.ok(overlapping[0].right <= overlapping[1].left, `${width}px simultaneous events overlap: ${JSON.stringify(overlapping)}`);
+
+    await clickText("Erstellen");
+    await clickText("Termin");
+    await waitFor("Boolean(document.querySelector('.time-grid-entry.preview'))");
+    await evaluate("document.querySelector('.calendar-sidebar > .panel button[title=Schliessen]').click()");
+    assert.equal(await evaluate("document.querySelector('.time-grid-entry.preview') === null"), true);
+    await clickText("Erstellen");
+    await clickText("Termin");
+    await fill("Titel", "Vorschautest");
+    await waitFor("document.querySelector('.time-grid-entry.preview strong')?.textContent === 'Vorschautest'");
+    await submit();
+    await waitFor("!document.querySelector('form.calendar-form') && Boolean(document.querySelector('.time-grid-entry.event[title^=Vorschautest]'))");
+    assert.equal(await evaluate("document.querySelector('.time-grid-entry.preview') === null"), true);
+    console.log(`PASS ${width}px calendar layout: short titles fit their slots, concurrent events have separate cards and previews follow the draft`);
+    await send("Page.navigate", { url: "about:blank" });
+  }
 } finally {
   await send("Page.navigate", { url: "about:blank" });
   await send("Fetch.disable");

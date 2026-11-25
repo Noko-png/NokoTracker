@@ -1,5 +1,10 @@
 # Changelog
 
+## 3.1.39
+
+- Kurze Termine passen mit einer kompakten Titelzeile ins Zeitraster. Überschneidende Termine stehen nebeneinander.
+- Die Vorschau erscheint beim Markieren eines Zeitraums oder im geöffneten Entwurf. Beim Aktualisieren bleibt das Raster an seiner Position, und bereits sichtbare ICS-Termine bleiben bis zum nächsten erfolgreichen Abruf sichtbar.
+
 ## 3.1.38
 
 - Beim Antippen eines Serienvorkommens lässt sich für dessen Datum ein verdrängender Einzeltermin anlegen. **Serie bearbeiten** öffnet die Wiederholungsregel gezielt.

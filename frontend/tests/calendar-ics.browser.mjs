@@ -10,6 +10,8 @@ const socket = new WebSocket(page.webSocketDebuggerUrl);
 await new Promise((resolve, reject) => { socket.addEventListener("open", resolve, { once: true }); socket.addEventListener("error", reject, { once: true }); });
 let sequence = 0;
 const pending = new Map();
+let heldRequest = null;
+let holdPath = null;
 function send(method, params = {}) {
   return new Promise((resolve, reject) => { const id = ++sequence; pending.set(id, { resolve, reject }); socket.send(JSON.stringify({ id, method, params })); });
 }
@@ -19,7 +21,14 @@ socket.addEventListener("message", ({ data }) => {
     const call = pending.get(message.id); pending.delete(message.id);
     message.error ? call.reject(new Error(JSON.stringify(message.error))) : call.resolve(message.result);
   } else if (message.method === "Fetch.requestPaused") {
-    void send("Fetch.continueRequest", { requestId: message.params.requestId, url: message.params.request.url.replace("http://127.0.0.1:8000", api) });
+    const { requestId, request } = message.params;
+    const options = { requestId, url: request.url.replace("http://127.0.0.1:8000", api) };
+    if (request.method === "GET" && new URL(request.url).pathname === holdPath) {
+      holdPath = null;
+      heldRequest = options;
+    } else {
+      void send("Fetch.continueRequest", options);
+    }
   }
 });
 async function evaluate(expression) {
@@ -33,6 +42,16 @@ async function waitFor(expression) {
   throw new Error(`Not ready: ${expression}\n${await evaluate("document.body.innerText.slice(-2000)")}`);
 }
 async function click(selector) { await waitFor(`Boolean(document.querySelector(${JSON.stringify(selector)}))`); await evaluate(`document.querySelector(${JSON.stringify(selector)}).click()`); }
+async function waitForHeldRequest() {
+  const deadline = Date.now() + 10000;
+  while (!heldRequest && Date.now() < deadline) {
+    await new Promise(resolve => setTimeout(resolve, 50));
+  }
+  assert.ok(heldRequest, `No request to ${holdPath} was intercepted`);
+  const request = heldRequest;
+  heldRequest = null;
+  return () => send("Fetch.continueRequest", request);
+}
 async function file(content, name = "termine.ics") {
   await waitFor("document.querySelector('.calendar-ics-transfer input[type=file]')?.disabled === false");
   await evaluate(`(() => { const input = document.querySelector('.calendar-ics-transfer input[type=file]');
@@ -90,13 +109,40 @@ try {
     assert.match(exportData.type, /text\/calendar/);
     assert.match(exportData.content, /BEGIN:VCALENDAR/);
     assert.equal((exportData.content.match(/BEGIN:VEVENT/g) ?? []).length, 4);
+
+    await click('.calendar-view-switch button:first-child');
+    const renderedSeries = '.calendar-time-grid.day .time-grid-entry[title^="ICS Geändert |"]';
+    await waitFor(`Boolean(document.querySelector(${JSON.stringify(renderedSeries)})) && !document.querySelector('.loading-bar')`);
+    const calendarTop = "document.querySelector('.calendar-time-grid.day').getBoundingClientRect().top";
+    const seriesTop = `document.querySelector(${JSON.stringify(renderedSeries)})?.getBoundingClientRect().top`;
+    const initialCalendarTop = await evaluate(calendarTop);
+    const initialSeriesTop = await evaluate(seriesTop);
+
+    holdPath = '/session';
+    await click('.topbar-actions button');
+    const resumeSession = await waitForHeldRequest();
+    try {
+      await waitFor("Boolean(document.querySelector('.loading-bar'))");
+      assert.ok(Math.abs(await evaluate(calendarTop) - initialCalendarTop) <= 1, `${width}px calendar grid moved during reload`);
+      assert.ok(Math.abs(await evaluate(seriesTop) - initialSeriesTop) <= 1, `${width}px ICS entry moved during reload`);
+    } finally {
+      holdPath = '/calendar/ics/occurrences';
+      await resumeSession();
+    }
+    const resumeOccurrences = await waitForHeldRequest();
+    try {
+      assert.ok(Math.abs(await evaluate(seriesTop) - initialSeriesTop) <= 1, `${width}px ICS entry vanished while its refresh was pending`);
+    } finally {
+      await resumeOccurrences();
+    }
+    await waitFor(`Boolean(document.querySelector(${JSON.stringify(renderedSeries)})) && !document.querySelector('.loading-bar')`);
     await evaluate("Array.from(document.querySelectorAll('.agenda-item')).find(row => row.textContent.includes('ICS Geändert')).querySelector('[title=\"Nur dieses Serienvorkommen loeschen\"]').click()");
     await waitFor("!Array.from(document.querySelectorAll('.agenda-item')).some(row => row.textContent.includes('ICS Geändert'))");
     await click('.calendar-ics-sources summary');
     await evaluate("Array.from(document.querySelectorAll('.calendar-ics-sources button')).find(button => button.textContent.trim() === 'ICS-Termin löschen').click()");
     await waitFor("document.querySelector('.calendar-ics-sources summary')?.textContent.includes('(1)')");
     assert.equal((await (await fetch(`${api}/calendar/events`)).json()).length, 1);
-    console.log(`PASS ${width}px ICS: invalid file recovery, recurring and all-day imports, UID deduplication and updates, calendar display, standard export and single-occurrence deletion`);
+    console.log(`PASS ${width}px ICS: import and export, UID updates, stable display during refresh and single-occurrence deletion`);
   }
 } finally {
   await send("Page.navigate", { url: "about:blank" });

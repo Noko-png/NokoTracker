@@ -400,7 +400,7 @@ export function getCalendarOccurrences(
           segmentStart.getTime() === target.startAt.getTime() &&
           segmentEnd.getTime() === target.endAt.getTime();
         occurrences.push({
-          key: `${target.event.id}-${target.occurrenceStartAt.toISOString()}-${segmentStart.toISOString()}`,
+          key: `${target.event.id}-${target.event.ics_occurrence_start_utc ?? target.occurrenceStartAt.toISOString()}-${segmentStart.toISOString()}`,
           date,
           event: target.event,
           occurrenceStartAt: target.occurrenceStartAt,

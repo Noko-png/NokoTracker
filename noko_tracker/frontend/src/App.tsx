@@ -594,7 +594,7 @@ const macroMeta: Array<{
   { key: "carbs", label: "Kohlenhydrate", unit: "g", tone: "red" },
 ];
 
-const appVersion = "3.1.38";
+const appVersion = "3.1.39";
 const updateSourceLabel = "main / github.com/Noko-png/NokoTracker";
 
 const emptyNutrition: NutritionDay = {
@@ -1116,21 +1116,40 @@ function occurrenceStartSlot(occurrence: CalendarOccurrence) {
 }
 
 function occurrenceEndSlot(occurrence: CalendarOccurrence) {
-  if (occurrence.allDay) {
-    return 48;
-  }
-
   const end = occurrence.endAt ?? new Date(occurrence.startAt.getTime() + 60 * 60 * 1000);
-  const slot = Math.ceil((end.getHours() * 60 + end.getMinutes()) / 30);
+  const minutes = end.getHours() * 60 + end.getMinutes() + end.getSeconds() / 60;
+  const slot = Math.ceil(minutes / 30);
   return Math.min(Math.max(slot, occurrenceStartSlot(occurrence) + 1), 48);
 }
 
-function timeValueToSlot(value: string, fallback: number) {
+function layoutTimedOccurrences(occurrences: CalendarOccurrence[]) {
+  const entries = occurrences.filter((occurrence) => !occurrence.allDay).map((occurrence) => ({
+    occurrence,
+    startSlot: occurrenceStartSlot(occurrence),
+    endSlot: occurrenceEndSlot(occurrence),
+  }));
+  const groups: { endSlot: number; laneEnds: number[]; entries: (typeof entries[number] & { lane: number })[] }[] = [];
+  for (const entry of entries.sort((a, b) => a.startSlot - b.startSlot || b.endSlot - a.endSlot)) {
+    let group = groups[groups.length - 1];
+    if (!group || entry.startSlot >= group.endSlot) {
+      group = { endSlot: entry.endSlot, laneEnds: [], entries: [] };
+      groups.push(group);
+    }
+    const freeLane = group.laneEnds.findIndex((end) => end <= entry.startSlot);
+    const lane = freeLane === -1 ? group.laneEnds.length : freeLane;
+    group.laneEnds[lane] = entry.endSlot;
+    group.endSlot = Math.max(group.endSlot, entry.endSlot);
+    group.entries.push({ ...entry, lane });
+  }
+  return groups.flatMap(({ laneEnds, entries }) => entries.map((entry) => ({ ...entry, laneCount: laneEnds.length })));
+}
+
+function timeValueToSlot(value: string, fallback: number, round = Math.floor) {
   const [hours, minutes] = value.split(":").map(Number);
   if (!Number.isFinite(hours) || !Number.isFinite(minutes)) {
     return fallback;
   }
-  return Math.min(Math.max(Math.floor((hours * 60 + minutes) / 30), 0), 48);
+  return Math.min(Math.max(round((hours * 60 + minutes) / 30), 0), 48);
 }
 
 function monthGridDates(selectedDate: string) {
@@ -1848,7 +1867,11 @@ export default function App() {
   const [shoppingList, setShoppingList] = useState<ShoppingListItem[]>([]);
   const [users, setUsers] = useState<User[]>([]);
   const [calendarEvents, setCalendarEvents] = useState<CalendarEvent[]>([]);
-  const [icsEvents, setIcsEvents] = useState<CalendarEvent[]>([]);
+  const [icsSnapshot, setIcsSnapshot] = useState<{
+    sessionKey: string;
+    timezone: string;
+    events: CalendarEvent[];
+  } | null>(null);
   const [icsError, setIcsError] = useState("");
   const [calendarTimezone, setCalendarTimezone] = useState(() => readStoredValue("noko.calendar.icsTimezone") || "Europe/Berlin");
   const [calendarGroups, setCalendarGroups] = useState<CalendarGroup[]>([]);
@@ -2267,33 +2290,62 @@ export default function App() {
     writeStoredValue("noko.calendar.icsTimezone", calendarTimezone);
   }, [calendarTimezone]);
 
-  useEffect(() => {
-    const controller = new AbortController();
-    setIcsEvents([]);
-    setIcsError("");
-    if (!calendarEvents.some(event => event.is_ics)) return;
+  const icsSessionKey = session && (session.is_admin || session.user_id !== null)
+    ? JSON.stringify([session.ha_user_id, session.user_id, session.is_admin])
+    : null;
+  const icsSourcesById = useMemo(
+    () => new Map(calendarEvents.filter((event) => event.is_ics).map((event) => [event.id, event])),
+    [calendarEvents],
+  );
+  const [icsRangeStart, icsRangeEnd] = useMemo(() => {
     const dates = getVisibleCalendarDates(calendarView, calendarDate);
-    const first = getLocalDate(dates[0]);
-    const last = getLocalDate(addDays(dates[dates.length - 1], 1));
-    const today = getLocalDate();
-    const ranges = [[first, last]];
-    if (today < first || today >= last) ranges.push([today, getLocalDate(addDays(dateFromLocalValue(today), 1))]);
+    return [getLocalDate(dates[0]), getLocalDate(addDays(dates[dates.length - 1], 1))];
+  }, [calendarView, calendarDate]);
+  const icsToday = getLocalDate();
+
+  useEffect(() => {
+    setIcsError("");
+    if (!icsSessionKey || icsSourcesById.size === 0) {
+      setIcsSnapshot(null);
+      return;
+    }
+    const controller = new AbortController();
+    const ranges = [[icsRangeStart, icsRangeEnd]];
+    if (icsToday < icsRangeStart || icsToday >= icsRangeEnd) {
+      ranges.push([icsToday, getLocalDate(addDays(dateFromLocalValue(icsToday), 1))]);
+    }
     void Promise.all(ranges.map(([start, end]) => getIcsOccurrences(`${start}T00:00:00`, `${end}T00:00:00`, calendarTimezone, controller.signal)))
-      .then(results => {
+      .then((results) => {
         if (!controller.signal.aborted) {
-          const unique = new Map(results.flat().map(event => [`${event.id}:${event.start_at}`, event]));
-          setIcsEvents([...unique.values()]);
+          const unique = new Map(results.flat().map((event) => [`${event.id}:${event.ics_occurrence_start_utc ?? event.start_at}`, event]));
+          setIcsSnapshot({ sessionKey: icsSessionKey, timezone: calendarTimezone, events: [...unique.values()] });
         }
-      }).catch(error => {
+      }).catch((error) => {
         if (!controller.signal.aborted) setIcsError(error instanceof Error ? error.message : "ICS-Termine konnten nicht geladen werden.");
       });
     return () => controller.abort();
-  }, [calendarEvents, calendarDate, calendarView, calendarTimezone]);
+  }, [icsSourcesById, icsRangeStart, icsRangeEnd, icsToday, icsSessionKey, calendarTimezone]);
 
-  const calendarVisibleEvents = useMemo(
-    () => [...calendarEvents.filter(event => event.entry_type !== "task" && !event.is_ics), ...icsEvents],
-    [calendarEvents, icsEvents],
-  );
+  const calendarVisibleEvents = useMemo(() => {
+    const visible = calendarEvents.filter((event) => event.entry_type !== "task" && !event.is_ics);
+    if (!icsSnapshot || icsSnapshot.sessionKey !== icsSessionKey || icsSnapshot.timezone !== calendarTimezone) {
+      return visible;
+    }
+
+    for (const event of icsSnapshot.events) {
+      const source = icsSourcesById.get(event.id);
+      if (!source || source.ics_uid !== event.ics_uid || source.created_at !== event.created_at) continue;
+      // The SQLite exclusion timestamp is UTC even when the response omits its offset.
+      const utcStart = Date.parse(event.ics_occurrence_start_utc ?? "");
+      const excluded = source.exclusions.some(({ occurrence_start_at }) => {
+        const date = /(?:Z|[+-]\d{2}:\d{2})$/i.test(occurrence_start_at)
+          ? occurrence_start_at : `${occurrence_start_at}Z`;
+        return Date.parse(date) === utcStart;
+      });
+      if (!excluded) visible.push(event);
+    }
+    return visible;
+  }, [calendarEvents, icsSourcesById, icsSnapshot, icsSessionKey, calendarTimezone]);
 
   const todaysEvents = useMemo(() => {
     const today = getLocalDate();
@@ -3481,10 +3533,8 @@ export default function App() {
         editingCalendarEventId === null
           ? await createCalendarEvent(payload)
           : await updateCalendarEvent(editingCalendarEventId, payload);
-      setCalendarDate(getLocalDate(new Date(calendarEvent.start_at)));
-      setCalendarForm(createCalendarForm(calendarForm.date));
-      setEditingCalendarEventId(null);
       await loadData();
+      setCalendarDate(getLocalDate(new Date(calendarEvent.start_at)));
       return true;
     } catch (error) {
       setApiError(error instanceof Error ? error.message : "API-Fehler");
@@ -4268,7 +4318,7 @@ export default function App() {
           </div>
         )}
 
-        {loading && <div className="loading-bar" />}
+        {loading && <div className={activePage === "calendar" ? "loading-bar calendar-loading-bar" : "loading-bar"} />}
 
         {activePage === "healthTest" && session.is_admin && <HealthTestPage key={session.ha_user_id ?? "local"} />}
 
@@ -6001,6 +6051,7 @@ function CalendarPage({
     useRef<CalendarDateSelectionPointer | null>(null);
   const calendarSwipeTouchRef = useRef<CalendarSwipeTouch | null>(null);
   const suppressTimeSelectionFinishRef = useRef(false);
+  const entrySubmitInFlight = useRef(false);
   const [createMenuOpen, setCreateMenuOpen] = useState(false);
   const createMenuRef = useCloseOnOutsideClick<HTMLDivElement>(
     createMenuOpen,
@@ -6171,8 +6222,13 @@ function CalendarPage({
   }
 
   async function submitEntryForm(event: FormEvent) {
-    if (await onSubmit(event)) {
-      setCreatePanel(null);
+    event.preventDefault();
+    if (entrySubmitInFlight.current) return;
+    entrySubmitInFlight.current = true;
+    try {
+      if (await onSubmit(event)) closeCreatePanel();
+    } finally {
+      entrySubmitInFlight.current = false;
     }
   }
 
@@ -6580,17 +6636,19 @@ function CalendarPage({
     : timeValueToSlot(form.start_time, 18);
   const draftEndSlot = timeSelection
     ? Math.min(Math.max(timeSelection.startSlot, timeSelection.endSlot) + 1, 48)
-    : Math.max(timeValueToSlot(form.end_time, draftStartSlot + 2), draftStartSlot + 1);
+    : Math.max(timeValueToSlot(form.end_time, draftStartSlot + 2, Math.ceil), draftStartSlot + 1);
+  const newEntryOpen = createPanel === "event" && editingEventId === null;
   const draftPreview =
     view !== "month" &&
-    editingEventId === null &&
-    !form.all_day &&
-    draftDayIndex >= 0
+    (timeSelection || (newEntryOpen && !form.all_day && draftDayIndex >= 0))
       ? {
           dayIndex: timeSelection?.dayIndex ?? draftDayIndex,
           startSlot: draftStartSlot,
           endSlot: Math.min(draftEndSlot, 48),
-          title: form.title.trim() || "Neuer Eintrag",
+          title: (newEntryOpen && form.title.trim()) || "Neuer Eintrag",
+          time: timeSelection
+            ? `${timeSlotLabel(draftStartSlot)} - ${timeSlotEndLabel(draftEndSlot)}`
+            : `${form.start_time} - ${form.end_time || timeSlotEndLabel(draftEndSlot)}`,
         }
       : null;
 
@@ -6824,35 +6882,39 @@ function CalendarPage({
               )),
             )}
             {gridDates.map((date, dayIndex) =>
-              (occurrencesByDate.get(getLocalDate(date)) ?? [])
-                .filter((occurrence) => !occurrence.allDay)
-                .map((occurrence) => (
-                  <button
-                    className={`time-grid-entry ${occurrence.event.entry_type} ${
-                      occurrence.event.is_completed ? "completed" : ""
-                    }`}
-                    key={`time-${occurrence.key}`}
-                    onClick={() => selectOccurrence(occurrence)}
-                    style={{
-                      borderLeftColor: occurrenceColor(occurrence),
-                      gridColumn: dayIndex + 2,
-                      gridRow: `${occurrenceStartSlot(occurrence) + timeGridRowOffset} / ${
-                        occurrenceEndSlot(occurrence) + timeGridRowOffset
-                      }`,
-                    }}
-                    title={`${formatOccurrenceTitle(occurrence)} | ${formatOccurrenceTime(
-                      occurrence,
-                    )}`}
-                    type="button"
-                  >
-                    <strong>{formatOccurrenceTitle(occurrence)}</strong>
-                    <span>{formatOccurrenceTime(occurrence)}</span>
-                  </button>
-                )),
+              layoutTimedOccurrences(occurrencesByDate.get(getLocalDate(date)) ?? []).map(
+                ({ occurrence, startSlot, endSlot, lane, laneCount }) => {
+                  const title = formatOccurrenceTitle(occurrence);
+                  const time = formatOccurrenceTime(occurrence);
+                  const label = `${title} | ${time}`;
+                  return (
+                    <button
+                      aria-label={label}
+                      className={`time-grid-entry ${occurrence.event.entry_type} ${
+                        occurrence.event.is_completed ? "completed" : ""
+                      } ${endSlot - startSlot === 1 ? "compact" : ""}`}
+                      key={`time-${occurrence.key}`}
+                      onClick={() => selectOccurrence(occurrence)}
+                      style={{
+                        borderLeftColor: occurrenceColor(occurrence),
+                        gridColumn: dayIndex + 2,
+                        gridRow: `${startSlot + timeGridRowOffset} / ${endSlot + timeGridRowOffset}`,
+                        "--calendar-entry-lane": lane,
+                        "--calendar-entry-lanes": laneCount,
+                      } as CSSProperties}
+                      title={label}
+                      type="button"
+                    >
+                      <strong>{title}</strong>
+                      <span>{time}</span>
+                    </button>
+                  );
+                },
+              ),
             )}
             {draftPreview && (
               <div
-                className="time-grid-entry preview"
+                className={`time-grid-entry preview ${draftPreview.endSlot - draftPreview.startSlot === 1 ? "compact" : ""}`}
                 style={{
                   gridColumn: draftPreview.dayIndex + 2,
                   gridRow: `${draftPreview.startSlot + timeGridRowOffset} / ${
@@ -6861,10 +6923,7 @@ function CalendarPage({
                 }}
               >
                 <strong>{draftPreview.title}</strong>
-                <span>
-                  {timeSlotLabel(draftPreview.startSlot)} -{" "}
-                  {timeSlotEndLabel(draftPreview.endSlot)}
-                </span>
+                <span>{draftPreview.time}</span>
               </div>
             )}
           </div>
