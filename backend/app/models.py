@@ -396,7 +396,7 @@ class InventoryItem(TimestampMixin, Base):
     purchase_date = Column(Date, default=date.today, nullable=False, index=True)
     price = Column(Float, nullable=True)
     barcode = Column(String(128), nullable=True, index=True)
-    image_path = Column(String(500), nullable=True)
+    image_path = Column(Text, nullable=True)
     notes = Column(Text, nullable=True)
     serving_size = Column(Float, default=100.0, nullable=False)
     serving_unit = Column(String(32), default="g", nullable=False)

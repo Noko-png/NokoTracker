@@ -334,7 +334,7 @@ def migrate_sqlite_inventory_schema() -> None:
         "purchase_date": "ALTER TABLE inventory_items ADD COLUMN purchase_date DATE",
         "price": "ALTER TABLE inventory_items ADD COLUMN price FLOAT",
         "barcode": "ALTER TABLE inventory_items ADD COLUMN barcode VARCHAR(128)",
-        "image_path": "ALTER TABLE inventory_items ADD COLUMN image_path VARCHAR(500)",
+        "image_path": "ALTER TABLE inventory_items ADD COLUMN image_path TEXT",
         "notes": "ALTER TABLE inventory_items ADD COLUMN notes TEXT",
         "serving_size": "ALTER TABLE inventory_items ADD COLUMN serving_size FLOAT NOT NULL DEFAULT 100",
         "serving_unit": "ALTER TABLE inventory_items ADD COLUMN serving_unit VARCHAR(32) NOT NULL DEFAULT 'g'",
@@ -940,7 +940,7 @@ ensure_default_user()
 app = FastAPI(
     title="Heim-ERP Backend",
     description="Backend API fuer ein privates Heim-ERP mit Kalender, Vorrat, Rezepten, Mahlzeiten und Einkaufsliste.",
-    version="3.1.34",
+    version="3.1.35",
     docs_url=None,
     redoc_url=None,
 )

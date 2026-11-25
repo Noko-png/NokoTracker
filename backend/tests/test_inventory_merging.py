@@ -18,6 +18,9 @@ from app.services.receipt_import_service import book_receipt_import
 from test_security import request
 
 
+LARGE_RECIPE_IMAGE = "data:image/png;base64," + "dGVz" * 256
+
+
 class InventoryMergingTest(unittest.TestCase):
     def setUp(self):
         self.engine = create_engine("sqlite://", connect_args={"check_same_thread": False}, poolclass=StaticPool)
@@ -342,6 +345,45 @@ class InventoryMergingTest(unittest.TestCase):
         with Session(self.engine) as db:
             row = db.get(models.InventoryItem, first["id"])
             self.assertEqual(nutrition_service.food_amount_in_grams(row, row.quantity, row.unit), 600)
+
+    def test_inventory_reads_an_existing_large_recipe_image(self):
+        stored = self.store(1, "kg")
+        with Session(self.engine) as db:
+            row = db.get(models.InventoryItem, stored["id"])
+            row.image_path = LARGE_RECIPE_IMAGE
+            db.commit()
+
+        item, = self.call("GET", "/inventory")
+        self.assertEqual((item["id"], item["quantity"]), (stored["id"], 1))
+        self.assertEqual(item["image_path"], LARGE_RECIPE_IMAGE)
+
+    def test_large_recipe_image_survives_preparing_editing_and_refunding_stock(self):
+        ingredient_stock = self.store(1, "kg")
+        recipe = self.call("POST", "/recipes", {
+            "name": "Gericht mit Bild", "servings": 2, "image_path": LARGE_RECIPE_IMAGE,
+            "ingredients": [{"food_id": self.food["id"], "quantity": 400, "unit": "g"}],
+        }, status=201)
+        prepared = self.call("POST", f'/recipes/{recipe["id"]}/prepare', status=201)["inventory_item"]
+        self.assertEqual(prepared["image_path"], LARGE_RECIPE_IMAGE)
+        self.assertEqual((prepared["quantity"], prepared["unit"]), (2, "Portion"))
+        self.assertEqual(self.call("GET", f'/inventory/{ingredient_stock["id"]}')["quantity"], .6)
+
+        path = f'/inventory/{prepared["id"]}'
+        edited = self.call("PUT", path, {
+            **prepared, "notes": "Für später", "expected_updated_at": prepared["updated_at"],
+        })
+        self.assertEqual(edited["image_path"], LARGE_RECIPE_IMAGE)
+        meal = self.call("POST", "/meals/logs", {
+            "food_id": prepared["food_id"], "quantity": 1, "unit": "Portion",
+            "deduct_inventory": True, "booking_key": "large-recipe-image",
+        }, status=201)
+        self.assertEqual(self.call("GET", path)["quantity"], 1)
+
+        self.call("DELETE", path, status=204)
+        self.call("DELETE", f'/meals/logs/{meal["id"]}', status=204)
+        restored, = [row for row in self.call("GET", "/inventory") if row["food_id"] == prepared["food_id"]]
+        self.assertEqual((restored["quantity"], restored["unit"], restored["notes"]), (1, "Portion", "Für später"))
+        self.assertEqual(restored["image_path"], LARGE_RECIPE_IMAGE)
 
     def test_legacy_gram_lot_and_recorded_refund_are_converted_without_losing_stock(self):
         self.can_food()

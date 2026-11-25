@@ -1,5 +1,9 @@
 # Changelog
 
+## 3.1.35
+
+- Eingebettete Rezeptbilder in zubereiteten Bestandspositionen verursachen beim Laden des Bestands und beim Zubereiten keinen HTTP-500-Fehler mehr. Bereits gespeicherte Bilder bleiben beim Laden, Bearbeiten und Rückbuchen erhalten.
+
 ## 3.1.34
 
 - Das Rezeptbild in der Zubereitungsansicht wird vollständig oberhalb von Beschreibung, Zutaten und Schritten angezeigt. Lange Rezepte lassen sich im Dialog scrollen.

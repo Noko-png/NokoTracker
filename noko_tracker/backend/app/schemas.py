@@ -640,7 +640,8 @@ class InventoryItemBase(BaseModel):
     purchase_date: date = Field(default_factory=date.today)
     price: Optional[float] = Field(None, ge=0)
     barcode: Optional[str] = Field(None, max_length=128)
-    image_path: Optional[str] = Field(None, max_length=500)
+    # Prepared dishes copy the recipe image, including embedded image data.
+    image_path: Optional[str] = None
     notes: Optional[str] = None
     serving_size: float = Field(100.0, gt=0)
     serving_unit: str = Field("g", min_length=1, max_length=32)
@@ -690,7 +691,7 @@ class InventoryItemUpdate(BaseModel):
     purchase_date: Optional[date] = None
     price: Optional[float] = Field(None, ge=0)
     barcode: Optional[str] = Field(None, max_length=128)
-    image_path: Optional[str] = Field(None, max_length=500)
+    image_path: Optional[str] = None
     notes: Optional[str] = None
     serving_size: Optional[float] = Field(None, gt=0)
     serving_unit: Optional[str] = Field(None, min_length=1, max_length=32)
