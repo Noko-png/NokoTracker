@@ -1,5 +1,5 @@
 import type { MealLog, MealPrepSelection } from "./api/client";
-import { getLocalDate } from "./calendar";
+import { addDays, dateFromLocalValue, getLocalDate } from "./calendar";
 
 export type MealPrepSlotKey = MealPrepSelection["meal_type"];
 
@@ -16,6 +16,11 @@ export const mealPrepSlots: readonly MealPrepSlot[] = [
   { id: "lunch", label: "Mittagessen", time: "12:30", legacyLabel: "Mittag" },
   { id: "dinner", label: "Abendessen", time: "18:30" },
 ];
+
+export function mealPrepWeekDates(startDate: string) {
+  const firstDay = dateFromLocalValue(startDate);
+  return Array.from({ length: 7 }, (_, offset) => addDays(firstDay, offset));
+}
 
 export function isMealPrepSlotLog(mealLog: MealLog, day: string, slot: MealPrepSlot, userId: number) {
   if (mealLog.meal_source !== mealPrepSource || (mealLog.user_id != null && mealLog.user_id !== userId)) {

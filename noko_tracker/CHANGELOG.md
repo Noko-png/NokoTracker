@@ -1,5 +1,9 @@
 # Changelog
 
+## 3.1.37
+
+- Mealprep im Kalorientracker zeigt beim Öffnen den ausgewählten Tag und die sechs darauffolgenden Tage an.
+
 ## 3.1.36
 
 - Nach dem Zubereiten öffnet **Portionen einplanen** eine Auswahl für heute und die nächsten sechs Tage. Je Mahlzeit lässt sich eine Portion als Frühstück, Mittagessen oder Abendessen im Mealprep-Kalender eintragen. Belegte Mahlzeiten bleiben erhalten.

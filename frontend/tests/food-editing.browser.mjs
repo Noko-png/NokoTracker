@@ -729,6 +729,42 @@ try {
     await waitFor(`!(${plannerOpen})`);
     assert.deepEqual(await preparedMeals(), plannedPortions);
     console.log(`PASS ${width}px prepared meal plan: seven days from today, mixed meals, occupied slots preserved and remaining portions limited`);
+
+    await click('.prepare-panel [title="Schliessen"]');
+    await click('[title="Kalorientracker"]');
+    const { dayIndex, rangeLabels } = await evaluate(`(() => {
+      const date = new Date();
+      const dayIndex = date.getDay() === 4 ? 4 : 3;
+      date.setDate(date.getDate() - (date.getDay() + 6) % 7 + dayIndex);
+      const format = new Intl.DateTimeFormat('de-DE', { dateStyle: 'medium' });
+      const rangeLabels = Array.from({ length: 8 }, (_, offset) => {
+        const next = new Date(date);
+        next.setDate(next.getDate() + offset);
+        return format.format(next);
+      });
+      return { dayIndex, rangeLabels };
+    })()`);
+    await click(`.nutrition-week-strip button:nth-child(${dayIndex + 1})`);
+    const trackerPlanner = '.nutrition-mealprep-sheet';
+    const dayCard = `${trackerPlanner} .mealprep-day-card`;
+    const openTrackerPlanner = async () => {
+      await click('.nutrition-tools-button');
+      await click('.nutrition-tools-list button:first-child');
+      await waitFor(`document.querySelector('${trackerPlanner}') !== null`);
+    };
+    const visibleDayLabels = () => evaluate(`Array.from(document.querySelectorAll('${dayCard}'), card =>
+      card.querySelector('select').getAttribute('aria-label').slice('Frühstück '.length))`);
+    await openTrackerPlanner();
+    assert.deepEqual(await visibleDayLabels(), rangeLabels.slice(0, 7));
+    assert.equal(await evaluate(`document.querySelector('${trackerPlanner} .mealprep-header .eyebrow').textContent`),
+      `${rangeLabels[0]} – ${rangeLabels[6]}`);
+    await click(`${dayCard}:nth-child(2) .mealprep-day-head`);
+    await waitFor(`document.querySelector('${dayCard}:nth-child(2).selected') !== null`);
+    assert.deepEqual(await visibleDayLabels(), rangeLabels.slice(0, 7));
+    await click(`${trackerPlanner} [title="Schliessen"]`);
+    await openTrackerPlanner();
+    assert.deepEqual(await visibleDayLabels(), rangeLabels.slice(1));
+    console.log(`PASS ${width}px tracker Mealprep: seven days from the selected date on every opening`);
   }
 } finally {
   await send("Page.navigate", { url: "about:blank" });

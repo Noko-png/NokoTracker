@@ -1,8 +1,8 @@
 import { Check, Plus } from "lucide-react";
 import { useEffect, useId, useRef, useState, type FormEvent } from "react";
 import type { MealLog, MealPrepSelection } from "./api/client";
-import { addDays, dateFromLocalValue, getLocalDate } from "./calendar";
-import { isMealPrepSlotLog, mealPrepSlots } from "./mealPrep";
+import { getLocalDate } from "./calendar";
+import { isMealPrepSlotLog, mealPrepSlots, mealPrepWeekDates } from "./mealPrep";
 
 const shortDate = new Intl.DateTimeFormat("de-DE", { weekday: "short", day: "2-digit", month: "2-digit" });
 const fullDate = new Intl.DateTimeFormat("de-DE", { weekday: "long", day: "numeric", month: "long" });
@@ -36,11 +36,7 @@ export function PreparedMealPlanDialog({
     return () => dialog.close();
   }, []);
 
-  const firstDay = dateFromLocalValue(startDate);
-  const week = Array.from({ length: 7 }, (_, index) => {
-    const date = addDays(firstDay, index);
-    return { date, day: getLocalDate(date) };
-  });
+  const week = mealPrepWeekDates(startDate).map((date) => ({ date, day: getLocalDate(date) }));
   const occupied = new Set<string>();
   for (const { day } of week) {
     for (const slot of mealPrepSlots) {

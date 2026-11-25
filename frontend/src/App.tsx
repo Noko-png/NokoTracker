@@ -5,7 +5,7 @@ import { DatabaseReset } from "./DatabaseReset";
 import { foodInventoryUnitNames } from "./foodInventory";
 import { InventoryUnderflowDialog } from "./InventoryUnderflowDialog";
 import { PreparedMealPlanDialog } from "./PreparedMealPlanDialog";
-import { isMealPrepSlotLog, mealPrepSlots, mealPrepSource, type MealPrepSlotKey } from "./mealPrep";
+import { isMealPrepSlotLog, mealPrepSlots, mealPrepSource, mealPrepWeekDates, type MealPrepSlotKey } from "./mealPrep";
 import { resolveProfileId } from "./profileSelection";
 import {
   configuredConversionUnitNames,
@@ -593,7 +593,7 @@ const macroMeta: Array<{
   { key: "carbs", label: "Kohlenhydrate", unit: "g", tone: "red" },
 ];
 
-const appVersion = "3.1.36";
+const appVersion = "3.1.37";
 const updateSourceLabel = "main / github.com/Noko-png/NokoTracker";
 
 const emptyNutrition: NutritionDay = {
@@ -7291,7 +7291,9 @@ function MealPrepPlanner({
   selectedDate: string;
   userId: number;
 }) {
-  const weekDates = weekGridDates(selectedDate);
+  const [startDate] = useState(selectedDate);
+  const weekDates = mealPrepWeekDates(startDate);
+  const lastDate = getLocalDate(weekDates[weekDates.length - 1]);
   const today = getLocalDate();
   const sortedRecipes = [...recipes].sort((first, second) =>
     first.name.localeCompare(second.name, "de-DE"),
@@ -7337,7 +7339,7 @@ function MealPrepPlanner({
     <div className="mealprep-planner">
       <div className="mealprep-header">
         <div>
-          <p className="eyebrow">{formatCalendarViewTitle("week", selectedDate)}</p>
+          <p className="eyebrow">{formatDate(startDate)} – {formatDate(lastDate)}</p>
           <h3>Mealprep</h3>
         </div>
         <div className="mealprep-summary">
