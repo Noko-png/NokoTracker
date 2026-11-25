@@ -55,7 +55,7 @@ Ab 3.1.24 zeigt **Lebensmittel einlagern** die Naehrwerte und Umrechnungen schre
 1. In Home Assistant einen langlebigen Zugriffstoken fuer ein separates Konto ohne Administratorrechte erzeugen. In der Add-on-Konfiguration `health_ha_url` und `health_ha_token` eintragen, das Add-on neu starten und als NokoTracker-Administrator anmelden.
 2. Auf dem Handy in Health Connect pruefen, ob Samsung Health Schritte, Herzfrequenz und Schlaf bereitstellt und Home Assistant diese lesen darf.
 3. In der HA-App unter **Einstellungen > Companion App > Sensoren verwalten > Health Connect** die jeweiligen Sensoren aktivieren. Die Android-Datenfreigabe allein reicht nicht aus.
-4. Samsung Health synchronisieren, die HA-App oeffnen und in NokoTracker **Test Health dashboard** aufrufen. Beim Oeffnen startet die Abfrage; **Daten abrufen** wiederholt sie.
+4. Samsung Health synchronisieren, die HA-App oeffnen und in NokoTracker **Stammdaten verwalten > Beta** aufrufen. Beim Oeffnen des Test Health dashboards startet die Abfrage. **Daten abrufen** wiederholt sie.
 
 Die automatische Suche erkennt Sensor-IDs mit `health_connect_daily_steps`, `health_connect_heart_rate`, `health_connect_resting_heart_rate` und `health_connect_sleep_duration`, auch mit Geraetepraefix oder nummeriertem Suffix. Fuer umbenannte Sensoren im aufklappbaren Bereich die exakte `sensor.*`-ID aus Home Assistant angeben. Leere Felder verwenden die automatische Suche. Mehrere Handys werden getrennt angezeigt, Werte werden nicht addiert. Diese Testauswahl wird nicht gespeichert.
 

@@ -129,7 +129,7 @@ Titel und Notizen bestehender Serien bleiben bearbeitbar. Sobald eine Serie zusa
 
 ## Test Health dashboard
 
-Administratoren koennen unter **Test Health dashboard** die Health-Connect-Sensoren der Home-Assistant-Companion-App testweise abrufen. Ab 3.1.21 benoetigt die Funktion eine HTTPS-Adresse und einen separaten HA-API-Token. Die Einrichtung steht in der [Add-on-Dokumentation](noko_tracker/DOCS.md#test-health-dashboard).
+Administratoren koennen unter **Stammdaten verwalten > Beta** im Test Health dashboard die Health-Connect-Sensoren der Home-Assistant-Companion-App testweise abrufen. Ab 3.1.21 benoetigt die Funktion eine HTTPS-Adresse und einen separaten HA-API-Token. Die Einrichtung steht in der [Add-on-Dokumentation](noko_tracker/DOCS.md#test-health-dashboard).
 
 Die Testansicht speichert keine Messwerte, ordnet sie keinem Profil zu und ist nur fuer Administratoren erreichbar. Der Abruf benoetigt die HA-Add-on-Installation; ein lokal gestarteter NokoTracker meldet den fehlenden HA-Anschluss. Hinweise zu den neuen HA-API-Rechten stehen in der [Add-on-Dokumentation](noko_tracker/DOCS.md).
 

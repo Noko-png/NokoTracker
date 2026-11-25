@@ -27,7 +27,6 @@ import {
 } from "./quantity";
 import {
   AlertTriangle,
-  HeartPulse,
   Apple,
   BarChart3,
   CalendarDays,
@@ -250,7 +249,6 @@ type InventoryDeduction = {
 };
 
 type Page =
-  | "healthTest"
   | "dashboard"
   | "todos"
   | "calendar"
@@ -319,7 +317,7 @@ type InventoryForm = {
   carbs_per_100g: string;
 };
 
-type MasterDataTab = "foods" | "locations" | "units" | "groups" | "training";
+type MasterDataTab = "foods" | "locations" | "units" | "groups" | "training" | "beta";
 
 type RecipeSort = "name" | "tag" | "servings" | "calories" | "calories-desc";
 
@@ -540,7 +538,6 @@ const navigation = [
   { id: "todos", label: "ToDo Tracker", icon: CheckCircle2 },
   { id: "nutrition", label: "Kalorientracker", icon: Gauge },
   { id: "training", label: "Training", icon: Dumbbell },
-  { id: "healthTest", label: "Test Health dashboard", icon: HeartPulse },
   { id: "calendar", label: "Kalender", icon: CalendarDays },
   { id: "foods", label: "Bestandsübersicht", icon: Apple },
   { id: "shopping", label: "Einkaufsliste", icon: ShoppingCart },
@@ -594,7 +591,7 @@ const macroMeta: Array<{
   { key: "carbs", label: "Kohlenhydrate", unit: "g", tone: "red" },
 ];
 
-const appVersion = "3.1.39";
+const appVersion = "3.1.40";
 const updateSourceLabel = "main / github.com/Noko-png/NokoTracker";
 
 const emptyNutrition: NutritionDay = {
@@ -1849,7 +1846,7 @@ export default function App() {
   const [ingressFocusResetTick, setIngressFocusResetTick] = useState(0);
   const [masterDataOpen, setMasterDataOpen] = useState(false);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
-  const [activeMasterDataTab, setActiveMasterDataTab] =
+  const [selectedMasterDataTab, setSelectedMasterDataTab] =
     useState<MasterDataTab>("foods");
   const [dashboard, setDashboard] = useState<DashboardSummary | null>(null);
   const [inventory, setInventory] = useState<InventoryItem[]>([]);
@@ -4121,7 +4118,7 @@ export default function App() {
   }
 
   function selectMasterDataTab(tab: MasterDataTab) {
-    setActiveMasterDataTab(tab);
+    setSelectedMasterDataTab(tab);
     setMasterDataOpen(true);
     setActivePage("masterData");
     setMobileMenuOpen(false);
@@ -4147,6 +4144,12 @@ export default function App() {
       <button className="button primary" type="button" onClick={() => void loadData()}>Erneut pruefen</button>
     </main>;
   }
+
+  const activeMasterDataTab = selectedMasterDataTab === "beta" && !session.is_admin
+    ? "foods"
+    : selectedMasterDataTab;
+  const healthTestOpen = activePage === "masterData" && activeMasterDataTab === "beta";
+  const visibleMasterDataTabs = session.is_admin ? [...masterDataTabs, { id: "beta", label: "Beta" } as const] : masterDataTabs;
 
   return (
     <div
@@ -4206,7 +4209,7 @@ export default function App() {
         </div>
 
         <nav className="nav-list" aria-label="Navigation">
-          {navigation.filter(item => item.id !== "healthTest" || session.is_admin).map(({ id, label, icon: Icon }) => (
+          {navigation.map(({ id, label, icon: Icon }) => (
             <button
               className={`nav-item ${activePage === id ? "active" : ""}`}
               key={id}
@@ -4256,7 +4259,7 @@ export default function App() {
           </button>
           {masterDataOpen && (
             <div className="sidebar-master-options">
-              {masterDataTabs.map((tab) => (
+              {visibleMasterDataTabs.map((tab) => (
                 <button
                   className={`sidebar-master-option ${
                     activePage === "masterData" && activeMasterDataTab === tab.id
@@ -4265,6 +4268,7 @@ export default function App() {
                   }`}
                   key={tab.id}
                   onClick={() => selectMasterDataTab(tab.id)}
+                  title={tab.label}
                   type="button"
                 >
                   {tab.label}
@@ -4290,7 +4294,7 @@ export default function App() {
             <p className="eyebrow">NokoTracker</p>
             <h1>{pageTitle}</h1>
           </div>
-          {activePage !== "healthTest" && <div className="topbar-actions">
+          {!healthTestOpen && <div className="topbar-actions">
             <label className="compact-field">
               <span>User</span>
               <select
@@ -4319,8 +4323,6 @@ export default function App() {
         )}
 
         {loading && <div className={activePage === "calendar" ? "loading-bar calendar-loading-bar" : "loading-bar"} />}
-
-        {activePage === "healthTest" && session.is_admin && <HealthTestPage key={session.ha_user_id ?? "local"} />}
 
         {activePage === "dashboard" && (
           <DashboardPage
@@ -4476,7 +4478,14 @@ export default function App() {
 
         {activePage === "masterData" && (
           <section className="section master-data-main-section">
-            {activeMasterDataTab === "training" ? (
+            {activeMasterDataTab === "beta" ? (
+              <>
+                <div className="section-header">
+                  <h2>Test Health dashboard</h2>
+                </div>
+                <HealthTestPage key={session.ha_user_id ?? "local"} />
+              </>
+            ) : activeMasterDataTab === "training" ? (
               <TrainingPlanningPanel
                 editingPlanId={editingTrainingPlanId}
                 exerciseForm={trainingExerciseForm}

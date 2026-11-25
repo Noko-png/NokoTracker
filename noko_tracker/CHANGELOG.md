@@ -1,5 +1,9 @@
 # Changelog
 
+## 3.1.40
+
+- Das Test Health dashboard ist für Administratoren unter **Stammdaten verwalten > Beta** erreichbar.
+
 ## 3.1.39
 
 - Kurze Termine passen mit einer kompakten Titelzeile ins Zeitraster. Überschneidende Termine stehen nebeneinander.

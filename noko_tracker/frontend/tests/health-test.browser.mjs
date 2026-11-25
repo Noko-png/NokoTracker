@@ -77,6 +77,13 @@ async function refresh() {
   await click('.health-test-intro button');
   await waitFor("!document.querySelector('.health-test [aria-busy=true]')");
 }
+async function openMasterDataMenu() {
+  if (await evaluate("Boolean(document.querySelector('.mobile-app-bar .mobile-menu-button')?.getClientRects().length)")) {
+    await click('.mobile-app-bar .mobile-menu-button');
+  }
+  await click('[title="Stammdaten verwalten"]');
+  await waitFor("Boolean(document.querySelector('.sidebar-master-options'))");
+}
 try {
   await send('Page.enable');
   await send('Runtime.enable');
@@ -88,9 +95,13 @@ try {
     await send('Emulation.setDeviceMetricsOverride', { width, height: 900, deviceScaleFactor: 1, mobile: width < 760 });
     await send('Page.navigate', { url: frontend });
     await waitFor("document.body.innerText.includes('Kalendertest') && !document.querySelector('.loading-bar')");
-    await click('[title="Test Health dashboard"]');
+    assert.equal(await evaluate("document.querySelector('[title=\"Test Health dashboard\"]')"), null);
+    await openMasterDataMenu();
+    await click('.sidebar-master-option[title="Beta"]');
     await waitFor("document.querySelector('.health-test-status')?.textContent.includes('Lokal besteht keine Verbindung')");
-    assert.equal(await evaluate("document.querySelector('.topbar h1').textContent"), 'Test Health dashboard');
+    assert.ok(await evaluate("Boolean(document.querySelector('.sidebar-master-option.active[title=Beta]'))"));
+    assert.equal(await evaluate("document.querySelector('.topbar h1').textContent"), 'Stammdaten verwalten');
+    assert.ok(await evaluate("Array.from(document.querySelectorAll('main h2')).some(heading => heading.textContent === 'Test Health dashboard')"));
     fixture = healthy;
     await refresh();
     assert.equal(await evaluate("document.querySelectorAll('.health-test-card').length"), 3);
@@ -129,8 +140,10 @@ try {
   nonAdmin = true;
   await send('Page.navigate', { url: frontend });
   await waitFor("document.body.innerText.includes('Kalendertest') && !document.querySelector('.loading-bar')");
-  assert.equal(await evaluate("document.querySelector('[title=\"Test Health dashboard\"]')"), null);
-  console.log('PASS non-admin: health test navigation hidden');
+  await openMasterDataMenu();
+  assert.equal(await evaluate("document.querySelector('.sidebar-master-option[title=Beta]')"), null);
+  assert.equal(await evaluate("document.querySelector('.health-test')"), null);
+  console.log('PASS non-admin: the Beta tab and health test are unavailable');
 } finally {
   await send('Fetch.disable');
   socket.close();
